@@ -1,0 +1,74 @@
+﻿import express from 'express';
+import Anthropic from '@anthropic-ai/sdk';
+import { authMiddleware } from '../middleware/auth.js';
+
+const router = express.Router();
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+router.post('/generate', authMiddleware, async (req, res) => {
+  console.log('🔥 Requête reçue sur /asefi/generate');
+  console.log('📦 Body:', req.body);
+  console.log('🔑 User:', req.user);
+  
+  try {
+    const { campaignType, objective, audience, tone, mainLink, meetingLink, signature } = req.body;
+
+    if (!objective || !objective.trim()) {
+      console.log('❌ Objectif manquant');
+      return res.status(400).json({ error: 'Objectif requis' });
+    }
+
+    console.log('✅ Objectif valide, appel à Claude API...');
+
+    const linksPart = (mainLink || meetingLink)
+      ? '\n\nLiens à intégrer:\n' + (mainLink ? '- Lien principal: ' + mainLink + '\n' : '') + (meetingLink ? '- Lien RDV: ' + meetingLink : '')
+      : '';
+
+    const signaturePart = (signature?.name || signature?.company)
+      ? '\n\nSignature:\n' + (signature.name || '') + (signature.title ? ' - ' + signature.title : '') + '\n' + (signature.company || '') + '\n' + (signature.phone || '') + ' ' + (signature.email || '')
+      : '';
+
+    const prompt = 'Tu es Asefi, assistant IA pour LeadSynch CRM. Crée un template email professionnel.\n\nType: ' + campaignType + '\nObjectif: ' + objective + '\nAudience: ' + audience + '\nTon: ' + tone + linksPart + signaturePart + '\n\nGénère un email avec:\n1. Objet accrocheur (50-70 caractères)\n2. Pré-en-tête engageant\n3. Corps structuré (3-5 paragraphes) avec liens intégrés\n4. CTA clair\n5. Signature professionnelle\n\nRéponds UNIQUEMENT en JSON strict sans aucun markdown ni backticks:\n{\n  "subject": "...",\n  "preheader": "...",\n  "body": "...",\n  "cta": "..."\n}';
+
+    console.log('📤 Envoi du prompt à Claude...');
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2500,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    console.log('📥 Réponse de Claude reçue');
+
+    let content = message.content[0].text.trim();
+    
+    // Nettoyage du JSON
+    content = content.replace(/```json/gi, '');
+    content = content.replace(/```/g, '');
+    content = content.trim();
+    
+    console.log('📄 Contenu nettoyé:', content.substring(0, 100) + '...');
+    
+    const parsed = JSON.parse(content);
+
+    console.log('✅ JSON parsé avec succès');
+
+    res.json({
+      success: true,
+      template: parsed
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur Asefi:', error);
+    console.error('Stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Erreur lors de la génération',
+      details: error.message 
+    });
+  }
+});
+
+export default router;

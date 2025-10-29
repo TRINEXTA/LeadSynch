@@ -1,0 +1,26 @@
+{
+  "name": "leadsych-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'No build needed'",
+    "test": "echo 'No tests yet'"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.67.1",
+    "@googlemaps/google-maps-services-js": "^3.4.2",
+    "@vercel/postgres": "^0.5.1",
+    "axios": "^1.13.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "csv-parse": "^6.1.0",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "zod": "^3.22.4"
+  }
+}

@@ -1,0 +1,20 @@
+﻿<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="30" cy="30" r="22" stroke="#2563EB" stroke-width="3" fill="none"/>
+  <circle cx="30" cy="30" r="15" stroke="#60A5FA" stroke-width="2.5" fill="none"/>
+  <circle cx="30" cy="30" r="8" fill="#7C3AED"/>
+  <path d="M 15 15 L 30 30 L 45 15" stroke="#10B981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 30 30" to="360 30 30" dur="10s" repeatCount="indefinite"/>
+  </path>
+  <circle cx="30" cy="30" r="3" fill="#10B981">
+    <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <text x="65" y="35" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="#1F2937">Lead</text>
+  <text x="115" y="35" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="url(#gradient)">Synch</text>
+  <text x="65" y="48" font-family="Inter, sans-serif" font-size="9" font-weight="400" fill="#6B7280">Propulsé par <tspan fill="#7C3AED" font-weight="600">Asefi IA</tspan></text>
+</svg>

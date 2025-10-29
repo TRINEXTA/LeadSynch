@@ -1,0 +1,4 @@
+import React from "react";
+export default function CreateLeadSearch() {
+  return <div className="p-6"><h1 className="text-3xl font-bold">Nouvelle Recherche</h1></div>;
+}
