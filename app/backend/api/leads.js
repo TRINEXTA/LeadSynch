@@ -1,254 +1,300 @@
-﻿import { authMiddleware } from '../middleware/auth.js';
-import { queryAll, execute } from '../lib/db.js';
-import multer from 'multer';
-import csvParser from 'csv-parser';
-import { Readable } from 'stream';
+﻿import { Router } from "express";
+import { query, queryOne, execute } from "../lib/db.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { ValidationError, NotFoundError, DatabaseError } from "../lib/errors.js";
 
-const upload = multer({ 
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }
+const router = Router();
+
+router.use(authMiddleware);
+
+/**
+ * GET /api/leads/count - Compter les leads d'une base
+ */
+router.get("/count", async (req, res, next) => {
+  try {
+    const { database_id, industry } = req.query;
+    const tenantId = req.user.tenant_id;
+    
+    if (!database_id) {
+      return res.json({ success: true, count: 0 });
+    }
+
+    const params = [tenantId, database_id];
+    let where = 'tenant_id = $1 AND database_id = $2';
+    
+    if (industry) {
+      params.push(industry);
+      where += ' AND industry = $' + params.length;
+    }
+
+    const sql = 'SELECT COUNT(*) as count FROM leads WHERE ' + where;
+    const { rows } = await query(sql, params);
+    
+    return res.json({ 
+      success: true, 
+      count: parseInt(rows[0].count) || 0 
+    });
+    
+  } catch (err) {
+    return next(err);
+  }
 });
 
-const SECTEUR_KEYWORDS = {
-  juridique: ['avocat', 'notaire', 'huissier', 'juridique', 'legal', 'droit'],
-  comptabilite: ['comptable', 'expert comptable', 'audit', 'expertise comptable'],
-  sante: ['medical', 'medecin', 'pharmacie', 'dentiste', 'kine', 'sante', 'clinique'],
-  informatique: ['informatique', 'digital', 'web', 'software', 'dev', 'tech', 'it'],
-  btp: ['btp', 'construction', 'maconnerie', 'plomberie', 'electricite', 'batiment'],
-  hotellerie: ['restaurant', 'hotel', 'cafe', 'bar', 'traiteur', 'restauration'],
-  immobilier: ['immobilier', 'agence immobiliere', 'syndic', 'promoteur'],
-  logistique: ['transport', 'logistique', 'livraison', 'entreposage'],
-  commerce: ['commerce', 'boutique', 'magasin', 'vente', 'retail'], 
-  education: ['ecole', 'formation', 'education', 'enseignement'],   
-  consulting: ['conseil', 'consulting', 'consultant', 'strategie'], 
-  rh: ['recrutement', 'rh', 'ressources humaines', 'interim'],      
-  services: ['nettoyage', 'maintenance', 'gardiennage', 'securite'],
-  industrie: ['industrie', 'usine', 'fabrication', 'production'],   
-  automobile: ['garage', 'automobile', 'carrosserie', 'concessionnaire']
-};
-
-function detectSector(companyName) {
-  if (!companyName) return 'autre';
-  const lowerName = companyName.toLowerCase();
-  for (const [sector, keywords] of Object.entries(SECTEUR_KEYWORDS)) {
-    for (const keyword of keywords) {
-      if (lowerName.includes(keyword)) return sector;
-    }
-  }
-  return 'autre';
-}
-
-function isValidEmail(email) {
-  if (!email) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-async function handler(req, res) {
-  const tenant_id = req.user.tenant_id;
-  const urlPath = req.url.split('?')[0]; // Enlever les query params
-
+/**
+ * GET /api/leads
+ */
+router.get("/", async (req, res, next) => {
   try {
-    // POST /api/leads/analyze-csv
-    if (req.method === 'POST' && urlPath.includes('/analyze-csv')) {
-      return new Promise((resolve) => {
-        upload.single('file')(req, res, async (err) => {
-          if (err) return resolve(res.status(400).json({ error: 'Erreur upload' }));
-          if (!req.file) return resolve(res.status(400).json({ error: 'Aucun fichier' }));
-
-          try {
-            const leads = [];
-            const segmentation = {};
-            let validLeads = 0;
-
-            Readable.from(req.file.buffer.toString())
-              .pipe(csvParser())
-              .on('data', (row) => {
-                const normalizedRow = {};
-                Object.keys(row).forEach(key => {
-                  normalizedRow[key.toLowerCase().trim().replace(/\s+/g, '_')] = row[key];
-                });
-
-                const company_name = normalizedRow.company_name || '';
-                const email = normalizedRow.email || '';
-
-                if (company_name && isValidEmail(email)) {
-                  validLeads++;
-                  const sector = detectSector(company_name);        
-                  segmentation[sector] = (segmentation[sector] || 0) + 1;
-                  leads.push({
-                    company_name,
-                    email,
-                    phone: normalizedRow.phone || null,
-                    city: normalizedRow.city || null,
-                    industry: sector
-                  });
-                }
-              })
-              .on('end', () => {
-                resolve(res.json({
-                  success: true,
-                  analysis: { totalLeads: leads.length, validLeads, segmentation, leads: leads.slice(0, 10) }
-                }));
-              })
-              .on('error', () => resolve(res.status(500).json({ error: 'Erreur analyse' })));
-          } catch (error) {
-            resolve(res.status(500).json({ error: 'Erreur serveur' }));
-          }
-        });
-      });
+    const tenantId = req.user.tenant_id;
+    
+    if (!tenantId) {
+      throw new ValidationError('Tenant ID manquant');
     }
 
-    // POST /api/leads/import-csv
-    if (req.method === 'POST' && urlPath.includes('/import-csv')) { 
-      const { name, description, source, fileName, segmentation } = req.body;
-      if (!name) return res.status(400).json({ error: 'Nom requis' });
+    const sql = 'SELECT l.*, ld.name as database_name, u.first_name || \' \' || u.last_name as assigned_to_name FROM leads l LEFT JOIN lead_databases ld ON l.database_id = ld.id LEFT JOIN users u ON l.assigned_to = u.id WHERE l.tenant_id = $1 ORDER BY l.created_at DESC LIMIT 1000';
 
-      const database = await execute(
-        `INSERT INTO lead_databases (tenant_id, name, description, source, file_name, total_leads, segmentation, created_by)
-         VALUES ($1, $2, $3, $4, $5, 0, $6, $7) RETURNING *`,       
-        [tenant_id, name, description, source, fileName, JSON.stringify(segmentation), req.user.id]
-      );
-
-      return res.status(201).json({ success: true, database });     
+    const { rows } = await query(sql, [tenantId]);
+    return res.json({ success: true, leads: rows });
+    
+  } catch (err) {
+    if (err.code?.startsWith('23')) {
+      return next(new DatabaseError('Erreur lors de la récupération des leads', err));
     }
-
-    // POST /api/leads/import-batch
-    if (req.method === 'POST' && urlPath.includes('/import-batch')) {
-      return new Promise((resolve) => {
-        upload.single('file')(req, res, async (err) => {
-          if (err) return resolve(res.status(400).json({ error: 'Erreur upload' }));
-
-          const { database_id } = req.body;
-          if (!database_id) return resolve(res.status(400).json({ error: 'database_id requis' }));
-
-          try {
-            let importedCount = 0;
-            const batch = [];
-            const BATCH_SIZE = 50;
-
-            Readable.from(req.file.buffer.toString())
-              .pipe(csvParser())
-              .on('data', (row) => {
-                const normalizedRow = {};
-                Object.keys(row).forEach(key => {
-                  normalizedRow[key.toLowerCase().trim().replace(/\s+/g, '_')] = row[key];
-                });
-
-                const company_name = normalizedRow.company_name || '';
-                const email = normalizedRow.email || '';
-
-                if (company_name && isValidEmail(email)) {
-                  batch.push({
-                    tenant_id,
-                    database_id,
-                    company_name,
-                    email,
-                    phone: normalizedRow.phone || null,
-                    city: normalizedRow.city || null,
-                    industry: detectSector(company_name),
-                    status: 'nouveau',
-                    score: 50
-                  });
-                }
-              })
-              .on('end', async () => {
-                try {
-                  for (let i = 0; i < batch.length; i += BATCH_SIZE) {
-                    const chunk = batch.slice(i, i + BATCH_SIZE);   
-
-                    for (const lead of chunk) {
-                      try {
-                        await execute(
-                          `INSERT INTO leads (tenant_id, database_id, company_name, email, phone, city, industry, status, score)        
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                          [lead.tenant_id, lead.database_id, lead.company_name, lead.email, lead.phone, lead.city, lead.industry, lead.status, lead.score]
-                        );
-                        importedCount++;
-                      } catch (insertError) {
-                        console.error('Erreur insert lead:', insertError);
-                      }
-                    }
-                  }
-
-                  await execute('UPDATE lead_databases SET total_leads = $1 WHERE id = $2', [importedCount, database_id]);
-                  resolve(res.json({ success: true, imported: importedCount }));
-                } catch (error) {
-                  console.error('Erreur import batch:', error);     
-                  resolve(res.status(500).json({ error: 'Erreur import' }));
-                }
-              })
-              .on('error', () => resolve(res.status(500).json({ error: 'Erreur lecture CSV' })));
-          } catch (error) {
-            resolve(res.status(500).json({ error: 'Erreur serveur' }));
-          }
-        });
-      });
-    }
-
-    // GET /api/leads - Liste tous les leads (avec filtres optionnels)
-    if (req.method === 'GET') {
-      const { database_id, campaign_id } = req.query;
-      
-      let query = 'SELECT * FROM leads WHERE tenant_id = $1';
-      const params = [tenant_id];
-      
-      // Filtrer par database_id si fourni
-      if (database_id) {
-        query += ' AND database_id = $2';
-        params.push(parseInt(database_id));
-      }
-      
-      // Filtrer par campaign_id si fourni (en plus ou à la place)
-      if (campaign_id && !database_id) {
-        query += ' AND campaign_id = $2';
-        params.push(parseInt(campaign_id));
-      } else if (campaign_id && database_id) {
-        query += ' AND campaign_id = $3';
-        params.push(parseInt(campaign_id));
-      }
-      
-      query += ' ORDER BY created_at DESC';
-      
-      console.log(' Query leads:', query, params);
-      const leads = await queryAll(query, params);
-      
-      return res.status(200).json({ 
-        success: true, 
-        leads: leads || [],
-        total: leads ? leads.length : 0,
-        filters: { database_id, campaign_id }
-      });
-    }
-
-    // POST /api/leads - Créer UN lead
-    if (req.method === 'POST') {
-      const { database_id, company_name, email, phone, website, address, city, industry, status, score } = req.body;
-
-      if (!database_id || !company_name) {
-        return res.status(400).json({ error: 'database_id et company_name requis' });
-      }
-
-      try {
-        const lead = await execute(
-          `INSERT INTO leads (tenant_id, database_id, company_name, email, phone, website, address, city, industry, status, score)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-           RETURNING *`,
-          [tenant_id, database_id, company_name, email, phone, website, address, city, industry, status || 'nouveau', score || 50]
-        );
-
-        console.log(' Lead créé:', company_name);
-        return res.status(201).json({ success: true, lead });
-      } catch (error) {
-        console.error('Erreur création lead:', error);
-        return res.status(500).json({ error: 'Erreur création lead', details: error.message });
-      }
-    }
-
-    return res.status(405).json({ error: 'Method not allowed' });   
-  } catch (error) {
-    console.error('Leads error:', error);
-    return res.status(500).json({ error: 'Server error' });
+    return next(err);
   }
-}
+});
 
-export default authMiddleware(handler);
+/**
+ * GET /api/leads/today
+ */
+router.get("/today", async (req, res, next) => {
+  try {
+    const scope = (req.query.scope || "mine").toString().toLowerCase();
+    const limit = Math.min(parseInt(req.query.limit || "200", 10), 1000);
+    const tenantId = req.user.tenant_id;
+    const userId = req.user.id;
+
+    const params = [tenantId];
+    let where = 'tenant_id = $1 AND DATE(created_at) = CURRENT_DATE';
+
+    if (scope === "mine" && userId) {
+      params.push(userId);
+      where += ' AND assigned_to = $' + params.length;
+    }
+
+    params.push(limit);
+
+    const sql = 'SELECT id, company_name, contact_name, email, phone, status, assigned_to, created_at, updated_at FROM leads WHERE ' + where + ' ORDER BY created_at DESC LIMIT $' + params.length;
+
+    const { rows } = await query(sql, params);
+    return res.json({ success: true, count: rows.length, leads: rows });
+    
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * GET /api/leads/:id - Récupérer un lead spécifique
+ */
+router.get("/:id", async (req, res, next) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const leadId = req.params.id;
+
+    const sql = 'SELECT l.*, ld.name as database_name, u.first_name || \' \' || u.last_name as assigned_to_name FROM leads l LEFT JOIN lead_databases ld ON l.database_id = ld.id LEFT JOIN users u ON l.assigned_to = u.id WHERE l.id = $1 AND l.tenant_id = $2';
+
+    const lead = await queryOne(sql, [leadId, tenantId]);
+
+    if (!lead) {
+      throw new NotFoundError('Lead non trouvé');
+    }
+
+    return res.json({ success: true, lead });
+    
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /api/leads - Créer un nouveau lead
+ */
+router.post("/", async (req, res, next) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const userId = req.user.id;
+
+    const {
+      company_name,
+      contact_name,
+      email,
+      phone,
+      city,
+      website,
+      industry,
+      deal_value,
+      notes,
+      score,
+      database_id,
+      assigned_to
+    } = req.body;
+
+    if (!company_name || !company_name.trim()) {
+      throw new ValidationError('Le nom de l\'entreprise est requis');
+    }
+
+    if (!email || !email.trim()) {
+      throw new ValidationError('L\'email est requis');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new ValidationError('Format d\'email invalide');
+    }
+
+    const sql = 'INSERT INTO leads (tenant_id, company_name, contact_name, email, phone, city, website, industry, deal_value, notes, score, database_id, assigned_to, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()) RETURNING *';
+
+    const lead = await queryOne(sql, [
+      tenantId,
+      company_name.trim(),
+      contact_name?.trim() || null,
+      email.trim().toLowerCase(),
+      phone?.trim() || null,
+      city?.trim() || null,
+      website?.trim() || null,
+      industry?.trim() || null,
+      deal_value || 0,
+      notes?.trim() || null,
+      score || 50,
+      database_id || null,
+      assigned_to || userId,
+      'new'
+    ]);
+
+    console.log('✅ Lead créé:', lead.company_name, '- ID:', lead.id);
+
+    return res.status(201).json({ 
+      success: true, 
+      message: 'Lead créé avec succès',
+      lead 
+    });
+    
+  } catch (err) {
+    if (err.code === '23505') {
+      return next(new ValidationError('Un lead avec cet email existe déjà'));
+    }
+    return next(err);
+  }
+});
+
+/**
+ * PUT /api/leads/:id - Modifier un lead
+ */
+router.put("/:id", async (req, res, next) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const leadId = req.params.id;
+
+    const existingLead = await queryOne(
+      'SELECT id FROM leads WHERE id = $1 AND tenant_id = $2',
+      [leadId, tenantId]
+    );
+
+    if (!existingLead) {
+      throw new NotFoundError('Lead non trouvé');
+    }
+
+    const {
+      company_name,
+      contact_name,
+      email,
+      phone,
+      city,
+      website,
+      industry,
+      deal_value,
+      notes,
+      score,
+      status,
+      assigned_to
+    } = req.body;
+
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new ValidationError('Format d\'email invalide');
+      }
+    }
+
+    const sql = 'UPDATE leads SET company_name = COALESCE($1, company_name), contact_name = COALESCE($2, contact_name), email = COALESCE($3, email), phone = COALESCE($4, phone), city = COALESCE($5, city), website = COALESCE($6, website), industry = COALESCE($7, industry), deal_value = COALESCE($8, deal_value), notes = COALESCE($9, notes), score = COALESCE($10, score), status = COALESCE($11, status), assigned_to = COALESCE($12, assigned_to), updated_at = NOW() WHERE id = $13 AND tenant_id = $14 RETURNING *';
+
+    const lead = await queryOne(sql, [
+      company_name?.trim(),
+      contact_name?.trim(),
+      email?.trim().toLowerCase(),
+      phone?.trim(),
+      city?.trim(),
+      website?.trim(),
+      industry?.trim(),
+      deal_value,
+      notes?.trim(),
+      score,
+      status,
+      assigned_to,
+      leadId,
+      tenantId
+    ]);
+
+    console.log('✅ Lead mis à jour:', lead.company_name, '- ID:', lead.id);
+
+    return res.json({ 
+      success: true, 
+      message: 'Lead mis à jour avec succès',
+      lead 
+    });
+    
+  } catch (err) {
+    if (err.code === '23505') {
+      return next(new ValidationError('Un lead avec cet email existe déjà'));
+    }
+    return next(err);
+  }
+});
+
+/**
+ * DELETE /api/leads/:id - Supprimer un lead
+ */
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const leadId = req.params.id;
+
+    const existingLead = await queryOne(
+      'SELECT id, company_name FROM leads WHERE id = $1 AND tenant_id = $2',
+      [leadId, tenantId]
+    );
+
+    if (!existingLead) {
+      throw new NotFoundError('Lead non trouvé');
+    }
+
+    await execute('DELETE FROM call_history WHERE pipeline_lead_id IN (SELECT id FROM pipeline_leads WHERE lead_id = $1)', [leadId]);
+    await execute('DELETE FROM pipeline_leads WHERE lead_id = $1', [leadId]);
+    await execute('DELETE FROM campaign_leads WHERE lead_id = $1', [leadId]);
+    await execute('DELETE FROM email_tracking WHERE lead_id = $1', [leadId]);
+    await execute('DELETE FROM leads WHERE id = $1 AND tenant_id = $2', [leadId, tenantId]);
+
+    console.log('🗑️ Lead supprimé:', existingLead.company_name, '- ID:', leadId);
+
+    return res.json({ 
+      success: true, 
+      message: 'Lead supprimé avec succès' 
+    });
+    
+  } catch (err) {
+    return next(err);
+  }
+});
+
+export default router;

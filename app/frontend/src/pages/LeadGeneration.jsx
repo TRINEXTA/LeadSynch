@@ -1,522 +1,332 @@
-﻿import React, { useState } from "react";
-import { Search, MapPin, Target, Zap, Database, Loader2, Phone, Mail, Globe, CheckCircle, AlertCircle } from "lucide-react";
+﻿import React, { useState, useRef, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Sparkles, Loader, Pause, Play, Square, Clock, CheckCircle2 } from "lucide-react";
 
-const SECTEURS = [
-  { value: "juridique", label: "Juridique / Légal", icon: "⚖️" },
-  { value: "comptabilite", label: "Comptabilité", icon: "💼" },
-  { value: "sante", label: "Santé", icon: "🏥" },
-  { value: "informatique", label: "Informatique / IT", icon: "💻" },
-  { value: "btp", label: "BTP / Construction", icon: "🏗️" },
-  { value: "hotellerie", label: "Hôtellerie-Restauration", icon: "🏨" },
-  { value: "immobilier", label: "Immobilier", icon: "🏢" },
-  { value: "logistique", label: "Logistique / Transport", icon: "🚚" },
-  { value: "commerce", label: "Commerce / Retail", icon: "🛒" },
-  { value: "education", label: "Éducation", icon: "📚" },
-  { value: "consulting", label: "Consulting", icon: "💡" },
-  { value: "rh", label: "Ressources Humaines", icon: "👥" },
-  { value: "services", label: "Services", icon: "🔧" },
-  { value: "industrie", label: "Industrie", icon: "🏭" },
-  { value: "automobile", label: "Automobile", icon: "🚗" }
-];
+export default function LeadGeneration() {
+  const [sector, setSector] = useState("informatique");
+  const [city, setCity] = useState("");
+  const [radius, setRadius] = useState(10);
+  const [quantity, setQuantity] = useState(100);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [message, setMessage] = useState("");
+  const [leads, setLeads] = useState([]);
+  const [stats, setStats] = useState({ found: 0, generated: 0, total: 0 });
+  const [timeElapsed, setTimeElapsed] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState(null);
+  const searchIdRef = useRef(null);
+  const timerRef = useRef(null);
 
-export default function GenerateLeads() {
-  const [formData, setFormData] = useState({
-    sector: '',
-    city: '',
-    radius: 10,
-    quantity: 50
-  });
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [creating, setCreating] = useState(false);
-  const [showQuotaModal, setShowQuotaModal] = useState(false);
-  const [quotaError, setQuotaError] = useState(null);
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  const [existingDatabase, setExistingDatabase] = useState(null);
+  useEffect(() => {
+    if (isGenerating && !isPaused) {
+      timerRef.current = setInterval(() => setTimeElapsed(prev => prev + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isGenerating, isPaused]);
 
-  const handleGenerate = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.sector || !formData.city) {
-      alert('Veuillez remplir tous les champs obligatoires');
+  useEffect(() => {
+    if (progress > 10 && progress < 100 && timeElapsed > 0) {
+      const rate = progress / timeElapsed;
+      const remaining = (100 - progress) / rate;
+      setEstimatedTime(Math.ceil(remaining));
+    }
+  }, [progress, timeElapsed]);
+
+  const handleGenerate = async () => {
+    if (!sector || !city || quantity < 1) {
+      alert("Veuillez remplir tous les champs");
       return;
     }
 
-    setLoading(true);
-    setResult(null);
-    setQuotaError(null);
+    console.log("Lancement generation:", { sector, city, radius, quantity });
+
+    setIsGenerating(true);
+    setIsPaused(false);
+    setProgress(0);
+    setLeads([]);
+    setStats({ found: 0, generated: 0, total: 0 });
+    setTimeElapsed(0);
+    setEstimatedTime(null);
+    setMessage("Demarrage...");
+
+    const searchId = Date.now().toString();
+    searchIdRef.current = searchId;
+    const token = localStorage.getItem("token");
 
     try {
-      // 1. VÉRIFIER LES QUOTAS
-      const quotaCheck = await fetch('http://localhost:3000/api/quotas/check', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
+      console.log("Appel API generate-leads-stream...");
+      const response = await fetch("http://localhost:3000/api/generate-leads-stream", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json", 
+          "Authorization": `Bearer ${token}` 
         },
-        body: JSON.stringify({
-          action: 'google_leads',
-          quantity: formData.quantity
+        body: JSON.stringify({ 
+          sector, 
+          city, 
+          radius: parseInt(radius), 
+          quantity: parseInt(quantity), 
+          searchId 
         })
       });
 
-      const quotaData = await quotaCheck.json();
+      console.log("Response status:", response.status);
 
-      if (!quotaData.allowed) {
-        setQuotaError({
-          message: quotaData.message,
-          remaining: quotaData.remaining,
-          plan: quotaData.plan,
-          upgrade_suggestion: quotaData.upgrade_suggestion
-        });
-        setShowQuotaModal(true);
-        setLoading(false);
-        return;
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      // 2. VÉRIFIER S'IL EXISTE UNE BASE SIMILAIRE
-      const databasesResponse = await fetch('http://localhost:3000/api/lead-databases', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log("Stream termine");
+          break;
         }
-      });
 
-      const databasesData = await databasesResponse.json();
-      
-      if (databasesData.success) {
-        const similarBase = databasesData.databases.find(db => 
-          db.name.toLowerCase().includes(formData.sector) && 
-          db.name.toLowerCase().includes(formData.city.toLowerCase())
-        );
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
 
-        if (similarBase) {
-          setExistingDatabase(similarBase);
-          setShowDuplicateModal(true);
-          setLoading(false);
-          return;
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              console.log("Event recu:", data.type, data);
+
+              switch (data.type) {
+                case 'start':
+                  setMessage(data.message);
+                  break;
+                case 'progress':
+                  setProgress(data.percent);
+                  setMessage(data.message);
+                  break;
+                case 'cache_results':
+                  setProgress(data.percent);
+                  setStats(prev => ({ ...prev, found: data.found }));
+                  setLeads(data.leads || []);
+                  setMessage(`${data.found} leads trouves en cache`);
+                  break;
+                case 'new_lead':
+                  setProgress(data.percent);
+                  setStats({ found: stats.found, generated: data.generated, total: data.total });
+                  setLeads(prev => [...prev, data.lead]);
+                  setMessage(`Generation: ${data.generated} generes`);
+                  break;
+                case 'complete':
+                  setProgress(100);
+                  setIsGenerating(false);
+                  setMessage(`Termine ! ${data.total} leads trouves`);
+                  break;
+                case 'error':
+                  setIsGenerating(false);
+                  setMessage(`Erreur: ${data.message}`);
+                  alert(`Erreur: ${data.message}`);
+                  break;
+              }
+            } catch (e) {
+              console.error('Erreur parsing:', e, line);
+            }
+          }
         }
       }
-
-      // 3. GÉNÉRER LES LEADS
-      await generateLeads();
-
     } catch (error) {
-      console.error('Erreur:', error);
-      alert('Erreur lors de la vérification');
-      setLoading(false);
+      console.error("Erreur generation:", error);
+      setIsGenerating(false);
+      setMessage("Erreur de connexion");
+      alert(`Erreur: ${error.message}`);
     }
   };
 
-  const generateLeads = async (addToExisting = false, existingDbId = null) => {
-    try {
-      const response = await fetch('http://localhost:3000/api/generate-leads', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setResult(data);
-        
-        // Si on doit ajouter à une base existante
-        if (addToExisting && existingDbId) {
-          await addLeadsToExistingDatabase(existingDbId, data.leads);
-        }
-      } else {
-        alert('Erreur: ' + (data.error || 'Erreur inconnue'));
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-      alert('Erreur lors de la génération');
-    } finally {
-      setLoading(false);
-      setShowDuplicateModal(false);
-    }
+  const handlePause = async () => {
+    const token = localStorage.getItem("token");
+    await fetch("http://localhost:3000/api/pause-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ searchId: searchIdRef.current })
+    });
+    setIsPaused(true);
+    setMessage("En pause...");
   };
 
-  const addLeadsToExistingDatabase = async (databaseId, leads) => {
-    setCreating(true);
-    let insertedCount = 0;
-
-    for (const lead of leads) {
-      try {
-        const insertResponse = await fetch('http://localhost:3000/api/leads', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            database_id: databaseId,
-            company_name: lead.company_name,
-            phone: lead.phone,
-            email: lead.email || null,
-            website: lead.website,
-            address: lead.address,
-            city: lead.city,
-            industry: formData.sector,
-            status: 'nouveau',
-            score: 50
-          })
-        });
-
-        if (insertResponse.ok) insertedCount++;
-      } catch (error) {
-        console.error('Erreur insertion:', error);
-      }
-    }
-
-    alert(`✅ ${insertedCount} leads ajoutés à la base existante !`);
-    window.location.href = '/LeadDatabases';
-    setCreating(false);
+  const handleResume = async () => {
+    const token = localStorage.getItem("token");
+    await fetch("http://localhost:3000/api/resume-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ searchId: searchIdRef.current })
+    });
+    setIsPaused(false);
+    setMessage("Reprise...");
   };
 
-  const handleCreateDatabase = async () => {
-    if (!result || !result.leads || result.leads.length === 0) {
-      alert('Aucun lead à enregistrer');
-      return;
-    }
+  const handleStop = async () => {
+    const token = localStorage.getItem("token");
+    await fetch("http://localhost:3000/api/stop-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ searchId: searchIdRef.current })
+    });
+    setIsGenerating(false);
+    setMessage("Arrete - leads sauvegardes");
+  };
 
-    const databaseName = prompt('Nom de la base de données:', `${formData.sector} - ${formData.city}`);
-    if (!databaseName) return;
-
-    setCreating(true);
-
-    try {
-      const createResponse = await fetch('http://localhost:3000/api/lead-databases', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: databaseName,
-          description: `Leads ${formData.sector} à ${formData.city}`,
-          source: 'google_maps',
-          total_leads: result.leads.length,
-          segmentation: { [formData.sector]: result.total }
-        })
-      });
-
-      const createData = await createResponse.json();
-      
-      if (!createData.success) {
-        throw new Error(createData.error || 'Erreur création base');
-      }
-
-      const databaseId = createData.database.id;
-      let insertedCount = 0;
-      
-      for (const lead of result.leads) {
-        try {
-          const insertResponse = await fetch('http://localhost:3000/api/leads', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              database_id: databaseId,
-              company_name: lead.company_name,
-              phone: lead.phone,
-              email: lead.email || null,
-              website: lead.website,
-              address: lead.address,
-              city: lead.city,
-              industry: formData.sector,
-              status: 'nouveau',
-              score: 50
-            })
-          });
-
-          if (insertResponse.ok) insertedCount++;
-        } catch (error) {
-          console.error('Erreur insertion:', error);
-        }
-      }
-
-      alert(`✅ Base créée avec ${insertedCount} leads !`);
-      window.location.href = '/LeadDatabases';
-      
-    } catch (error) {
-      console.error('Erreur:', error);
-      alert('Erreur: ' + error.message);
-    } finally {
-      setCreating(false);
-    }
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* MODAL QUOTA DÉPASSÉ */}
-      {showQuotaModal && quotaError && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="w-8 h-8 text-orange-500" />
-              <h3 className="text-xl font-bold">Quota insuffisant</h3>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
+          <Sparkles className="w-10 h-10 text-yellow-500" />
+          Generation de Leads IA
+        </h1>
+        <p className="text-gray-600 text-lg">Recherche intelligente : base locale d abord, puis Google Maps</p>
+      </div>
+
+      <Card className="shadow-xl mb-6 border-2">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardTitle className="text-2xl">🎯 Parametres de recherche</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid md:grid-cols-4 gap-6 mb-6">
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-gray-700">Secteur *</label>
+              <select value={sector} onChange={(e) => setSector(e.target.value)} className="w-full h-12 border-2 border-gray-300 rounded-lg px-4 text-base focus:border-blue-500 focus:outline-none">
+                <option value="informatique">💻 Informatique</option>
+                <option value="comptabilite">📊 Comptabilite</option>
+                <option value="juridique">⚖️ Juridique</option>
+                <option value="sante">🏥 Sante</option>
+                <option value="btp">🏗️ BTP</option>
+                <option value="hotellerie">🍽️ Hotellerie</option>
+                <option value="immobilier">🏠 Immobilier</option>
+                <option value="commerce">🛒 Commerce</option>
+              </select>
             </div>
-            <p className="text-gray-700 mb-4">{quotaError.message}</p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-blue-800">
-                💡 <strong>Reste disponible :</strong> {quotaError.remaining} leads Google Maps
-              </p>
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-gray-700">Ville *</label>
+              <input type="text" placeholder="Ex: Paris, Lyon, Marseille..." value={city} onChange={(e) => setCity(e.target.value)} className="w-full h-12 border-2 border-gray-300 rounded-lg px-4 text-base focus:border-blue-500 focus:outline-none" />
             </div>
-            <div className="space-y-2">
-              {quotaError.remaining > 0 && (
-                <button
-                  onClick={() => {
-                    setFormData({...formData, quantity: quotaError.remaining});
-                    setShowQuotaModal(false);
-                    handleGenerate({ preventDefault: () => {} });
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium"
-                >
-                  Générer {quotaError.remaining} leads seulement
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-gray-700">Rayon (km)</label>
+              <select value={radius} onChange={(e) => setRadius(e.target.value)} className="w-full h-12 border-2 border-gray-300 rounded-lg px-4 text-base focus:border-blue-500 focus:outline-none">
+                <option value="5">5 km</option>
+                <option value="10">10 km</option>
+                <option value="20">20 km</option>
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-gray-700">Quantite</label>
+              <input type="number" min="1" max="10000" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full h-12 border-2 border-gray-300 rounded-lg px-4 text-base focus:border-blue-500 focus:outline-none" />
+              <p className="text-xs text-gray-500 mt-1">💡 Max 10,000 leads</p>
+            </div>
+          </div>
+
+          {!isGenerating ? (
+            <button onClick={handleGenerate} disabled={!city || !sector} className="w-full h-16 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-lg rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3">
+              <Sparkles className="w-6 h-6" />
+              Lancer recherche ({quantity} leads dans {radius} km)
+            </button>
+          ) : (
+            <div className="flex gap-3">
+              {!isPaused ? (
+                <button onClick={handlePause} className="flex-1 h-16 bg-white border-2 border-orange-500 text-orange-600 hover:bg-orange-50 font-semibold text-lg rounded-lg flex items-center justify-center gap-2 transition-all">
+                  <Pause className="w-5 h-5" />Pause
+                </button>
+              ) : (
+                <button onClick={handleResume} className="flex-1 h-16 bg-white border-2 border-green-500 text-green-600 hover:bg-green-50 font-semibold text-lg rounded-lg flex items-center justify-center gap-2 transition-all">
+                  <Play className="w-5 h-5" />Reprendre
                 </button>
               )}
-              <button
-                onClick={() => alert('Redirection vers la page tarifs...')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium"
-              >
-                🚀 {quotaError.upgrade_suggestion}
-              </button>
-              <button
-                onClick={() => setShowQuotaModal(false)}
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-medium"
-              >
-                Annuler
+              <button onClick={handleStop} className="flex-1 h-16 bg-white border-2 border-red-500 text-red-600 hover:bg-red-50 font-semibold text-lg rounded-lg flex items-center justify-center gap-2 transition-all">
+                <Square className="w-5 h-5" />Arreter
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
-      {/* MODAL BASE SIMILAIRE */}
-      {showDuplicateModal && existingDatabase && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <Database className="w-8 h-8 text-blue-500" />
-              <h3 className="text-xl font-bold">Base similaire détectée</h3>
-            </div>
-            <p className="text-gray-700 mb-2">
-              Vous avez déjà une base <strong>"{existingDatabase.name}"</strong> avec {existingDatabase.total_leads} leads.
-            </p>
-            <p className="text-gray-600 text-sm mb-4">
-              Que voulez-vous faire ?
-            </p>
-            <div className="space-y-2">
-              <button
-                onClick={() => generateLeads(true, existingDatabase.id)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
-              >
-                ➕ Ajouter à la base existante
-                <span className="text-sm">({existingDatabase.total_leads} → {existingDatabase.total_leads + formData.quantity})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowDuplicateModal(false);
-                  generateLeads(false, null);
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium"
-              >
-                📁 Créer une nouvelle base "{formData.sector} - {formData.city} (2)"
-              </button>
-              <button
-                onClick={() => setShowDuplicateModal(false)}
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-medium"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* HEADER */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Zap className="w-8 h-8 text-yellow-500" />
-          Générer des Leads
-        </h1>
-        <p className="text-gray-600">Trouvez des prospects qualifiés via Google Maps</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* FORMULAIRE */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-6 sticky top-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Paramètres
-            </h2>
-
-            <form onSubmit={handleGenerate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Secteur *</label>
-                <select
-                  required
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={formData.sector}
-                  onChange={(e) => setFormData({...formData, sector: e.target.value})}
-                >
-                  <option value="">Sélectionner</option>
-                  {SECTEURS.map(s => (
-                    <option key={s.value} value={s.value}>{s.icon} {s.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Ville *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Paris, Lyon..."
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={formData.city}
-                  onChange={(e) => setFormData({...formData, city: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Rayon: {formData.radius} km</label>
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  step="5"
-                  className="w-full"
-                  value={formData.radius}
-                  onChange={(e) => setFormData({...formData, radius: parseInt(e.target.value)})}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Quantité</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value)})}
-                >
-                  <option value={10}>10 leads</option>
-                  <option value={25}>25 leads</option>
-                  <option value={50}>50 leads</option>
-                  <option value={100}>100 leads</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Vérification...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-5 h-5" />
-                    Générer
-                  </>
+      {isGenerating && (
+        <Card className="mb-6 border-4 border-blue-500 shadow-2xl animate-pulse">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-xl flex items-center gap-3">
+                <Loader className="w-6 h-6 animate-spin text-blue-600" />
+                <span className="text-blue-700">{message}</span>
+              </h3>
+              <div className="flex items-center gap-6 text-base font-semibold">
+                <span className="flex items-center gap-2 text-gray-700">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  {formatTime(timeElapsed)}
+                </span>
+                {estimatedTime && (
+                  <span className="text-orange-600">
+                    Reste: ~{formatTime(estimatedTime)}
+                  </span>
                 )}
-              </button>
-            </form>
-
-            {result && (
-              <div className="mt-6 pt-6 border-t">
-                <div className="text-center mb-4">
-                  <p className="text-4xl font-bold text-green-600">{result.total}</p>
-                  <p className="text-sm text-gray-600">Leads trouvés</p>
-                </div>
-                <button
-                  onClick={handleCreateDatabase}
-                  disabled={creating}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {creating ? 'Création...' : 'Créer la base'}
-                </button>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* LISTE DES LEADS */}
-        <div className="lg:col-span-3">
-          {!result && !loading && (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">Configurez votre recherche et générez des leads</p>
             </div>
-          )}
 
-          {loading && (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <Loader2 className="w-16 h-16 mx-auto mb-4 animate-spin text-blue-600" />
-              <p className="font-medium">Vérification des quotas...</p>
-            </div>
-          )}
-
-          {result && result.leads && (
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-4 border-b bg-gray-50">
-                <h2 className="text-xl font-semibold">Résultats ({result.total} leads)</h2>
+            <div className="w-full bg-gray-300 rounded-full h-10 mb-6 shadow-inner">
+              <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-10 rounded-full transition-all duration-500 flex items-center justify-center text-white font-bold text-lg shadow-lg" style={{ width: `${progress}%` }}>
+                {progress}%
               </div>
-              <div className="divide-y max-h-[600px] overflow-y-auto">
-                {result.leads.map((lead, index) => (
-                  <div key={index} className="p-4 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{lead.company_name}</h3>
-                        {lead.address && (
-                          <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
-                            <MapPin className="w-4 h-4" />
-                            {lead.address}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-3 mt-2">
-                          {lead.phone && (
-                            <a href={`tel:${lead.phone}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                              <Phone className="w-4 h-4" />
-                              {lead.phone}
-                            </a>
-                          )}
-                          {lead.email && (
-                            <a href={`mailto:${lead.email}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                              <Mail className="w-4 h-4" />
-                              {lead.email}
-                            </a>
-                          )}
-                          {lead.website && (
-                            <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                              <Globe className="w-4 h-4" />
-                              Site web
-                            </a>
-                          )}
-                        </div>
-                        {lead.rating && (
-                          <div className="mt-2 text-sm text-gray-600">
-                            ⭐ {lead.rating}/5 ({lead.review_count} avis)
-                          </div>
-                        )}
-                      </div>
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-6">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl text-center border-2 border-blue-200 shadow-md">
+                <p className="text-sm text-gray-600 font-semibold mb-1">En cache</p>
+                <p className="text-4xl font-bold text-blue-600">{stats.found}</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl text-center border-2 border-green-200 shadow-md">
+                <p className="text-sm text-gray-600 font-semibold mb-1">Generes</p>
+                <p className="text-4xl font-bold text-green-600">{stats.generated}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-xl text-center border-2 border-purple-200 shadow-md">
+                <p className="text-sm text-gray-600 font-semibold mb-1">Total</p>
+                <p className="text-4xl font-bold text-purple-600">{stats.total}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {leads.length > 0 && (
+        <Card className="shadow-xl">
+          <CardHeader className="bg-green-50 border-b-2">
+            <CardTitle className="text-2xl flex items-center gap-3">
+              <CheckCircle2 className="w-7 h-7 text-green-600" />
+              Resultats ({leads.length} leads)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+              {leads.map((lead, i) => (
+                <div key={i} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg hover:from-blue-50 hover:to-indigo-50 transition-all border border-gray-200 hover:border-blue-300 hover:shadow-md">
+                  <p className="font-bold text-lg text-gray-800 mb-2">{lead.company_name}</p>
+                  <div className="text-sm text-gray-600 flex flex-wrap gap-4">
+                    {lead.phone && <span className="flex items-center gap-1">📞 <span className="font-medium">{lead.phone}</span></span>}
+                    {lead.email && <span className="flex items-center gap-1">📧 <span className="font-medium">{lead.email}</span></span>}
+                    {lead.website && <span className="flex items-center gap-1">🌐 <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{lead.website}</a></span>}
+                    {lead.address && <span className="text-gray-500">📍 {lead.address}</span>}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

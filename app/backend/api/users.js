@@ -1,16 +1,17 @@
 ﻿import { authMiddleware } from '../middleware/auth.js';
-import { queryAll, queryOne } from '../lib/db.js';
+import { queryAll, queryOne, execute } from '../lib/db.js';
 import { hashPassword } from '../lib/auth.js';
+import { sendTemporaryPassword } from '../lib/email.js';
 import { z } from 'zod';
+import crypto from 'crypto';
 
-// Validation schema
 const createUserSchema = z.object({
   email: z.string().email('Email invalide'),
-  password: z.string().min(6, 'Mot de passe minimum 6 caractères'),
   first_name: z.string().min(1, 'Prénom requis'),
   last_name: z.string().min(1, 'Nom requis'),
   role: z.enum(['admin', 'manager', 'user']).default('user'),
-  phone: z.string().optional()
+  phone: z.string().optional(),
+  team_id: z.string().optional().nullable()
 });
 
 async function handler(req, res) {
@@ -20,7 +21,7 @@ async function handler(req, res) {
     // GET - List users
     if (method === 'GET') {
       const users = await queryAll(
-        `SELECT u.id, u.email, u.first_name, u.last_name, u.role, 
+        `SELECT u.id, u.email, u.first_name, u.last_name, u.role,  
                 u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
                 t.name as tenant_name
          FROM users u
@@ -38,34 +39,34 @@ async function handler(req, res) {
 
     // POST - Create user
     if (method === 'POST') {
-      // Only admin/manager can create users
       if (!['admin', 'manager'].includes(req.user.role)) {
-        return res.status(403).json({ 
-          error: 'Permissions insuffisantes' 
+        return res.status(403).json({
+          error: 'Permissions insuffisantes'
         });
       }
 
       const data = createUserSchema.parse(req.body);
-      
-      // Check if email exists
+      const team_id = data.team_id && data.team_id !== '' ? data.team_id : null;
+
       const existing = await queryOne(
         'SELECT id FROM users WHERE email = $1',
         [data.email]
       );
 
       if (existing) {
-        return res.status(400).json({ 
-          error: 'Email déjà utilisé' 
+        return res.status(400).json({
+          error: 'Email déjà utilisé'
         });
       }
 
-      // Hash password
-      const password_hash = await hashPassword(data.password);
+      const tempPassword = crypto.randomBytes(4).toString('hex');  
+      console.log('🔐 Mot de passe temporaire généré:', tempPassword);
 
-      // Create user
+      const password_hash = await hashPassword(tempPassword);
+
       const newUser = await queryOne(
-        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, phone)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, phone, requires_password_change)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true)
          RETURNING id, email, first_name, last_name, role, phone, created_at`,
         [
           req.user.tenant_id,
@@ -78,9 +79,25 @@ async function handler(req, res) {
         ]
       );
 
+      if (team_id) {
+        await execute(
+          `INSERT INTO team_members (id, team_id, user_id, role, joined_at)
+           VALUES (gen_random_uuid(), $1, $2, 'member', NOW())`,   
+          [team_id, newUser.id]
+        );
+      }
+
+      try {
+        await sendTemporaryPassword(data.email, data.first_name, tempPassword);
+        console.log(`✅ Email envoyé à ${data.email}`);
+      } catch (emailError) {
+        console.error('⚠️ Erreur envoi email:', emailError.message);
+      }
+
       return res.status(201).json({
         success: true,
-        user: newUser
+        user: newUser,
+        message: 'Utilisateur créé avec succès !'
       });
     }
 
@@ -90,14 +107,15 @@ async function handler(req, res) {
     console.error('Users API error:', error);
 
     if (error.name === 'ZodError') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Données invalides',
-        details: error.errors 
+        details: error.errors
       });
     }
 
-    return res.status(500).json({ 
-      error: 'Erreur serveur' 
+    return res.status(500).json({
+      error: 'Erreur serveur',
+      message: error.message
     });
   }
 }

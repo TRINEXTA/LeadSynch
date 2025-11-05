@@ -155,6 +155,18 @@ async function handler(req, res) {
         follow_up_date 
       } = req.body;
 
+      // Récupérer la campagne de la session
+      const sessionData = await queryAll(
+        'SELECT campaign_id FROM prospection_sessions WHERE id = $1',
+        [session_id]
+      );
+
+      if (sessionData.length === 0) {
+        return res.status(404).json({ error: 'Session non trouvée' });
+      }
+
+      const campaign_id = sessionData[0].campaign_id;
+
       // Enregistrer l'appel
       await execute(
         `INSERT INTO call_history 
@@ -174,11 +186,66 @@ async function handler(req, res) {
         [qualification, follow_up_date, notes, lead_id]
       );
 
+      // 🔥 METTRE À JOUR LE STAGE DANS LE PIPELINE
+      try {
+        // Mapper la qualification vers le bon stage du pipeline
+        const stageMapping = {
+          // Intéressé → Qualifié
+          'interested': 'qualifie',
+          'qualified': 'qualifie',
+          
+          // RDV → Très Qualifié
+          'meeting_scheduled': 'tres_qualifie',
+          'meeting_requested': 'tres_qualifie',
+          'rdv_scheduled': 'tres_qualifie',
+          'appointment': 'tres_qualifie',
+          
+          // Démo → Proposition
+          'demo_scheduled': 'proposition',
+          'demo_requested': 'proposition',
+          
+          // À relancer
+          'callback': 'relancer',
+          'follow_up': 'relancer',
+          'email_sent': 'relancer',
+          
+          // NRP / Pas intéressé / Hors scope
+          'not_interested': 'nrp',
+          'disqualified': 'hors_scope',
+          'nrp': 'nrp',
+          'no_answer': 'nrp',
+          'wrong_number': 'nrp'
+        };
+
+        const stage = stageMapping[qualification] || 'cold_call';
+
+        // Mettre à jour le stage dans pipeline_leads
+        await execute(
+          `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at, assigned_user_id)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW(), $5)
+           ON CONFLICT (lead_id, campaign_id) 
+           DO UPDATE SET 
+             stage = EXCLUDED.stage, 
+             updated_at = NOW(),
+             assigned_user_id = EXCLUDED.assigned_user_id`,
+          [tenant_id, lead_id, campaign_id, stage, user_id]
+        );
+
+        console.log(`🧩 [PROSPECTION] Lead ${lead_id} déplacé vers ${stage} (qualification: ${qualification})`);
+      } catch (pipelineError) {
+        console.error('❌ [PROSPECTION] Erreur mise à jour pipeline:', pipelineError.message);
+        console.error(`   - tenant_id: ${tenant_id}`);
+        console.error(`   - lead_id: ${lead_id}`);
+        console.error(`   - campaign_id: ${campaign_id}`);
+        console.error(`   - qualification: ${qualification}`);
+        // Ne pas bloquer l'enregistrement de l'appel si l'injection pipeline échoue
+      }
+
       // Incrémenter compteur session
       await execute(
         `UPDATE prospection_sessions 
          SET calls_made = calls_made + 1,
-             meetings_obtained = meetings_obtained + CASE WHEN $1 IN ('meeting_scheduled', 'demo_scheduled') THEN 1 ELSE 0 END,
+             meetings_obtained = meetings_obtained + CASE WHEN $1 IN ('meeting_scheduled', 'demo_scheduled', 'meeting_requested') THEN 1 ELSE 0 END,
              docs_sent = docs_sent + CASE WHEN $1 = 'email_sent' THEN 1 ELSE 0 END,
              follow_ups_created = follow_ups_created + CASE WHEN $2 IS NOT NULL THEN 1 ELSE 0 END,
              disqualified = disqualified + CASE WHEN $1 IN ('disqualified', 'not_interested') THEN 1 ELSE 0 END,
@@ -189,7 +256,7 @@ async function handler(req, res) {
 
       return res.json({ 
         success: true,
-        message: 'Appel enregistré'
+        message: 'Appel enregistré et lead mis à jour dans le pipeline'
       });
     }
 

@@ -1,36 +1,870 @@
-﻿import { authMiddleware } from '../middleware/auth.js';
-import { queryAll, execute } from '../lib/db.js';
+﻿import express from 'express';
+import authenticateToken from '../middleware/auth.js';
+import db from '../config/db.js';
 
-async function handler(req, res) {
-  const tenant_id = req.user.tenant_id;
+const router = express.Router();
 
+// ==================== HELPERS ====================
+const queryOne = async (query, params = []) => {
+  const { rows } = await db.query(query, params);
+  return rows[0] || null;
+};
+
+const queryAll = async (query, params = []) => {
+  const { rows } = await db.query(query, params);
+  return rows;
+};
+
+const execute = async (query, params = []) => {
+  return await db.query(query, params);
+};
+
+// ==================== GET ALL CAMPAIGNS ====================
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    if (req.method === 'GET') {
-      const campaigns = await queryAll(
-        'SELECT * FROM campaigns WHERE tenant_id = $1 ORDER BY created_at DESC',
-        [tenant_id]
-      );
-      return res.status(200).json({ success: true, campaigns: campaigns || [] });
-    }
-
-    if (req.method === 'POST') {
-      const { name, type, description, start_date, end_date } = req.body;
-      if (!name) {
-        return res.status(400).json({ error: 'Le nom est requis' });
-      }
-      const campaign = await execute(
-        `INSERT INTO campaigns (tenant_id, name, type, description, start_date, end_date, created_by, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft') RETURNING *`,
-        [tenant_id, name, type || 'email', description, start_date, end_date, req.user.id]
-      );
-      return res.status(201).json({ success: true, campaign });
-    }
-
-    return res.status(405).json({ error: 'Method not allowed' });
+    const tenantId = req.user?.tenant_id;
+    
+    const campaigns = await queryAll(
+      `SELECT 
+        c.*,
+        ld.name as database_name,
+        et.name as template_name
+      FROM campaigns c
+      LEFT JOIN lead_databases ld ON c.database_id = ld.id
+      LEFT JOIN email_templates et ON c.template_id = et.id
+      WHERE c.tenant_id = $1
+      ORDER BY c.created_at DESC`,
+      [tenantId]
+    );
+    
+    console.log('?? Campagnes charg?es:', campaigns.length);
+    
+    return res.json({ success: true, campaigns });
+    
   } catch (error) {
-    console.error('Campaigns error:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('? Erreur GET campaigns:', error);
+    return res.status(500).json({ error: error.message });
   }
-}
+});
 
-export default authMiddleware(handler);
+// ==================== GET ONE CAMPAIGN ====================
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+    
+    const campaign = await queryOne(
+      `SELECT 
+        c.*,
+        ld.name as database_name,
+        et.name as template_name,
+        et.html_body as template_html
+      FROM campaigns c
+      LEFT JOIN lead_databases ld ON c.database_id = ld.id
+      LEFT JOIN email_templates et ON c.template_id = et.id
+      WHERE c.id = $1 AND c.tenant_id = $2`,
+      [campaignId, tenantId]
+    );
+    
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+    
+    return res.json({ success: true, campaign });
+    
+  } catch (error) {
+    console.error('? Erreur GET campaign:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== CREATE CAMPAIGN ====================
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const {
+      name,
+      type,
+      objective,
+      subject,
+      goal_description,
+      message,
+      link,
+      database_id,
+      template_id,
+      assigned_users,
+      send_days,
+      send_time_start,
+      send_time_end,
+      start_date,
+      start_time,
+      emails_per_cycle,
+      cycle_interval_minutes,
+      status,
+      sectors,
+      attachments,
+      track_clicks,
+      auto_distribute
+    } = req.body;
+
+    console.log('?? Donn?es re?ues:', req.body);
+
+    // Validation des champs requis
+    if (!name || !type || !database_id) {
+      return res.status(400).json({ 
+        error: 'Champs requis: name, type, database_id' 
+      });
+    }
+
+    // R?cup?ration des leads depuis la base de donn?es
+    let leads = [];
+    
+    if (sectors && Object.keys(sectors).length > 0) {
+      // Filtrage par secteurs si sp?cifi?
+      const sectorFilter = Object.entries(sectors)
+        .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
+        .map(([dbId, sectorList]) => 
+          `(ldr.database_id = '${dbId}' AND l.sector = ANY(ARRAY[${sectorList.map(s => `'${s}'`).join(',')}]))`
+        )
+        .join(' OR ');
+      
+      if (sectorFilter) {
+        leads = await queryAll(
+          `SELECT DISTINCT l.* 
+           FROM leads l
+           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+           WHERE l.tenant_id = $1 
+           AND ldr.database_id = $2
+           AND (${sectorFilter})`,
+          [tenantId, database_id]
+        );
+      }
+    } else {
+      // R?cup?ration de tous les leads de la base
+      leads = await queryAll(
+        `SELECT DISTINCT l.* 
+         FROM leads l
+         JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+         WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+        [tenantId, database_id]
+      );
+    }
+
+    console.log(`? ${leads.length} leads trouv?s`);
+
+    if (leads.length === 0) {
+      return res.status(400).json({ 
+        error: 'Aucun lead trouv? dans cette base' 
+      });
+    }
+
+    // Cr?ation de la campagne dans la base de donn?es
+    const campaign = await queryOne(
+      `INSERT INTO campaigns (
+        tenant_id,
+        name,
+        type,
+        campaign_type,
+        objective,
+        subject,
+        description,
+        database_id,
+        sector,
+        template_id,
+        status,
+        send_days,
+        send_time_start,
+        send_time_end,
+        start_date,
+        emails_per_cycle,
+        cycle_interval_minutes,
+        assigned_users,
+        total_leads,
+        track_clicks,
+        auto_distribute,
+        created_by,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
+      )
+      RETURNING *`,
+      [
+        tenantId,
+        name,
+        type,
+        type,
+        objective || 'leads',
+        subject || null,
+        goal_description || null,
+        database_id,
+        sectors ? JSON.stringify(sectors) : null,
+        template_id || null,
+        status || 'draft',
+        JSON.stringify(send_days || [1,2,3,4,5]),
+        send_time_start || '08:00',
+        send_time_end || '18:00',
+        start_date || null,
+        emails_per_cycle || 50,
+        cycle_interval_minutes || 10,
+        JSON.stringify(assigned_users || []),
+        leads.length,
+        track_clicks !== false,
+        auto_distribute !== false,
+        userId
+      ]
+    );
+
+    console.log('? Campagne cr??e:', campaign.id);
+
+    // Si campagne EMAIL : TOUJOURS ajouter les emails ? la queue
+    if (type === 'email') {
+      console.log('?? Ajout des emails ? la queue...');
+      
+      for (const lead of leads) {
+        await execute(
+          `INSERT INTO email_queue (
+            campaign_id,
+            lead_id,
+            tenant_id,
+            recipient_email,
+            status,
+            created_at
+          ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+          [campaign.id, lead.id, tenantId, lead.email, 'pending']
+        );
+      }
+      
+      console.log(`? ${leads.length} emails ajout?s ? la queue`);
+    }
+
+    // Si campagne PHONING/SMS/WHATSAPP : affecter les leads aux commerciaux ET injecter dans le pipeline
+    if (type !== 'email' && assigned_users && assigned_users.length > 0) {
+      console.log(`?? Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
+
+      const INITIAL_LEADS_PER_USER = 50;
+      // Compteur d'injection par commercial
+      const perUserInjected = new Map(assigned_users.map(u => [u, 0]));
+      let totalInjected = 0;
+      const totalInitialLeads = Math.min(leads.length, INITIAL_LEADS_PER_USER * assigned_users.length);
+
+      console.log(`?? Injection initiale: ${INITIAL_LEADS_PER_USER} leads par commercial (${totalInitialLeads} total)`);
+
+      await execute('BEGIN');
+
+      try {
+        for (let i = 0; i < leads.length; i++) {
+          const lead = leads[i];
+          const userId = assigned_users[i % assigned_users.length];
+
+          // 1) assignation du lead au commercial (round-robin)
+          await execute(
+            `UPDATE leads 
+               SET assigned_to = $1, status = 'assigned', updated_at = NOW()
+             WHERE id = $2 AND tenant_id = $3`,
+            [userId, lead.id, tenantId]
+          );
+
+          // 2) injection contrôlée dans le pipeline : max 50 par commercial
+          const alreadyForUser = perUserInjected.get(userId) || 0;
+          if (totalInjected < totalInitialLeads && alreadyForUser < INITIAL_LEADS_PER_USER) {
+            const res = await execute(
+              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id)
+               DO UPDATE SET
+                 stage = EXCLUDED.stage,
+                 assigned_user_id = EXCLUDED.assigned_user_id,
+                 updated_at = NOW()`,
+              [tenantId, lead.id, campaign.id, userId]
+            );
+
+            // Si une ligne a été insérée OU updatée, on incrémente
+            if (res.rowCount > 0) {
+              perUserInjected.set(userId, alreadyForUser + 1);
+              totalInjected++;
+            }
+          }
+        }
+
+        await execute('COMMIT');
+      } catch (e) {
+        await execute('ROLLBACK');
+        console.error('? Erreur affectation/injection :', e.message);
+        throw e;
+      }
+
+      console.log(`? ${leads.length} leads affectés`);
+      console.log(`?? ${totalInjected} leads injectés dans le pipeline (cold_call)`);
+    }
+
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur cr?ation campagne:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== UPDATE CAMPAIGN ====================
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+    const updates = req.body;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET 
+         name = COALESCE($1, name),
+         subject = COALESCE($2, subject),
+         description = COALESCE($3, description),
+         template_id = COALESCE($4, template_id),
+         send_days = COALESCE($5, send_days),
+         send_time_start = COALESCE($6, send_time_start),
+         send_time_end = COALESCE($7, send_time_end),
+         start_date = COALESCE($8, start_date),
+         emails_per_cycle = COALESCE($9, emails_per_cycle),
+         assigned_users = COALESCE($10, assigned_users),
+         updated_at = NOW()
+       WHERE id = $11 AND tenant_id = $12
+       RETURNING *`,
+      [
+        updates.name,
+        updates.subject,
+        updates.goal_description,
+        updates.template_id,
+        updates.send_days ? JSON.stringify(updates.send_days) : null,
+        updates.send_time_start,
+        updates.send_time_end,
+        updates.start_date,
+        updates.emails_per_cycle,
+        updates.assigned_users ? JSON.stringify(updates.assigned_users) : null,
+        campaignId,
+        tenantId
+      ]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    console.log('? Campagne mise ? jour:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur update:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== START CAMPAIGN ====================
+router.post('/:id/start', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET status = 'active', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    // Ajouter les emails ? la queue si pas d?j? fait (pour campagnes email)
+    if (campaign.type === 'email') {
+      const existingEmails = await queryOne(
+        'SELECT COUNT(*) as count FROM email_queue WHERE campaign_id = $1',
+        [campaignId]
+      );
+
+      if (existingEmails.count === 0) {
+        const leads = await queryAll(
+          `SELECT DISTINCT l.* 
+           FROM leads l
+           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+          [tenantId, campaign.database_id]
+        );
+
+        for (const lead of leads) {
+          await execute(
+            `INSERT INTO email_queue (
+              campaign_id,
+              lead_id,
+              tenant_id,
+              recipient_email,
+              status,
+              created_at
+            ) VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+            [campaignId, lead.id, tenantId, lead.email]
+          );
+        }
+
+        console.log(`? ${leads.length} emails ajout?s ? la queue`);
+      }
+    }
+
+    console.log('?? Campagne d?marr?e:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur start:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== PAUSE CAMPAIGN ====================
+router.post('/:id/pause', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET status = 'paused', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    console.log('?? Campagne mise en pause:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur pause:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== RESUME CAMPAIGN ====================
+router.post('/:id/resume', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET status = 'active', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    console.log('?? Campagne reprise:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur resume:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== STOP CAMPAIGN ====================
+router.post('/:id/stop', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET status = 'stopped', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    console.log('?? Campagne arr?t?e:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur stop:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ARCHIVE CAMPAIGN ====================
+router.post('/:id/archive', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET status = 'archived', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    console.log('?? Campagne archiv?e:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur archive:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== UNARCHIVE CAMPAIGN ====================
+router.post('/:id/unarchive', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+
+    const campaign = await queryOne(
+      `UPDATE campaigns 
+       SET status = 'draft', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+
+    console.log('?? Campagne d?sarchiv?e:', campaignId);
+
+    return res.json({ success: true, campaign });
+
+  } catch (error) {
+    console.error('? Erreur unarchive:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== RELAUNCH CAMPAIGN ====================
+router.post('/:id/relaunch', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const campaignId = req.params.id;
+    
+    console.log('?? Relance campagne:', campaignId);
+    
+    const campaign = await queryOne(
+      'SELECT * FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+    
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+    
+    // R?cup?rer les leads exclus (RGPD: bounce, unsubscribe, clicked)
+    const excludedLeads = await queryAll(
+      `SELECT DISTINCT lead_id 
+       FROM email_queue 
+       WHERE campaign_id = $1 
+       AND (
+         bounced_at IS NOT NULL 
+         OR unsubscribed_at IS NOT NULL 
+         OR clicked_at IS NOT NULL
+       )`,
+      [campaignId]
+    );
+    
+    const excludedIds = excludedLeads.map(l => l.lead_id);
+    console.log(`? ${excludedIds.length} leads ? exclure (RGPD)`);
+    
+    // R?cup?rer tous les leads de la base
+    const allLeads = await queryAll(
+      `SELECT DISTINCT l.* 
+       FROM leads l
+       JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+       WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+      [tenantId, campaign.database_id]
+    );
+    
+    const eligibleLeads = allLeads.filter(l => !excludedIds.includes(l.id));
+    
+    console.log(`? ${eligibleLeads.length} leads ?ligibles pour relance`);
+    
+    if (eligibleLeads.length === 0) {
+      return res.status(400).json({ 
+        error: 'Aucun lead ?ligible pour la relance' 
+      });
+    }
+    
+    // Cr?er une nouvelle campagne de relance
+    const newCampaign = await queryOne(
+      `INSERT INTO campaigns (
+        tenant_id, name, type, campaign_type, objective, subject, description,
+        database_id, sector, template_id, status,
+        send_days, send_time_start, send_time_end,
+        start_date, emails_per_cycle, cycle_interval_minutes,
+        assigned_users, total_leads, track_clicks, auto_distribute,
+        created_by, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
+      ) RETURNING *`,
+      [
+        campaign.tenant_id,
+        `${campaign.name} (Relance)`,
+        campaign.type,
+        campaign.campaign_type,
+        campaign.objective,
+        campaign.subject,
+        campaign.description,
+        campaign.database_id,
+        campaign.sector,
+        campaign.template_id,
+        'active',
+        campaign.send_days,
+        campaign.send_time_start,
+        campaign.send_time_end,
+        null,
+        campaign.emails_per_cycle,
+        campaign.cycle_interval_minutes,
+        campaign.assigned_users,
+        eligibleLeads.length,
+        campaign.track_clicks,
+        campaign.auto_distribute,
+        userId
+      ]
+    );
+    
+    // Ajouter les leads ?ligibles ? la queue
+    for (const lead of eligibleLeads) {
+      await execute(
+        `INSERT INTO email_queue (
+          campaign_id,
+          lead_id,
+          tenant_id,
+          recipient_email,
+          status,
+          created_at
+        ) VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+        [newCampaign.id, lead.id, tenantId, lead.email]
+      );
+    }
+    
+    console.log(`? Relance cr??e: ${eligibleLeads.length} emails en queue`);
+    
+    return res.json({ 
+      success: true, 
+      campaign: newCampaign,
+      leads_count: eligibleLeads.length,
+      excluded_count: excludedIds.length
+    });
+    
+  } catch (error) {
+    console.error('? Erreur relance:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== DUPLICATE CAMPAIGN ====================
+router.post('/:id/duplicate', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const campaignId = req.params.id;
+    
+    const campaign = await queryOne(
+      'SELECT * FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+    
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+    
+    const newCampaign = await queryOne(
+      `INSERT INTO campaigns (
+        tenant_id, name, type, campaign_type, objective, subject, description,
+        database_id, sector, template_id, status,
+        send_days, send_time_start, send_time_end,
+        start_date, emails_per_cycle, cycle_interval_minutes,
+        assigned_users, total_leads, track_clicks, auto_distribute,
+        created_by, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
+      ) RETURNING *`,
+      [
+        campaign.tenant_id,
+        `${campaign.name} (Copie)`,
+        campaign.type,
+        campaign.campaign_type,
+        campaign.objective,
+        campaign.subject,
+        campaign.description,
+        campaign.database_id,
+        campaign.sector,
+        campaign.template_id,
+        'draft',
+        campaign.send_days,
+        campaign.send_time_start,
+        campaign.send_time_end,
+        null,
+        campaign.emails_per_cycle,
+        campaign.cycle_interval_minutes,
+        campaign.assigned_users,
+        campaign.total_leads,
+        campaign.track_clicks,
+        campaign.auto_distribute,
+        userId
+      ]
+    );
+    
+    console.log('?? Campagne dupliqu?e:', newCampaign.id);
+    
+    return res.json({ success: true, campaign: newCampaign });
+    
+  } catch (error) {
+    console.error('? Erreur duplication:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== DELETE CAMPAIGN ====================
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+    
+    // Supprimer d'abord les emails de la queue
+    await execute(
+      'DELETE FROM email_queue WHERE campaign_id = $1',
+      [campaignId]
+    );
+    
+    // Puis supprimer la campagne
+    const campaign = await queryOne(
+      'DELETE FROM campaigns WHERE id = $1 AND tenant_id = $2 RETURNING *',
+      [campaignId, tenantId]
+    );
+    
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouv?e' });
+    }
+    
+    console.log('??? Campagne supprim?e:', campaignId);
+    
+    return res.json({ success: true, message: 'Campagne supprim?e' });
+    
+  } catch (error) {
+    console.error('? Erreur suppression:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SEND TEST EMAILS ====================
+router.post('/test-emails', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { template_id, recipients, attachments } = req.body;
+    
+    if (!template_id || !recipients || recipients.length === 0) {
+      return res.status(400).json({ 
+        error: 'Template et destinataires requis' 
+      });
+    }
+    
+    if (recipients.length > 3) {
+      return res.status(400).json({ 
+        error: 'Maximum 3 destinataires' 
+      });
+    }
+    
+    const template = await queryOne(
+      'SELECT * FROM email_templates WHERE id = $1 AND tenant_id = $2',
+      [template_id, tenantId]
+    );
+    
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouv?' });
+    }
+    
+    console.log(`?? Envoi de ${recipients.length} emails de test...`);
+    
+    // Importer le service Elastic Email
+    const { sendTestEmail } = await import('../services/elasticEmail.js');
+    
+    const results = {
+      success: [],
+      failed: []
+    };
+    
+    // Envoyer ? chaque destinataire
+    for (const recipient of recipients) {
+      try {
+        await sendTestEmail({
+          to: recipient,
+          subject: template.subject || 'Email de test',
+          templateHtml: template.html_body
+        });
+        results.success.push(recipient);
+      } catch (error) {
+        console.error(`? Erreur envoi ? ${recipient}:`, error);
+        results.failed.push({ email: recipient, error: error.message });
+      }
+    }
+    
+    console.log(`? Envoi termin?: ${results.success.length} succ?s, ${results.failed.length} ?checs`);
+    
+    return res.json({ 
+      success: true, 
+      message: `${results.success.length}/${recipients.length} email(s) de test envoy?(s)`,
+      results
+    });
+    
+  } catch (error) {
+    console.error('? Erreur envoi test:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ==================== FORCE SYNC STATS ====================
+router.post('/:id/force-sync', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+
+    console.log('?? [FORCE SYNC] Synchronisation forc?e pour:', campaignId);
+
+    // Importer le service de polling
+    const { pollingService } = await import('../lib/elasticEmailPolling.js');
+    
+    // Forcer la sync de cette campagne
+    await pollingService.syncCampaignStats(campaignId);
+    
+    return res.json({ success: true, message: 'Synchronisation forc?e lanc?e' });
+    
+  } catch (error) {
+    console.error('? Erreur force sync:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+export default router;

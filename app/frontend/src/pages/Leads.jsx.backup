@@ -1,0 +1,235 @@
+﻿import React, { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Plus, Mail, Phone, MapPin, Star, X, Building2, User, Briefcase, Globe, Edit2, Trash2 } from "lucide-react";
+
+export default function Leads() {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [showModal, setShowModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [formData, setFormData] = useState({
+    company_name: '',
+    contact_name: '',
+    contact_position: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    postal_code: '',
+    country: 'France',
+    website: '',
+    industry: '',
+    company_size: '',
+    annual_revenue: '',
+    status: 'nouveau',
+    score: 50,
+    source: '',
+    notes: ''
+  });
+
+  useEffect(() => {
+    loadLeads();
+  }, []);
+
+  const loadLeads = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/leads', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+      setLeads(data.leads || []);
+      setLoading(false);
+    } catch (error) {
+      console.error('Erreur chargement leads:', error);
+      setLoading(false);
+    }
+  };
+
+  const handleViewDetails = (lead) => {
+    setSelectedLead(lead);
+    setShowDetailsModal(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://localhost:3000/api/leads', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        setFormData({
+          company_name: '',
+          contact_name: '',
+          contact_position: '',
+          email: '',
+          phone: '',
+          address: '',
+          city: '',
+          postal_code: '',
+          country: 'France',
+          website: '',
+          industry: '',
+          company_size: '',
+          annual_revenue: '',
+          status: 'nouveau',
+          score: 50,
+          source: '',
+          notes: ''
+        });
+        loadLeads();
+      }
+    } catch (error) {
+      console.error('Erreur création lead:', error);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'nouveau': 'bg-blue-100 text-blue-800',
+      'contacté': 'bg-yellow-100 text-yellow-800',
+      'qualifié': 'bg-green-100 text-green-800',
+      'perdu': 'bg-red-100 text-red-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const filteredLeads = filter === 'all'
+    ? leads
+    : leads.filter(lead => lead.status === filter);
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Chargement...</div>;
+  }
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Leads & Prospects</h1>
+          <p className="text-gray-600">Gérez vos prospects et opportunités</p>
+        </div>
+        <Button
+          className="bg-blue-600 hover:bg-blue-700"
+          onClick={() => setShowModal(true)}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Nouveau Lead
+        </Button>
+      </div>
+
+      {/* Filtres */}
+      <div className="flex gap-2 mb-6">
+        <Button
+          variant={filter === 'all' ? 'default' : 'outline'}
+          onClick={() => setFilter('all')}
+        >
+          Tous ({leads.length})
+        </Button>
+        <Button
+          variant={filter === 'nouveau' ? 'default' : 'outline'}
+          onClick={() => setFilter('nouveau')}
+        >
+          Nouveaux ({leads.filter(l => l.status === 'nouveau').length})
+        </Button>
+        <Button
+          variant={filter === 'contacté' ? 'default' : 'outline'}
+          onClick={() => setFilter('contacté')}
+        >
+          Contactés ({leads.filter(l => l.status === 'contacté').length})
+        </Button>
+        <Button
+          variant={filter === 'qualifié' ? 'default' : 'outline'}
+          onClick={() => setFilter('qualifié')}
+        >
+          Qualifiés ({leads.filter(l => l.status === 'qualifié').length})
+        </Button>
+      </div>
+
+      {/* Liste des leads */}
+      <div className="grid gap-4">
+        {filteredLeads.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6 text-center text-gray-500">
+              Aucun lead trouvé
+            </CardContent>
+          </Card>
+        ) : (
+          filteredLeads.map(lead => (
+            <Card key={lead.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-xl font-bold">{lead.company_name}</h3>
+                      <Badge className={getStatusColor(lead.status)}>
+                        {lead.status}
+                      </Badge>
+                      {lead.score && lead.score > 70 && (
+                        <div className="flex items-center text-yellow-600">
+                          <Star className="w-4 h-4 mr-1 fill-yellow-600" />
+                          <span className="text-sm font-medium">{lead.score}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {lead.contact_name && (
+                      <p className="text-gray-600 mb-3">
+                        <User className="w-4 h-4 inline mr-1" />
+                        {lead.contact_name} {lead.contact_position && `- ${lead.contact_position}`}
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      {lead.email && (
+                        <div className="flex items-center text-gray-600">
+                          <Mail className="w-4 h-4 mr-2" />
+                          <span className="text-sm">{lead.email}</span>
+                        </div>
+                      )}
+                      {lead.phone && (
+                        <div className="flex items-center text-gray-600">
+                          <Phone className="w-4 h-4 mr-2" />
+                          <span className="text-sm">{lead.phone}</span>
+                        </div>
+                      )}
+                      {lead.city && (
+                        <div className="flex items-center text-gray-600">
+                          <MapPin className="w-4 h-4 mr-2" />
+                          <span className="text-sm">{lead.city}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {lead.industry && (
+                      <div className="mt-3">
+                        <Badge variant="outline">{lead.industry}</Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewDetails(lead)}
+                  >
+                    Voir détails
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>

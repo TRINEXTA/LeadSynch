@@ -1,0 +1,588 @@
+﻿import React, { useState, useEffect } from 'react';
+import { Mail, Sparkles, Code, Edit, Eye, Trash2, X, Shield, AlertTriangle, Image as ImageIcon, Blocks } from 'lucide-react';
+import api from '../api/axios';
+import ImageGallery from '../components/ImageGallery';
+import HtmlBlocks from '../components/HtmlBlocks';
+
+export default function EmailTemplates() {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState(null);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
+  const [rightPanelTab, setRightPanelTab] = useState('score'); // 'score', 'images', 'blocks'
+  const [formData, setFormData] = useState({
+    name: '',
+    subject: '',
+    content: '',
+    description: ''
+  });
+  const [spamScore, setSpamScore] = useState(null);
+  const [analyzingSpam, setAnalyzingSpam] = useState(false);
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formData.subject && formData.content && modalMode !== 'ai') {
+        analyzeSpam();
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [formData.subject, formData.content, modalMode]);
+
+  const loadTemplates = async () => {
+    try {
+      const response = await api.get('/email-templates');
+      setTemplates(response.data.templates || []);
+      setLoading(false);
+    } catch (error) {
+      console.error('Erreur:', error);
+      setLoading(false);
+    }
+  };
+
+  const analyzeSpam = async () => {
+    setAnalyzingSpam(true);
+    try {
+      const response = await api.post('/analyze-spam', {
+        subject: formData.subject,
+        content: formData.content,
+        from_email: 'test@example.com',
+        from_name: 'Test'
+      });
+      setSpamScore(response.data);
+    } catch (error) {
+      console.error('Erreur analyse spam:', error);
+    } finally {
+      setAnalyzingSpam(false);
+    }
+  };
+
+  const handleCreateClick = (mode) => {
+    setModalMode(mode);
+    setShowModal(true);
+    setSpamScore(null);
+    setRightPanelTab('score');
+    setFormData({ name: '', subject: '', content: '', description: '' });
+  };
+
+  const handleInsertCode = (code) => {
+    setFormData({...formData, content: formData.content + '\n\n' + code});
+    alert('✅ Code inséré !');
+  };
+
+  const handleSave = async () => {
+    if (modalMode === 'ai') {
+      // Validation pour l'IA
+      if (!formData.email_type || !formData.objective) {
+        alert('❌ Type d\'email et objectif requis !');
+        return;
+      }
+
+      setAnalyzingSpam(true);
+      try {
+        const response = await api.post('/ai/generate-template', {
+          email_type: formData.email_type,
+          tone: formData.tone,
+          objective: formData.objective,
+          target_audience: formData.target_audience,
+          company_name: formData.company_name,
+          product_service: formData.product_service,
+          call_to_action: formData.call_to_action,
+          additional_info: formData.additional_info
+        });
+
+        const generated = response.data.template;
+
+        // Remplir avec le résultat et basculer en mode HTML pour édition
+        setFormData({
+          name: `${formData.email_type} - ${formData.company_name || 'Template'}`,
+          subject: generated.subject,
+          content: generated.html,
+          description: generated.preview_text || ''
+        });
+        
+        setModalMode('html');
+        alert('✅ Template généré avec succès ! Vous pouvez maintenant l\'éditer.');
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert('❌ Erreur lors de la génération IA');
+      } finally {
+        setAnalyzingSpam(false);
+      }
+      return;
+    }
+
+    // Validation normale
+    if (!formData.name || !formData.subject || !formData.content) {
+      alert('❌ Tous les champs requis !');
+      return;
+    }
+    if (spamScore && spamScore.score < 70) {
+      if (!confirm(`⚠️ Score faible (${spamScore.score}/100). Continuer ?`)) return;
+    }
+    try {
+      await api.post('/email-templates', { ...formData, spam_score: spamScore?.score || null });
+      setShowModal(false);
+      loadTemplates();
+      alert('✅ Template créé !');
+    } catch (error) {
+      alert('❌ Erreur');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Supprimer ?')) return;
+    try {
+      await api.delete(`/email-templates/${id}`);
+      loadTemplates();
+      alert('✅ Supprimé !');
+    } catch (error) {
+      alert('❌ Erreur');
+    }
+  };
+
+  const getScoreColor = (score) => {
+    if (!score) return 'from-gray-400 to-gray-500';
+    if (score >= 90) return 'from-green-500 to-emerald-500';
+    if (score >= 70) return 'from-yellow-500 to-orange-500';
+    return 'from-red-500 to-pink-500';
+  };
+
+  const getScoreBadgeColor = (score) => {
+    if (!score) return 'bg-gray-100 text-gray-600';
+    if (score >= 90) return 'bg-green-100 text-green-700';
+    if (score >= 70) return 'bg-yellow-100 text-yellow-700';
+    return 'bg-red-100 text-red-700';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Mail className="w-8 h-8 text-purple-600" />
+            <h1 className="text-3xl font-bold text-gray-900">Templates Email Pro</h1>
+          </div>
+          <p className="text-gray-600">Le meilleur éditeur d'email marketing - Score anti-spam + Blocs + Images</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <button onClick={() => handleCreateClick('ai')} className="group bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all transform hover:scale-105">
+            <Sparkles className="w-12 h-12 mx-auto mb-3" />
+            <h3 className="text-xl font-bold mb-2">IA Asefi</h3>
+            <p className="text-sm opacity-90">Génération auto</p>
+          </button>
+
+          <button onClick={() => handleCreateClick('manual')} className="group bg-gradient-to-br from-blue-600 to-cyan-600 text-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all transform hover:scale-105">
+            <Edit className="w-12 h-12 mx-auto mb-3" />
+            <h3 className="text-xl font-bold mb-2">Manuel</h3>
+            <p className="text-sm opacity-90">Simple et rapide</p>
+          </button>
+
+          <button onClick={() => handleCreateClick('html')} className="group bg-gradient-to-br from-green-600 to-emerald-600 text-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all transform hover:scale-105">
+            <Code className="w-12 h-12 mx-auto mb-3" />
+            <h3 className="text-xl font-bold mb-2">HTML Pro</h3>
+            <p className="text-sm opacity-90">Éditeur 3 colonnes</p>
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <h2 className="text-xl font-bold mb-4">Mes Templates ({templates.length})</h2>
+          {templates.length === 0 ? (
+            <div className="text-center py-12">
+              <Mail className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">Aucun template</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {templates.map(t => (
+                <div key={t.id} className="border-2 rounded-xl p-4 hover:border-purple-300 transition-all">
+                  <div className="flex justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold">{t.name}</h3>
+                      <p className="text-xs text-gray-500">{t.subject}</p>
+                    </div>
+                    {t.spam_score && <div className={`px-2 py-1 rounded text-xs font-bold ${getScoreBadgeColor(t.spam_score)}`}>{t.spam_score}%</div>}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPreviewTemplate(t)} className="flex-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold flex items-center justify-center gap-1">
+                      <Eye className="w-4 h-4" />Voir
+                    </button>
+                    <button onClick={() => handleDelete(t.id)} className="px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-semibold">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL ÉDITEUR */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full h-[95vh] flex flex-col" style={{ maxWidth: '98vw' }}>
+            {/* HEADER */}
+            <div className="flex-shrink-0 border-b p-4 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl font-bold">
+                  {modalMode === 'ai' && '✨ IA'}
+                  {modalMode === 'manual' && '✏️ Manuel'}
+                  {modalMode === 'html' && '💻 HTML Pro'}
+                </h2>
+                {modalMode === 'html' && (
+                  <div className="flex gap-2">
+                    <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Nom *" className="px-3 py-2 border-2 rounded-lg text-sm w-40" />
+                    <input type="text" value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} placeholder="Sujet *" className="px-3 py-2 border-2 rounded-lg text-sm w-60" />
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setShowModal(false)}><X className="w-6 h-6" /></button>
+            </div>
+
+            {/* CONTENU */}
+            <div className="flex-1 overflow-hidden">
+              {modalMode === 'html' ? (
+                <div className="grid grid-cols-12 gap-0 h-full">
+                  {/* COLONNE 1 - CODE (40%) */}
+                  <div className="col-span-5 border-r flex flex-col h-full">
+                    <div className="flex-shrink-0 bg-gray-900 text-white px-4 py-2 flex items-center justify-between">
+                      <span className="text-sm font-semibold flex items-center gap-2">
+                        <Code className="w-4 h-4" />Code HTML
+                      </span>
+                    </div>
+                    <textarea
+                      value={formData.content}
+                      onChange={(e) => setFormData({...formData, content: e.target.value})}
+                      placeholder={'<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial; max-width: 600px; margin: 0 auto; }\n    .container { padding: 20px; }\n  </style>\n</head>\n<body>\n  <div class="container">\n    <h1>Bonjour {{name}} 👋</h1>\n    <p>Bienvenue !</p>\n  </div>\n</body>\n</html>'}
+                      className="flex-1 w-full px-4 py-3 font-mono text-sm bg-gray-900 text-green-400 resize-none focus:outline-none"
+                      spellCheck="false"
+                    />
+                    <div className="flex-shrink-0 bg-gray-800 px-4 py-2">
+                      <p className="text-xs text-gray-400">Variables: {'{{name}}, {{company}}, {{email}}'}</p>
+                    </div>
+                  </div>
+
+                  {/* COLONNE 2 - PREVIEW (35%) */}
+                  <div className="col-span-4 border-r flex flex-col h-full bg-gray-50">
+                    <div className="flex-shrink-0 bg-gray-100 px-4 py-2 border-b">
+                      <span className="text-sm font-semibold flex items-center gap-2 text-gray-700">
+                        <Eye className="w-4 h-4" />Aperçu temps réel
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-auto p-2">
+                      {formData.content ? (
+                        <iframe
+                          srcDoc={formData.content.replace(/\{\{name\}\}/g, 'Jean Dupont').replace(/\{\{company\}\}/g, 'Acme Corp').replace(/\{\{email\}\}/g, 'jean@example.com')}
+                          className="w-full h-full border-2 border-gray-200 rounded-lg bg-white"
+                          title="Preview"
+                          sandbox="allow-same-origin"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center text-gray-400">
+                            <Eye className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Commencez à écrire...</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* COLONNE 3 - OUTILS (25%) */}
+                  <div className="col-span-3 flex flex-col h-full bg-white">
+                    {/* TABS */}
+                    <div className="flex-shrink-0 border-b bg-gray-50">
+                      <div className="flex">
+                        <button
+                          onClick={() => setRightPanelTab('score')}
+                          className={`flex-1 px-3 py-3 text-sm font-semibold transition-all ${rightPanelTab === 'score' ? 'bg-white border-b-2 border-purple-600 text-purple-600' : 'text-gray-600 hover:bg-gray-100'}`}
+                        >
+                          <Shield className="w-4 h-4 mx-auto mb-1" />
+                          Score
+                        </button>
+                        <button
+                          onClick={() => setRightPanelTab('images')}
+                          className={`flex-1 px-3 py-3 text-sm font-semibold transition-all ${rightPanelTab === 'images' ? 'bg-white border-b-2 border-purple-600 text-purple-600' : 'text-gray-600 hover:bg-gray-100'}`}
+                        >
+                          <ImageIcon className="w-4 h-4 mx-auto mb-1" />
+                          Images
+                        </button>
+                        <button
+                          onClick={() => setRightPanelTab('blocks')}
+                          className={`flex-1 px-3 py-3 text-sm font-semibold transition-all ${rightPanelTab === 'blocks' ? 'bg-white border-b-2 border-purple-600 text-purple-600' : 'text-gray-600 hover:bg-gray-100'}`}
+                        >
+                          <Blocks className="w-4 h-4 mx-auto mb-1" />
+                          Blocs
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* CONTENU PANNEAU */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                      {rightPanelTab === 'score' && (
+                        <div>
+                          <h3 className="font-bold mb-3 text-gray-900">Score Anti-Spam</h3>
+                          {analyzingSpam ? (
+                            <div className="text-center py-8">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                              <p className="text-xs text-gray-600">Analyse...</p>
+                            </div>
+                          ) : spamScore ? (
+                            <div>
+                              <div className="text-center mb-4">
+                                <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br ${getScoreColor(spamScore.score)} text-white mb-2`}>
+                                  <span className="text-2xl font-bold">{spamScore.score}</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-700">{spamScore.deliverability}</p>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+                                <div className={`h-2 rounded-full bg-gradient-to-r ${getScoreColor(spamScore.score)} transition-all`} style={{ width: `${spamScore.score}%` }}></div>
+                              </div>
+                              {spamScore.issues && spamScore.issues.length > 0 && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                                  <p className="text-xs font-semibold text-yellow-800 mb-2">⚠️ {spamScore.issues.length} problème(s)</p>
+                                  <div className="space-y-1">
+                                    {spamScore.issues.slice(0, 3).map((issue, i) => (
+                                      <p key={i} className="text-xs text-yellow-700">{issue.message}</p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <Shield className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                              <p className="text-xs text-gray-500">Écrivez pour voir le score</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {rightPanelTab === 'images' && (
+                        <div>
+                          <h3 className="font-bold mb-3 text-gray-900">Galerie d'images</h3>
+                          <ImageGallery onInsert={handleInsertCode} />
+                        </div>
+                      )}
+
+                      {rightPanelTab === 'blocks' && (
+                        <div>
+                          <h3 className="font-bold mb-3 text-gray-900">Blocs HTML</h3>
+                          <HtmlBlocks onInsert={handleInsertCode} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6">
+                  {              {modalMode === 'ai' ? (
+                <div className="max-w-3xl mx-auto space-y-6">
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border-2 border-purple-200">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Sparkles className="w-8 h-8 text-purple-600" />
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">Génération IA - Claude Sonnet 4</h3>
+                        <p className="text-sm text-gray-600">L'IA la plus puissante pour créer des emails marketing professionnels</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Type d'email * <span className="text-red-500">●</span>
+                      </label>
+                      <select
+                        value={formData.email_type || 'newsletter'}
+                        onChange={(e) => setFormData({...formData, email_type: e.target.value})}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="newsletter">Newsletter</option>
+                        <option value="promotion">Promotion / Offre spéciale</option>
+                        <option value="welcome">Email de bienvenue</option>
+                        <option value="announcement">Annonce produit/service</option>
+                        <option value="invitation">Invitation événement</option>
+                        <option value="follow-up">Relance / Follow-up</option>
+                        <option value="cart-abandonment">Panier abandonné</option>
+                        <option value="testimonial">Témoignage client</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Ton * <span className="text-red-500">●</span>
+                      </label>
+                      <select
+                        value={formData.tone || 'professional'}
+                        onChange={(e) => setFormData({...formData, tone: e.target.value})}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="professional">Professionnel</option>
+                        <option value="friendly">Amical et chaleureux</option>
+                        <option value="enthusiastic">Enthousiaste</option>
+                        <option value="formal">Formel</option>
+                        <option value="casual">Décontracté</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="luxury">Premium / Luxe</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Nom de l'entreprise *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.company_name || ''}
+                      onChange={(e) => setFormData({...formData, company_name: e.target.value})}
+                      placeholder="Votre Entreprise SAS"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Objectif de l'email * <span className="text-red-500">●</span>
+                    </label>
+                    <textarea
+                      value={formData.objective || ''}
+                      onChange={(e) => setFormData({...formData, objective: e.target.value})}
+                      rows={3}
+                      placeholder="Ex: Promouvoir notre nouvelle gamme de produits et générer des ventes..."
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Audience cible
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.target_audience || ''}
+                      onChange={(e) => setFormData({...formData, target_audience: e.target.value})}
+                      placeholder="Ex: Entrepreneurs, PME, professionnels B2B..."
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Produit/Service
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.product_service || ''}
+                      onChange={(e) => setFormData({...formData, product_service: e.target.value})}
+                      placeholder="Ex: Logiciel CRM, Formation en ligne, Consulting..."
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Call-to-action souhaité
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.call_to_action || ''}
+                      onChange={(e) => setFormData({...formData, call_to_action: e.target.value})}
+                      placeholder="Ex: Découvrir l'offre, S'inscrire maintenant, Prendre RDV..."
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Informations supplémentaires
+                    </label>
+                    <textarea
+                      value={formData.additional_info || ''}
+                      onChange={(e) => setFormData({...formData, additional_info: e.target.value})}
+                      rows={3}
+                      placeholder="Ex: Promo -30%, durée limitée, inclure des témoignages, mettre en avant les avantages..."
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  {analyzingSpam && (
+                    <div className="bg-purple-50 border-2 border-purple-300 rounded-xl p-6 text-center">
+                      <div className="flex items-center justify-center gap-3 mb-3">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                        <Sparkles className="w-6 h-6 text-purple-600 animate-pulse" />
+                      </div>
+                      <p className="font-bold text-purple-900 mb-2">Génération en cours avec Claude Sonnet 4...</p>
+                      <p className="text-sm text-purple-700">Création d'un template professionnel optimisé</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                    <div className="max-w-2xl mx-auto space-y-4">
+                      <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Nom *" className="w-full px-4 py-3 border-2 rounded-xl" />
+                      <input type="text" value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} placeholder="Sujet *" className="w-full px-4 py-3 border-2 rounded-xl" />
+                      <textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} rows={12} placeholder="Contenu..." className="w-full px-4 py-3 border-2 rounded-xl" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* FOOTER ACTIONS */}
+            {modalMode !== 'ai' && (
+              <div className="flex-shrink-0 border-t p-4 flex gap-3">
+                <button onClick={() => setShowModal(false)} className="px-6 py-3 bg-gray-200 rounded-xl font-bold">Annuler</button>
+                <button onClick={handleSave} className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold shadow-lg">Créer le template</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PREVIEW TEMPLATE */}
+      {previewTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">{previewTemplate.name}</h2>
+                {previewTemplate.spam_score && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Shield className="w-4 h-4" />
+                    <span className={`text-sm font-semibold ${getScoreBadgeColor(previewTemplate.spam_score)}`}>Score : {previewTemplate.spam_score}%</span>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setPreviewTemplate(null)}><X className="w-6 h-6" /></button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold mb-1">Sujet :</h3>
+                <p>{previewTemplate.subject}</p>
+              </div>
+              <div className="border-2 rounded-xl p-6 bg-gray-50">
+                <div dangerouslySetInnerHTML={{ __html: previewTemplate.content }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

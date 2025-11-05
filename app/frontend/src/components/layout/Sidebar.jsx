@@ -71,6 +71,7 @@ export default function Sidebar() {
       items: [
         { name: 'Mes Rappels', href: '/FollowUps', icon: Calendar, roles: ['commercial', 'admin'] },
         { name: 'Mode Prospection', href: '/ProspectingMode', icon: Phone, roles: ['commercial', 'admin'] },
+        { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin'] },
         { name: 'Gestion Campagnes', href: '/CampaignsManager', icon: Target, roles: ['admin'] },
         { name: 'Campagnes', href: '/Campaigns', icon: Mail, roles: ['admin'] },
         { name: 'Statistiques', href: '/Statistics', icon: BarChart3, roles: ['admin'] }
@@ -83,8 +84,6 @@ export default function Sidebar() {
       roles: ['admin'],
       items: [
         { name: 'Templates Email', href: '/EmailTemplates', icon: Mail },
-        { name: 'Campagnes Email', href: '/EmailCampaigns', icon: Zap },
-        { name: 'Pipeline Email', href: '/EmailPipeline', icon: TrendingUp },
         { name: 'Config Mailing', href: '/MailingSettings', icon: Settings },
         { name: 'Test Envoi', href: '/TestMailing', icon: TestTube },
         { name: 'Diagnostic Spam', href: '/SpamDiagnostic', icon: Shield }
@@ -216,5 +215,3 @@ export default function Sidebar() {
     </div>
   )
 }
-
-

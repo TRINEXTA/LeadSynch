@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { LogoDefault } from '../components/branding/LeadSynchLogo';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,21 +19,16 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        login(data.user, data.token);
-        navigate('/dashboard');
+      const result = await login(formData.email, formData.password);
+      
+      if (result.success) {
+        if (result.requiresPasswordChange) {
+        navigate('/change-password');
       } else {
-        setError(data.error || 'Identifiants incorrects');
+        navigate('/dashboard');
+      }
+      } else {
+        setError(result.error || 'Identifiants incorrects');
       }
     } catch (err) {
       console.error('Erreur login:', err);
@@ -46,17 +41,15 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        
-        {/* Logo animé */}
         <div className="flex justify-center mb-8">
           <LogoDefault size="large" animated={true} />
         </div>
-        
+
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">
           Connexion
         </h2>
         <p className="text-center text-gray-600 mb-8">
-          Accédez à votre plateforme CRM
+          Accedez a votre plateforme CRM
         </p>
 
         {error && (
@@ -103,10 +96,16 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Mot de passe oublié ? Contactez votre administrateur</p>
+        <div className="mt-6 text-center text-sm">
+          <Link 
+            to="/forgot-password" 
+            className="text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+          >
+            Mot de passe oublié ?
+          </Link>
         </div>
       </div>
     </div>
   );
 }
+

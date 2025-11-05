@@ -1,0 +1,76 @@
+﻿/**
+ * Extraire les emails d'une page web
+ */
+async function scrapeEmailsFromWebsite(url) {
+  if (!url) return [];
+  
+  try {
+    // Nettoyer l'URL
+    let cleanUrl = url;
+    if (!cleanUrl.startsWith('http')) {
+      cleanUrl = 'https://' + cleanUrl;
+    }
+
+    console.log(`🔍 Scraping emails sur: ${cleanUrl}`);
+
+    const response = await axios.get(cleanUrl, {
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const html = response.data;
+    const $ = cheerio.load(html);
+
+    // Regex pour trouver les emails
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    
+    const emails = new Set();
+
+    // 1. Chercher dans le texte brut
+    const textEmails = html.match(emailRegex) || [];
+    textEmails.forEach(email => {
+      // Filtrer les emails inutiles et fichiers
+      if (!email.includes('example.com') && 
+          !email.includes('domain.com') && 
+          !email.includes('yourdomain') &&
+          !email.includes('wix.com') &&
+          !email.includes('wordpress.com') &&
+          !email.includes('sentry.io') &&
+          !email.includes('ingest.sentry') &&
+          !email.includes('@2x.') &&
+          !email.includes('@3x.') &&
+          !email.match(/\.(png|jpg|jpeg|gif|svg|webp|ico|pdf|doc|docx)$/i) &&
+          !email.match(/@[a-z0-9-]+\.(png|jpg|jpeg|gif|svg|webp)/i)) {
+        emails.add(email.toLowerCase());
+      }
+    });
+
+    // 2. Chercher dans les liens mailto:
+    $('a[href^="mailto:"]').each((i, elem) => {
+      const mailto = $(elem).attr('href');
+      const email = mailto.replace('mailto:', '').split('?')[0];
+      if (email && email.includes('@') && !email.match(/\.(png|jpg|jpeg|gif|svg)$/i)) {
+        emails.add(email.toLowerCase());
+      }
+    });
+
+    // 3. Chercher dans les attributs data-*
+    $('[data-email], [data-mail]').each((i, elem) => {
+      const email = $(elem).attr('data-email') || $(elem).attr('data-mail');
+      if (email && email.includes('@') && !email.match(/\.(png|jpg|jpeg|gif|svg)$/i)) {
+        emails.add(email.toLowerCase());
+      }
+    });
+
+    const foundEmails = Array.from(emails);
+    console.log(`📧 ${foundEmails.length} emails trouvés: ${foundEmails.join(', ')}`);
+
+    return foundEmails;
+
+  } catch (error) {
+    console.log(`❌ Erreur scraping ${url}:`, error.message);
+    return [];
+  }
+}

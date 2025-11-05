@@ -1,11 +1,17 @@
-ï»¿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
+
+// Auth
+import ChangePassword from './pages/ChangePassword'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Login from './pages/Login';
+
+// Pages principales
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
-import Teams from './pages/Teams';
 import Users from './pages/Users';
 
 // Campagnes
@@ -15,11 +21,10 @@ import CampaignDetails from './pages/CampaignDetails';
 import CampaignAnalytics from './pages/CampaignAnalytics';
 import Pipeline from './pages/Pipeline';
 
-// Bases de donnÃ©es
+// Bases de données
 import LeadDatabases from './pages/LeadDatabases';
 import DatabaseDetails from './pages/DatabaseDetails';
 import ImportLeads from './pages/ImportLeads';
-import AddLeadsToDatabase from './pages/AddLeadsToDatabase';
 
 // Leads
 import LeadDetails from './pages/LeadDetails';
@@ -31,14 +36,12 @@ import EmailTemplates from './pages/EmailTemplates';
 import EmailCampaigns from './pages/EmailCampaigns';
 import MailingSettings from './pages/MailingSettings';
 import TestMailing from './pages/TestMailing';
-import EmailPipeline from './pages/EmailPipeline';
 import SpamDiagnostic from './pages/SpamDiagnostic';
+import Unsubscribe from './pages/Unsubscribe';
 
-// GÃ©nÃ©ration de leads
+// Génération de leads
 import LeadGeneration from './pages/LeadGeneration';
-import GenerateLeads from './pages/GenerateLeads';
 import CreateLeadSearch from './pages/CreateLeadSearch';
-import DatasetDetails from './pages/DatasetDetails';
 import GoogleApiSetup from './pages/GoogleApiSetup';
 
 // Suivi et prospection
@@ -51,9 +54,8 @@ import DuplicateDetection from './pages/DuplicateDetection';
 import DuplicateManagement from './pages/DuplicateManagement';
 import ManageDuplicateDatabases from './pages/ManageDuplicateDatabases';
 import RecategorizeLeads from './pages/RecategorizeLeads';
-import MigrateLeads from './pages/MigrateLeads';
 
-// Ã‰quipe et statistiques
+// Équipe et statistiques
 import ManageTeam from './pages/ManageTeam';
 import Statistics from './pages/Statistics';
 
@@ -67,8 +69,16 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* Route PUBLIC - Unsubscribe (pas d'auth) */}
+          <Route path="/unsubscribe/:lead_id" element={<Unsubscribe />} />
           
+          {/* Login */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          
+          {/* Routes protégées */}
           <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/CommercialDashboard" element={<CommercialDashboard />} />
@@ -81,11 +91,10 @@ function App() {
             <Route path="/LeadDatabases" element={<LeadDatabases />} />
             <Route path="/DatabaseDetails" element={<DatabaseDetails />} />
             <Route path="/ImportLeads" element={<ImportLeads />} />
-            <Route path="/AddLeadsToDatabase" element={<AddLeadsToDatabase />} />
             
             <Route path="/Campaigns" element={<Campaigns />} />
             <Route path="/CampaignsManager" element={<CampaignsManager />} />
-            <Route path="/Pipeline" element={<Pipeline />} />
+            <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/CampaignDetails" element={<CampaignDetails />} />
             <Route path="/CampaignAnalytics" element={<CampaignAnalytics />} />
             
@@ -93,13 +102,14 @@ function App() {
             <Route path="/EmailCampaigns" element={<EmailCampaigns />} />
             <Route path="/MailingSettings" element={<MailingSettings />} />
             <Route path="/TestMailing" element={<TestMailing />} />
-            <Route path="/EmailPipeline" element={<EmailPipeline />} />
             <Route path="/SpamDiagnostic" element={<SpamDiagnostic />} />
             
+            {/* Redirection de l'ancien EmailPipeline vers le nouveau Pipeline */}
+            <Route path="/EmailPipeline" element={<Navigate to="/pipeline" replace />} />
+            <Route path="/Pipeline" element={<Navigate to="/pipeline" replace />} />
+            
             <Route path="/LeadGeneration" element={<LeadGeneration />} />
-            <Route path="/generate-leads" element={<GenerateLeads />} />
             <Route path="/CreateLeadSearch" element={<CreateLeadSearch />} />
-            <Route path="/DatasetDetails" element={<DatasetDetails />} />
             <Route path="/GoogleApiSetup" element={<GoogleApiSetup />} />
             
             <Route path="/FollowUps" element={<FollowUps />} />
@@ -109,9 +119,7 @@ function App() {
             <Route path="/DuplicateManagement" element={<DuplicateManagement />} />
             <Route path="/ManageDuplicateDatabases" element={<ManageDuplicateDatabases />} />
             <Route path="/RecategorizeLeads" element={<RecategorizeLeads />} />
-            <Route path="/MigrateLeads" element={<MigrateLeads />} />
             
-            <Route path="/teams" element={<Teams />} />
             <Route path="/users" element={<Users />} />
             <Route path="/ManageTeam" element={<ManageTeam />} />
             <Route path="/Statistics" element={<Statistics />} />

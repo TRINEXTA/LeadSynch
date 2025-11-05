@@ -1,9 +1,14 @@
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 import { Client } from '@googlemaps/google-maps-services-js';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 const googleMapsClient = new Client({});
 const GOOGLE_API_KEY = 'AIzaSyCbNyMZXznzh-tHNxI3akt6RcrERH3pYFg';
+
+// Configuration Hunter.io (optionnel)
+const HUNTER_API_KEY = process.env.HUNTER_API_KEY || null;
 
 const SECTOR_TO_GOOGLE_TYPES = {
   juridique: ['lawyer', 'legal_services'],
@@ -23,6 +28,173 @@ const SECTOR_TO_GOOGLE_TYPES = {
   automobile: ['car_repair', 'car_dealer']
 };
 
+/**
+ * Extraire les emails d'une page web
+ */
+/**
+ * Extraire les emails d'une page web
+ */
+async function scrapeEmailsFromWebsite(url) {
+  if (!url) return [];
+  
+  try {
+    let cleanUrl = url;
+    if (!cleanUrl.startsWith('http')) {
+      cleanUrl = 'https://' + cleanUrl;
+    }
+
+    console.log(`🔍 Scraping emails sur: ${cleanUrl}`);
+
+    const response = await axios.get(cleanUrl, {
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const html = response.data;
+    const $ = cheerio.load(html);
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const emails = new Set();
+
+    const textEmails = html.match(emailRegex) || [];
+    textEmails.forEach(email => {
+      const cleanEmail = email.replace(/^[0-9\s\-\.\(\)]+/, '');
+      
+      if (cleanEmail.includes('@') &&
+          !cleanEmail.includes('example.com') && 
+          !cleanEmail.includes('domain.com') && 
+          !cleanEmail.includes('yourdomain') &&
+          !cleanEmail.includes('wix.com') &&
+          !cleanEmail.includes('wordpress.com') &&
+          !cleanEmail.includes('sentry.io') &&
+          !cleanEmail.includes('ingest.') &&
+          !cleanEmail.includes('o38419') &&
+          !cleanEmail.includes('@2x.') &&
+          !cleanEmail.includes('@3x.') &&
+          !cleanEmail.match(/^[0-9]+/) &&
+          !cleanEmail.match(/[a-f0-9]{32,}@/) &&
+          !cleanEmail.match(/\.(png|jpg|jpeg|gif|svg|webp|ico|pdf|doc|docx)$/i) &&
+          !cleanEmail.match(/@[a-z0-9-]+\.(png|jpg|jpeg|gif|svg|webp)/i) &&
+          cleanEmail.length > 5 &&
+          cleanEmail.split('@')[0].length >= 2) {
+        emails.add(cleanEmail.toLowerCase());
+      }
+    });
+
+    $('a[href^="mailto:"]').each((i, elem) => {
+      const mailto = $(elem).attr('href');
+      const email = mailto.replace('mailto:', '').split('?')[0];
+      if (email && email.includes('@') && !email.match(/\.(png|jpg|jpeg|gif|svg)$/i)) {
+        emails.add(email.toLowerCase());
+      }
+    });
+
+    $('[data-email], [data-mail]').each((i, elem) => {
+      const email = $(elem).attr('data-email') || $(elem).attr('data-mail');
+      if (email && email.includes('@') && !email.match(/\.(png|jpg|jpeg|gif|svg)$/i)) {
+        emails.add(email.toLowerCase());
+      }
+    });
+
+    const foundEmails = Array.from(emails);
+    console.log(`📧 ${foundEmails.length} emails trouvés: ${foundEmails.join(', ')}`);
+    return foundEmails;
+
+  } catch (error) {
+    console.log(`❌ Erreur scraping ${url}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Générer des emails probables basés sur le nom de l'entreprise
+ */
+function generateCommonEmails(companyName, website) {
+  if (!website) return [];
+
+  try {
+    const domain = new URL(website.startsWith('http') ? website : 'https://' + website).hostname;
+    
+    const patterns = [
+      `contact@${domain}`,
+      `info@${domain}`,
+      `hello@${domain}`,
+      `bonjour@${domain}`,
+      `commercial@${domain}`,
+      `vente@${domain}`,
+      `accueil@${domain}`,
+      `reception@${domain}`
+    ];
+
+    console.log(`💡 Emails générés pour ${domain}:`, patterns);
+    return patterns;
+
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * Utiliser Hunter.io pour trouver l'email
+ */
+async function findEmailWithHunter(domain) {
+  if (!HUNTER_API_KEY || !domain) return null;
+
+  try {
+    const response = await axios.get('https://api.hunter.io/v2/domain-search', {
+      params: {
+        domain: domain,
+        api_key: HUNTER_API_KEY,
+        limit: 1
+      },
+      timeout: 5000
+    });
+
+    if (response.data.data.emails && response.data.data.emails.length > 0) {
+      const email = response.data.data.emails[0].value;
+      console.log(`🎯 Hunter.io trouvé: ${email}`);
+      return email;
+    }
+
+  } catch (error) {
+    console.log(`❌ Hunter.io erreur:`, error.message);
+  }
+
+  return null;
+}
+
+/**
+ * Enrichir un lead avec des emails
+ */
+async function enrichLeadWithEmail(companyName, website) {
+  const emails = [];
+
+  // 1. Scraper le site web
+  if (website) {
+    const scrapedEmails = await scrapeEmailsFromWebsite(website);
+    emails.push(...scrapedEmails);
+  }
+
+  // 2. Utiliser Hunter.io (si configuré)
+  if (website && HUNTER_API_KEY) {
+    try {
+      const domain = new URL(website.startsWith('http') ? website : 'https://' + website).hostname;
+      const hunterEmail = await findEmailWithHunter(domain);
+      if (hunterEmail) {
+        emails.push(hunterEmail);
+      }
+    } catch (e) {}
+  }
+
+  // 3. Générer des emails courants
+  const commonEmails = generateCommonEmails(companyName, website);
+  emails.push(...commonEmails);
+
+  // Dédupliquer et retourner
+  return [...new Set(emails)];
+}
+
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
 
@@ -36,7 +208,7 @@ async function handler(req, res) {
 
       console.log(`🔍 Recherche: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 
-      // 1. VÉRIFIER LES QUOTAS DISPONIBLES
+      // 1. VÉRIFIER LES QUOTAS
       const quotaCheck = await queryAll(
         `SELECT 
           s.google_leads_quota,
@@ -53,31 +225,24 @@ async function handler(req, res) {
       );
 
       if (quotaCheck.length === 0) {
-        return res.status(403).json({ 
-          error: 'Aucun abonnement trouvé' 
-        });
+        return res.status(403).json({ error: 'Aucun abonnement trouvé' });
       }
 
       const available = quotaCheck[0].available;
-
       console.log(`💳 Quota disponible: ${available} leads Google`);
 
       if (available < quantity) {
-        console.log(`❌ QUOTA INSUFFISANT: demandé ${quantity}, disponible ${available}`);
         return res.status(403).json({
           error: 'Quota insuffisant',
           available,
-          requested: quantity,
-          message: `Vous ne pouvez générer que ${available} leads Google Maps`
+          requested: quantity
         });
       }
 
-      // 2. Chercher dans la base globale
+      // 2. Chercher dans la base
       const existingLeads = await queryAll(
         `SELECT * FROM global_leads 
-         WHERE industry = $1 
-         AND city ILIKE $2 
-         LIMIT $3`,
+         WHERE industry = $1 AND city ILIKE $2 LIMIT $3`,
         [sector, `%${city}%`, quantity]
       );
 
@@ -89,7 +254,7 @@ async function handler(req, res) {
       let newLeads = [];
       let googleLeadsGenerated = 0;
 
-      // 3. Si manque des leads ET quota disponible, chercher sur Google Maps
+      // 3. Générer depuis Google Maps
       if (missingCount > 0) {
         const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
         
@@ -97,8 +262,6 @@ async function handler(req, res) {
           if (googleLeadsGenerated >= missingCount) break;
 
           try {
-            console.log(`🔍 Google Maps: recherche ${type} à ${city}`);
-
             const response = await googleMapsClient.textSearch({
               params: {
                 query: `${type} ${city}`,
@@ -109,7 +272,6 @@ async function handler(req, res) {
             });
 
             const places = response.data.results || [];
-            console.log(`📍 ${places.length} résultats Google Maps`);
 
             for (const place of places) {
               if (googleLeadsGenerated >= missingCount) break;
@@ -119,10 +281,7 @@ async function handler(req, res) {
                 [place.place_id]
               );
 
-              if (existing.length > 0) {
-                console.log(`⏭️  Skip: ${place.name} (déjà en base)`);
-                continue;
-              }
+              if (existing.length > 0) continue;
 
               try {
                 const detailsResponse = await googleMapsClient.placeDetails({
@@ -136,17 +295,27 @@ async function handler(req, res) {
 
                 const details = detailsResponse.data.result;
 
+                // 🔥 ENRICHIR AVEC LES EMAILS
+                console.log(`📧 Recherche emails pour: ${details.name}`);
+                const emails = await enrichLeadWithEmail(details.name, details.website);
+                const primaryEmail = emails[0] || null;
+                const allEmails = emails.join(', ');
+
+                console.log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
+
                 const newLead = await execute(
                   `INSERT INTO global_leads 
-                  (company_name, phone, website, address, city, latitude, longitude, 
-                   industry, google_place_id, google_types, rating, review_count, 
-                   source, first_discovered_by, last_verified_at)
-                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+                  (company_name, phone, website, email, all_emails, address, city, 
+                   latitude, longitude, industry, google_place_id, google_types, 
+                   rating, review_count, source, first_discovered_by, last_verified_at)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
                   RETURNING *`,
                   [
                     details.name,
                     details.formatted_phone_number || null,
                     details.website || null,
+                    primaryEmail,
+                    allEmails || null,
                     details.formatted_address || null,
                     city,
                     details.geometry?.location?.lat || null,
@@ -163,38 +332,32 @@ async function handler(req, res) {
 
                 newLeads.push(newLead);
                 googleLeadsGenerated++;
-                
-                console.log(`✅ Ajouté: ${details.name}`);
 
               } catch (detailsError) {
-                console.error(`Erreur détails ${place.name}:`, detailsError.message);
+                console.error(`Erreur détails:`, detailsError.message);
               }
             }
 
           } catch (searchError) {
-            console.error(`Erreur recherche ${type}:`, searchError.message);
+            console.error(`Erreur recherche:`, searchError.message);
           }
         }
       }
 
-      // 4. CONSOMMER LES QUOTAS (décrémenter)
+      // 4. Consommer les quotas
       if (googleLeadsGenerated > 0) {
         await execute(
           `UPDATE subscriptions 
-           SET google_leads_used = google_leads_used + $1,
-               updated_at = NOW()
+           SET google_leads_used = google_leads_used + $1, updated_at = NOW()
            WHERE tenant_id = $2`,
           [googleLeadsGenerated, tenant_id]
         );
 
-        // Enregistrer dans l'historique
         await execute(
           `INSERT INTO usage_history (tenant_id, action_type, quantity, cost)
            VALUES ($1, 'google_lead', $2, $3)`,
           [tenant_id, googleLeadsGenerated, googleLeadsGenerated * 1.0]
         );
-
-        console.log(`💳 ${googleLeadsGenerated} crédits Google consommés`);
       }
 
       const totalLeads = [...existingLeads, ...newLeads];
@@ -222,3 +385,4 @@ async function handler(req, res) {
 }
 
 export default authMiddleware(handler);
+

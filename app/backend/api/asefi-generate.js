@@ -333,4 +333,227 @@ Analyse et réponds en JSON:
   }
 });
 
+// POST /asefi/generate-email-from-notes - Génération email depuis notes d'appel
+router.post('/generate-email-from-notes', authMiddleware, async (req, res) => {
+  console.log('📧 Génération email depuis notes d\'appel avec Asefi');
+  
+  try {
+    const { lead_info, call_notes, qualification, user_signature } = req.body;
+
+    if (!lead_info || !call_notes) {
+      return res.status(400).json({ error: 'lead_info et call_notes requis' });
+    }
+
+    // Définir le type d'email selon la qualification
+    const emailTypes = {
+      'qualifie': 'suivi commercial positif',
+      'tres_qualifie': 'confirmation de RDV et préparation',
+      'a_relancer': 'relance douce avec rappel des points évoqués',
+      'proposition': 'envoi de proposition commerciale',
+      'nrp': 'email de reprise de contact',
+      'mauvais_contact': 'clarification des besoins',
+    };
+
+    const emailType = emailTypes[qualification] || 'suivi général';
+
+    const prompt = `Tu es Asefi, assistant IA expert en communication commerciale pour LeadSynch CRM.
+
+Je viens de terminer un appel téléphonique avec un prospect. Génère un email de suivi professionnel et personnalisé basé sur cet appel.
+
+📞 CONTEXTE DE L'APPEL:
+
+PROSPECT:
+- Entreprise: ${lead_info.company_name}
+- Contact: ${lead_info.contact_name || 'Contact principal'}
+- Secteur: ${lead_info.industry || lead_info.sector || 'B2B'}
+- Email: ${lead_info.email}
+${lead_info.phone ? `- Téléphone: ${lead_info.phone}` : ''}
+${lead_info.city ? `- Ville: ${lead_info.city}` : ''}
+
+QUALIFICATION: ${qualification}
+TYPE D'EMAIL À GÉNÉRER: ${emailType}
+
+📝 NOTES DE L'APPEL:
+${call_notes}
+
+${user_signature ? `
+👤 MA SIGNATURE:
+${user_signature.name}${user_signature.title ? '\n' + user_signature.title : ''}
+${user_signature.company}
+${user_signature.email}${user_signature.phone ? '\n' + user_signature.phone : ''}
+` : ''}
+
+🎯 CONSIGNES DE GÉNÉRATION:
+
+1. **Objet percutant**: Référence l'appel de manière naturelle et engageante
+2. **Introduction chaleureuse**: Remercie pour l'échange et rappelle le contexte
+3. **Corps personnalisé**: 
+   - Synthétise les points clés discutés
+   - Reprends les besoins/problématiques évoqués
+   - Propose une valeur ajoutée concrète
+   - Adapte le ton selon la qualification
+4. **Appel à l'action clair**: Selon le type d'email
+5. **Signature professionnelle**: Intègre mes coordonnées
+
+TON: Professionnel mais humain, personnalisé, orienté solution
+
+IMPORTANT:
+- Utilise des détails PRÉCIS des notes d'appel
+- Ne mentionne JAMAIS explicitement "suite à notre appel" si les notes sont vides
+- Adapte la longueur selon l'importance (200-400 mots)
+- Si RDV pris, propose une date/horaire
+- Sois naturel et authentique
+
+Réponds en JSON strict sans markdown:
+{
+  "subject": "Objet de l'email",
+  "body": "Corps complet de l'email avec paragraphes bien structurés",
+  "cta": "Appel à l'action principal",
+  "tone_used": "Description du ton utilisé",
+  "suggestions": ["Suggestion 1", "Suggestion 2"]
+}`;
+
+    console.log('🤖 Appel à Claude API pour génération email...');
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      temperature: 0.7,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    let content = message.content[0].text.trim();
+    content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+    
+    const parsed = JSON.parse(content);
+
+    console.log('✅ Email généré avec succès depuis notes d\'appel');
+
+    res.json({
+      success: true,
+      email: parsed,
+      tokens_used: message.usage.input_tokens + message.usage.output_tokens,
+      call_notes_length: call_notes.length
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur génération email depuis notes:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la génération de l\'email',
+      details: error.message 
+    });
+  }
+});
+// POST /asefi/regenerate-email-with-tone - Régénérer email avec nouveau ton
+router.post('/regenerate-email-with-tone', authMiddleware, async (req, res) => {
+  console.log('🎨 Régénération email avec nouveau ton');
+  
+  try {
+    const { lead_info, call_notes, qualification, tone, user_signature } = req.body;
+
+    if (!lead_info || !call_notes || !tone) {
+      return res.status(400).json({ error: 'lead_info, call_notes et tone requis' });
+    }
+
+    const toneDescriptions = {
+      formal: 'très formel, professionnel et distant, style corporate strict',
+      friendly: 'amical, chaleureux et proche, tout en restant professionnel',
+      direct: 'direct, concis et efficace, va droit au but sans fioritures',
+      enthusiastic: 'enthousiaste, énergique et motivant, montre beaucoup d\'entrain'
+    };
+
+    const toneDesc = toneDescriptions[tone] || toneDescriptions.friendly;
+
+    const emailTypes = {
+      'qualifie': 'suivi commercial positif',
+      'tres_qualifie': 'confirmation de RDV et préparation',
+      'a_relancer': 'relance douce avec rappel des points évoqués',
+      'proposition': 'envoi de proposition commerciale',
+      'nrp': 'email de reprise de contact',
+      'mauvais_contact': 'clarification des besoins',
+    };
+
+    const emailType = emailTypes[qualification] || 'suivi général';
+
+    const prompt = `Tu es Asefi, assistant IA expert en communication commerciale pour LeadSynch CRM.
+
+Je viens de terminer un appel téléphonique avec un prospect. Génère un email de suivi professionnel et personnalisé.
+
+📞 CONTEXTE DE L'APPEL:
+
+PROSPECT:
+- Entreprise: ${lead_info.company_name}
+- Contact: ${lead_info.contact_name || 'Contact principal'}
+- Secteur: ${lead_info.industry || lead_info.sector || 'B2B'}
+- Email: ${lead_info.email}
+
+QUALIFICATION: ${qualification}
+TYPE D'EMAIL: ${emailType}
+
+📝 NOTES DE L'APPEL:
+${call_notes}
+
+🎨 TON DEMANDÉ: ${toneDesc}
+
+${user_signature ? `
+👤 MA SIGNATURE:
+${user_signature.name}${user_signature.title ? '\n' + user_signature.title : ''}
+${user_signature.company}
+${user_signature.email}${user_signature.phone ? '\n' + user_signature.phone : ''}
+` : ''}
+
+🎯 CONSIGNES CRITIQUES:
+
+1. **Ton ${tone}**: Adapte COMPLÈTEMENT le style et la tonalité selon: ${toneDesc}
+2. **Objet**: Change l'objet pour refléter le nouveau ton
+3. **Structure**: Adapte la structure selon le ton (formel = structure classique, direct = paragraphes courts, etc.)
+4. **Vocabulaire**: Choisis des mots qui correspondent au ton demandé
+5. **Personnalisation**: Utilise les détails précis des notes d'appel
+
+IMPORTANT:
+- Le ton doit être VRAIMENT différent de la version précédente
+- Reste professionnel même avec un ton amical ou enthousiaste
+- Garde les informations factuelles des notes
+- Adapte la longueur selon le ton (direct = court, formel = plus développé)
+
+Réponds en JSON strict sans markdown:
+{
+  "subject": "Objet adapté au ton ${tone}",
+  "body": "Corps de l'email avec le ton ${tone}",
+  "cta": "Appel à l'action adapté au ton",
+  "tone_used": "${tone}",
+  "suggestions": ["Suggestion 1", "Suggestion 2"]
+}`;
+
+    console.log(`🤖 Régénération avec ton: ${tone}`);
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      temperature: 0.8,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    let content = message.content[0].text.trim();
+    content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+    
+    const parsed = JSON.parse(content);
+
+    console.log(`✅ Email régénéré avec ton ${tone}`);
+
+    res.json({
+      success: true,
+      email: parsed,
+      tone_applied: tone,
+      tokens_used: message.usage.input_tokens + message.usage.output_tokens
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur régénération avec ton:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la régénération',
+      details: error.message 
+    });
+  }
+});
 export default router;

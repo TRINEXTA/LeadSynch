@@ -1,63 +1,26 @@
-﻿import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+﻿import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
-
-/**
- * Generate JWT token for a user
- * @param {Object} user - User object
- * @returns {string} JWT token
- */
-export function generateToken(user) {
-  const payload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    tenant_id: user.tenant_id
-  };
-
-  return jwt.sign(payload, JWT_SECRET, { 
-    expiresIn: '7d' 
-  });
+export async function hashPassword(password) {
+  return await bcrypt.hash(password, 10);
 }
 
-/**
- * Verify JWT token
- * @param {string} token - JWT token
- * @returns {Object|null} Decoded token or null
- */
+export async function verifyPassword(password, hash) {
+  return await bcrypt.compare(password, hash);
+}
+
+export function generateToken(userId, tenantId, role) {
+  return jwt.sign(
+    { id: userId, tenant_id: tenantId, role },
+    process.env.JWT_SECRET || 'your-secret-key',
+    { expiresIn: '7d' }
+  );
+}
+
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
   } catch (error) {
-    console.error('Token verification failed:', error.message);
     return null;
   }
 }
-
-/**
- * Hash a password
- * @param {string} password - Plain text password
- * @returns {Promise<string>} Hashed password
- */
-export async function hashPassword(password) {
-  const salt = await bcrypt.genSalt(10);
-  return bcrypt.hash(password, salt);
-}
-
-/**
- * Compare password with hash
- * @param {string} password - Plain text password
- * @param {string} hash - Hashed password
- * @returns {Promise<boolean>} True if passwords match
- */
-export async function comparePassword(password, hash) {
-  return bcrypt.compare(password, hash);
-}
-
-export default {
-  generateToken,
-  verifyToken,
-  hashPassword,
-  comparePassword
-};

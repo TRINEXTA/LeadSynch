@@ -1,32 +1,39 @@
-﻿import { queryOne, execute } from '../../lib/db.js';
-import { generateToken, comparePassword } from '../../lib/auth.js';
+﻿import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { queryOne } from '../../lib/db.js';
 
 export default async function handler(req, res) {
-  try {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
+  try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email et mot de passe requis' });
+    const user = await queryOne(
+      'SELECT * FROM users WHERE email = \$1 AND is_active = true',
+      [email]
+    );
+
+    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
 
-    const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
+    await queryOne(
+      'UPDATE users SET last_login = NOW() WHERE id = \$1',
+      [user.id]
+    );
 
-    if (!user) {
-      return res.status(401).json({ error: 'Identifiants invalides' });
-    }
-
-    const isValid = await comparePassword(password, user.password_hash);
-    if (!isValid) {
-      return res.status(401).json({ error: 'Identifiants invalides' });
-    }
-
-    await execute('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
-
-    const token = generateToken(user);
+    const token = jwt.sign(
+      {
+        id: user.id,
+        tenant_id: user.tenant_id,
+        email: user.email,
+        role: user.role
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     return res.json({
       success: true,

@@ -1,0 +1,459 @@
+﻿import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Send, Calendar, Users, Mail, Database, FileText, Settings, Zap, Eye, TestTube } from 'lucide-react';
+import api from '../api/axios';
+
+export default function CampaignsManager() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [databases, setDatabases] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [quotas, setQuotas] = useState([]);
+  const [selectedDatabases, setSelectedDatabases] = useState([]);
+  const [selectedSectors, setSelectedSectors] = useState({});
+  const [databaseSectors, setDatabaseSectors] = useState({});
+  const [leadsCount, setLeadsCount] = useState(0);
+  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    template_id: '',
+    assigned_users: [],
+    send_days: [],
+    send_time: '09:00'
+  });
+
+  useEffect(() => {
+    loadDatabases();
+    loadTemplates();
+    loadUsers();
+    loadQuotas();
+  }, []);
+
+  const loadQuotas = async () => {
+    try {
+      const response = await api.get('/quotas');
+      setQuotas(response.data.quotas);
+    } catch (error) {
+      console.error('Erreur quotas:', error);
+    }
+  };
+
+  const loadDatabases = async () => {
+    try {
+      const response = await api.get('/lead-databases');
+      setDatabases(response.data.databases || []);
+    } catch (error) {
+      console.error('Erreur databases:', error);
+    }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      const response = await api.get('/email-templates');
+      setTemplates(response.data.templates || []);
+    } catch (error) {
+      console.error('Erreur templates:', error);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await api.get('/users');
+      setUsers(response.data.users || []);
+    } catch (error) {
+      console.error('Erreur users:', error);
+    }
+  };
+
+  const loadSectorsForDatabase = async (databaseId) => {
+    try {
+      const response = await api.get(`/lead-databases/${databaseId}/sectors`);
+      setDatabaseSectors(prev => ({
+        ...prev,
+        [databaseId]: response.data.sectors || []
+      }));
+    } catch (error) {
+      console.warn('Secteurs non disponibles');
+      setDatabaseSectors(prev => ({
+        ...prev,
+        [databaseId]: []
+      }));
+    }
+  };
+
+  const handleDatabaseSelect = (dbId) => {
+    if (selectedDatabases.includes(dbId)) {
+      setSelectedDatabases(selectedDatabases.filter(id => id !== dbId));
+    } else {
+      setSelectedDatabases([...selectedDatabases, dbId]);
+      loadSectorsForDatabase(dbId);
+    }
+  };
+
+  const calculateLeadsCount = async () => {
+    if (selectedDatabases.length === 0) {
+      setLeadsCount(0);
+      return;
+    }
+
+    setLoadingLeads(true);
+    try {
+      const filters = selectedDatabases.map(dbId => ({
+        database_id: dbId,
+        sectors: selectedSectors[dbId] || []
+      }));
+
+      const response = await api.post('/leads-count-multi/count-multi', { filters });
+      setLeadsCount(response.data.count || 0);
+    } catch (error) {
+      console.error('Erreur count:', error);
+      setLeadsCount(0);
+    } finally {
+      setLoadingLeads(false);
+    }
+  };
+
+  useEffect(() => {
+    calculateLeadsCount();
+  }, [selectedDatabases, selectedSectors]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formDataFile = new FormData();
+    formDataFile.append('file', file);
+
+    try {
+      const response = await api.post('/upload-attachment', formDataFile, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const newAttachment = response.data.attachment;
+      setAttachments([...attachments, newAttachment]);
+      setFormData({
+        ...formData,
+        attachments: [...(formData.attachments || []), newAttachment.id]
+      });
+    } catch (error) {
+      console.error('Erreur upload:', error);
+      alert('Erreur lors de l\'upload');
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!formData.template_id) {
+      alert('Sélectionnez d\'abord un template');
+      return;
+    }
+
+    const email = prompt('Entrez l\'email de test :');
+    if (!email) return;
+
+    try {
+      await api.post('/send-test-email', {
+        template_id: formData.template_id,
+        recipient_email: email,
+        attachments: attachments.map(a => a.id)
+      });
+      alert('✅ Email de test envoyé !');
+    } catch (error) {
+      console.error('Erreur:', error);
+      alert('Erreur lors de l\'envoi');
+    }
+  };
+
+  const handleSubmit = async (isDraft = false) => {
+    if (!formData.name) {
+      alert('Nom requis');
+      return;
+    }
+
+    if (selectedDatabases.length === 0) {
+      alert('Sélectionnez au moins une base de données');
+      return;
+    }
+
+    if (!formData.template_id) {
+      alert('Sélectionnez un template');
+      return;
+    }
+
+    try {
+      const payload = {
+        name: formData.name,
+        database_id: selectedDatabases[0],
+        template_id: formData.template_id,
+        assigned_users: formData.assigned_users || [],
+        filters: {
+          sector: selectedSectors[selectedDatabases[0]]?.[0]
+        },
+        status: isDraft ? 'draft' : 'scheduled',
+        send_days: formData.send_days,
+        send_time: formData.send_time,
+        attachments: attachments.map(a => a.id)
+      };
+
+      console.log('📤 Envoi payload:', payload);
+
+      const response = await api.post('/campaigns', payload);
+
+      if (response.data.success) {
+        alert(`✅ Campagne créée avec ${response.data.leads_added} leads !`);
+        navigate('/Campaigns');
+      }
+    } catch (error) {
+      console.error('❌ Erreur création:', error);
+      alert(error.response?.data?.error || 'Erreur lors de la création');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-8 text-white">
+            <h1 className="text-4xl font-bold mb-2">✨ Nouvelle Campagne</h1>
+            <p className="text-purple-100">Créez votre campagne en 3 étapes simples</p>
+          </div>
+
+          <div className="flex items-center justify-center py-6 bg-gray-50 border-b">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex items-center">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all ${
+                  step >= s ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-110' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {s}
+                </div>
+                {s < 3 && <div className={`w-24 h-1 mx-2 ${step > s ? 'bg-gradient-to-r from-purple-600 to-pink-600' : 'bg-gray-200'}`} />}
+              </div>
+            ))}
+          </div>
+
+          <div className="p-8">
+            {step === 1 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Settings className="w-8 h-8 text-purple-600" />
+                  <h2 className="text-3xl font-bold text-gray-800">Configuration</h2>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Nom de la campagne *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Prospection Restaurants Paris Q1 2025"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Users className="w-8 h-8 text-purple-600" />
+                  <h2 className="text-3xl font-bold text-gray-800">Affectation</h2>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-3">
+                    Affecter aux commerciaux
+                    <span className="ml-2 text-xs font-normal text-gray-500">
+                      ({formData.assigned_users.length} commercial(aux) sélectionné(s))
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {users.map((user) => (
+                      <label
+                        key={user.id}
+                        className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                          formData.assigned_users.includes(user.id)
+                            ? 'border-purple-500 bg-purple-50 shadow-md'
+                            : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50/50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                          checked={formData.assigned_users.includes(user.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                assigned_users: [...formData.assigned_users, user.id]
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                assigned_users: formData.assigned_users.filter(id => id !== user.id)
+                              });
+                            }
+                          }}
+                        />
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-800">{user.first_name} {user.last_name}</p>
+                          <p className="text-sm text-gray-500">{user.email}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-3">Bases de données *</label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {databases.map((db) => (
+                      <label
+                        key={db.id}
+                        className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                          selectedDatabases.includes(db.id)
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5"
+                          checked={selectedDatabases.includes(db.id)}
+                          onChange={() => handleDatabaseSelect(db.id)}
+                        />
+                        <Database className="w-6 h-6 text-blue-600" />
+                        <div className="flex-1">
+                          <p className="font-semibold">{db.name}</p>
+                          <p className="text-sm text-gray-500">{db.leads_count || 0} leads</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl border-2 border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-1">Leads à envoyer</p>
+                      <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                        {loadingLeads ? '...' : leadsCount}
+                      </p>
+                    </div>
+                    <Mail className="w-16 h-16 text-blue-600 opacity-20" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Zap className="w-8 h-8 text-purple-600" />
+                  <h2 className="text-3xl font-bold text-gray-800">Finalisation</h2>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-3">Template d'email *</label>
+                  <select
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 transition-all"
+                    value={formData.template_id}
+                    onChange={(e) => setFormData({ ...formData, template_id: e.target.value })}
+                  >
+                    <option value="">Sélectionner un template</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={handleSendTestEmail}
+                    disabled={!formData.template_id}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <TestTube className="w-5 h-5" />
+                    Tester l'envoi
+                  </button>
+
+                  <button
+                    onClick={() => navigate(`/EmailTemplates?id=${formData.template_id}`)}
+                    disabled={!formData.template_id}
+                    className="flex items-center gap-2 px-6 py-3 border-2 border-purple-300 text-purple-700 font-semibold rounded-xl hover:bg-purple-50 transition-all disabled:opacity-50"
+                  >
+                    <Eye className="w-5 h-5" />
+                    Prévisualiser
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-3">Jours d'envoi</label>
+                  <div className="flex flex-wrap gap-3">
+                    {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day, idx) => (
+                      <label
+                        key={day}
+                        className={`px-6 py-3 border-2 rounded-xl cursor-pointer font-semibold transition-all ${
+                          formData.send_days.includes(idx)
+                            ? 'border-purple-500 bg-purple-500 text-white shadow-lg'
+                            : 'border-gray-200 hover:border-purple-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={formData.send_days.includes(idx)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, send_days: [...formData.send_days, idx] });
+                            } else {
+                              setFormData({ ...formData, send_days: formData.send_days.filter(d => d !== idx) });
+                            }
+                          }}
+                        />
+                        {day}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mt-8 pt-6 border-t">
+              <button
+                onClick={() => setStep(Math.max(1, step - 1))}
+                disabled={step === 1}
+                className="px-8 py-3 border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Précédent
+              </button>
+
+              <div className="flex gap-3">
+                {step === 3 && (
+                  <button
+                    onClick={() => handleSubmit(true)}
+                    className="px-8 py-3 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-xl transition-all"
+                  >
+                    Sauvegarder
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (step < 3) {
+                      setStep(step + 1);
+                    } else {
+                      handleSubmit(false);
+                    }
+                  }}
+                  className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-lg transition-all"
+                >
+                  {step === 3 ? 'Créer la campagne' : 'Suivant'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
