@@ -1,6 +1,13 @@
 ﻿import axios from "axios";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+// Récupère l'URL de l'API depuis les variables d'environnement
+const RAW_URL = import.meta.env.VITE_API_URL;
+
+if (!RAW_URL) {
+  throw new Error("❌ VITE_API_URL is not defined! Vérifie tes variables sur Vercel.");
+}
+
+const API_BASE = RAW_URL.replace(/\/+$/, "");
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -8,9 +15,8 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" }
 });
 
-// 🔧 Ajoute /api/ si ce n'est pas déjà présent
+// Ajoute automatiquement /api/ au chemin si besoin
 api.interceptors.request.use((cfg) => {
-  // Si l'URL ne commence pas par /api/, on l'ajoute
   if (cfg.url && !cfg.url.startsWith("/api/") && !cfg.url.startsWith("http")) {
     cfg.url = "/api" + cfg.url;
   }
