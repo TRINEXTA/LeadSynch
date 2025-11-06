@@ -1,25 +1,22 @@
-﻿import { Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import Layout from './layout/Layout'
+﻿import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import api from "../axios";
 
-export default function PrivateRoute() {
-  const { isAuthenticated, loading } = useAuth()
+export default function PrivateRoute({ children }) {
+  const [loading, setLoading] = useState(true);
+  const [auth, setAuth] = useState(false);
 
-  if (loading) {
-    return (
-      <div className='flex items-center justify-center min-h-screen'>
-        <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600'></div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    let mounted = true;
+    api.get("/me")
+      .then(() => mounted && setAuth(true))
+      .catch(() => mounted && setAuth(false))
+      .finally(() => mounted && setLoading(false));
+    return () => { mounted = false; };
+  }, []);
 
-  if (!isAuthenticated) {
-    return <Navigate to='/login' replace />
-  }
+  if (loading) return <div style={{ padding: 20 }}>Chargement...</div>;
+  if (!auth) return <Navigate to="/login" replace />;
 
-  return (
-    <Layout>
-      <Outlet />
-    </Layout>
-  )
+  return children;
 }

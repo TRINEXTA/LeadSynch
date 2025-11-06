@@ -6,10 +6,7 @@ import { useAuth } from '../context/AuthContext';
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,21 +14,18 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const result = await login(formData.email, formData.password);
-      
       if (result.success) {
         if (result.requiresPasswordChange) {
-        navigate('/change-password');
-      } else {
-        navigate('/dashboard');
-      }
+          navigate('/change-password');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         setError(result.error || 'Identifiants incorrects');
       }
     } catch (err) {
-      console.error('Erreur login:', err);
       setError('Erreur de connexion au serveur');
     } finally {
       setLoading(false);
@@ -45,12 +39,8 @@ export default function Login() {
           <LogoDefault size="large" animated={true} />
         </div>
 
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">
-          Connexion
-        </h2>
-        <p className="text-center text-gray-600 mb-8">
-          Accedez a votre plateforme CRM
-        </p>
+        <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">Connexion</h2>
+        <p className="text-center text-gray-600 mb-8">Accédez à votre plateforme CRM</p>
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
@@ -60,9 +50,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Email
-            </label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
             <input
               type="email"
               required
@@ -74,9 +62,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Mot de passe
-            </label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Mot de passe</label>
             <input
               type="password"
               required
@@ -97,10 +83,7 @@ export default function Login() {
         </form>
 
         <div className="mt-6 text-center text-sm">
-          <Link 
-            to="/forgot-password" 
-            className="text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
-          >
+          <Link to="/forgot-password" className="text-indigo-600 hover:text-indigo-700 font-medium hover:underline">
             Mot de passe oublié ?
           </Link>
         </div>
@@ -108,4 +91,3 @@ export default function Login() {
     </div>
   );
 }
-

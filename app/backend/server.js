@@ -8,14 +8,21 @@ import { errorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 if (!process.env.POSTGRES_URL) {
-  console.error('? ERREUR: POSTGRES_URL manquant');
+  console.error('ERREUR: POSTGRES_URL manquant');
   process.exit(1);
 }
 
 const app = express();
 
+// CORS CONFIGURE - Ajoute ton URL frontend production
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://leadsynch.com'],
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://leadsynch.com',
+    'https://www.leadsynch.com',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   credentials: true
 }));
 
@@ -110,7 +117,7 @@ app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage
 app.get('/api/images', authMiddleware, imageUploadController.getImages);
 app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
 
-// Servir les images uploadées
+// Servir les images uploadees
 app.use('/uploads', express.static('uploads'));
 
 // --- AI Template Generator ---
@@ -129,38 +136,38 @@ app.use(errorHandler);
 const PORT = 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`?? Backend démarré sur port ${PORT}`);
+  console.log('Backend demarre sur port', PORT);
 
-  // Démarrer le worker d'envoi d'emails
+  // Demarrer le worker d'envoi d'emails
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
-      console.log('?? Démarrage du worker d’envoi d’emails...');
+      console.log('Demarrage du worker emails...');
       startEmailWorker();
     })
     .catch(err => {
-      console.error('? Erreur démarrage email worker:', err);
+      console.error('Erreur demarrage email worker:', err);
     });
 
-  // Démarrer le polling Elastic Email
-  import('./lib/elasticEmailPolling.js') // respecte la casse du fichier
+  // Demarrer le polling Elastic Email
+  import('./lib/elasticEmailPolling.js')
     .then(({ pollingService }) => {
-      console.log('?? Premier polling au démarrage...');
+      console.log('Premier polling au demarrage...');
       pollingService.syncAllActiveCampaigns().catch(e => {
-        console.error('? Erreur premier polling:', e);
+        console.error('Erreur premier polling:', e);
       });
 
       // Polling toutes les 10 minutes
       setInterval(async () => {
         try {
-          console.log('?? Polling automatique...');
+          console.log('Polling automatique...');
           await pollingService.syncAllActiveCampaigns();
         } catch (e) {
-          console.error('? Erreur polling automatique:', e);
+          console.error('Erreur polling automatique:', e);
         }
       }, 10 * 60 * 1000);
     })
     .catch(err => {
-      console.error('? Erreur démarrage polling:', err);
+      console.error('Erreur demarrage polling:', err);
     });
 });

@@ -1,30 +1,11 @@
 ﻿import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000/api",
-  headers: { "Content-Type": "application/json" },
+  baseURL: import.meta.env.VITE_API_URL,   // ex: https://leadsynch-api.onrender.com
+  withCredentials: true,                   // <-- indispensable pour cookie HttpOnly
+  headers: { "Content-Type": "application/json" }
 });
 
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.warn("⚠️ Non autorisé (401)");
-    }
-    return Promise.reject(error);
-  }
-);
+// Plus de token localStorage ici.
 
 export default api;

@@ -1,69 +1,44 @@
 ﻿import { createContext, useContext, useState, useEffect } from 'react'
-import api from '../api/axios'
+import api from '../axios' // <-- IMPORTANT: axios.js mis à jour avec withCredentials:true
 
 const AuthContext = createContext(null)
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext)
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [booting, setBooting] = useState(true)
 
+  // Vérifie l'auth automatiquement via le cookie
   useEffect(() => {
-    checkAuth()
+    let mounted = true
+    api.get('/me')
+      .then(res => mounted && setUser(res.data))
+      .catch(() => mounted && setUser(null))
+      .finally(() => mounted && setBooting(false))
+
+    return () => { mounted = false }
   }, [])
-
-  const checkAuth = async () => {
-    const token = localStorage.getItem('token')
-    
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
-    try {
-      const response = await api.get('/auth/me')
-      setUser(response.data.user)
-    } catch (error) {
-      console.error('Auth check failed:', error)
-      localStorage.removeItem('token')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const login = async (email, password) => {
     try {
-      const response = await api.post('/auth/login', { email, password })
-      const { token, user } = response.data
-      
-      localStorage.setItem('token', token)
-      setUser(user)
-      
+      await api.post('/auth/login', { email, password }) // Cookie posé ici
+      const res = await api.get('/me')                   // On récupère l'utilisateur
+      setUser(res.data)
       return { success: true }
     } catch (error) {
-      console.error('Login error:', error)
-      return { 
-        success: false, 
-        error: error.response?.data?.error || 'Erreur de connexion' 
-      }
+      return { success: false, error: "Email ou mot de passe incorrect" }
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem('token')
+  const logout = async () => {
+    try { await api.post('/auth/logout') } catch {}
     setUser(null)
   }
 
   const value = {
     user,
-    loading,
+    booting,
     login,
     logout,
     isAuthenticated: !!user
@@ -75,4 +50,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   )
 }
-
