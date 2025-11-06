@@ -1,52 +1,41 @@
-﻿import { createContext, useContext, useState, useEffect } from 'react'
-import api from '../axios' // <-- IMPORTANT: axios.js mis à jour avec withCredentials:true
+﻿import { createContext, useContext, useEffect, useState } from 'react';
+import api from '../axios';
 
-const AuthContext = createContext(null)
+const AuthContext = createContext(null);
+export const useAuth = () => useContext(AuthContext);
 
-export const useAuth = () => useContext(AuthContext)
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [booting, setBooting] = useState(true);
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
-  const [booting, setBooting] = useState(true)
-
-  // Vérifie l'auth automatiquement via le cookie
   useEffect(() => {
-    let mounted = true
-    api.get('/me')
-      .then(res => mounted && setUser(res.data))
+    let mounted = true;
+    api.get('/auth/me')
+      .then(r => mounted && setUser(r.data))
       .catch(() => mounted && setUser(null))
-      .finally(() => mounted && setBooting(false))
-
-    return () => { mounted = false }
-  }, [])
+      .finally(() => mounted && setBooting(false));
+    return () => { mounted = false; };
+  }, []);
 
   const login = async (email, password) => {
     try {
-      await api.post('/auth/login', { email, password }) // Cookie posé ici
-      const res = await api.get('/me')                   // On récupère l'utilisateur
-      setUser(res.data)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: "Email ou mot de passe incorrect" }
+      await api.post('/auth/login', { email, password }); // cookie posé
+      const me = await api.get('/auth/me');
+      setUser(me.data);
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Identifiants incorrects' };
     }
-  }
+  };
 
   const logout = async () => {
-    try { await api.post('/auth/logout') } catch {}
-    setUser(null)
-  }
-
-  const value = {
-    user,
-    booting,
-    login,
-    logout,
-    isAuthenticated: !!user
-  }
+    try { await api.post('/auth/logout'); } catch {}
+    setUser(null);
+  };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, booting, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
-  )
+  );
 }

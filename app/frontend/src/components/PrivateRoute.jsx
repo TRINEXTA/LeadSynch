@@ -8,7 +8,7 @@ export default function PrivateRoute({ children }) {
 
   useEffect(() => {
     let mounted = true;
-    api.get("/me")
+    api.get("/auth/me")
       .then(() => mounted && setAuth(true))
       .catch(() => mounted && setAuth(false))
       .finally(() => mounted && setLoading(false));
