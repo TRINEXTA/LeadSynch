@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import api from "../axios";
+import api from "../api/axios";
 
 export default function PrivateRoute({ children }) {
   const [loading, setLoading] = useState(true);
