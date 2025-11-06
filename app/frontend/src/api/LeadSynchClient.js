@@ -1,11 +1,13 @@
 ﻿import axios from "axios";
 
-const API_BASE_URL = "http://localhost:3000";
+// Utilise la variable d'environnement ou fallback vide
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 class LeadSyncClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
+      withCredentials: true, // Important pour les cookies
       headers: { "Content-Type": "application/json" }
     });
     this.client.interceptors.request.use((config) => {
