@@ -11,7 +11,7 @@ export default function QuotasWidget() {
 
   const fetchQuotas = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/quotas', {
+      const response = await fetch('/quotas', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

@@ -55,7 +55,7 @@ export default function ImportLeads() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:3000/api/leads/analyze-csv', {
+      const response = await fetch('/leads/analyze-csv', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -87,7 +87,7 @@ export default function ImportLeads() {
 
     try {
       // 1. Créer la base de données
-      const createResponse = await fetch('http://localhost:3000/api/leads/import-csv', {
+      const createResponse = await fetch('/leads/import-csv', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -115,7 +115,7 @@ export default function ImportLeads() {
       formData.append('file', file);
       formData.append('database_id', databaseId);
 
-      const importResponse = await fetch('http://localhost:3000/api/leads/import-batch', {
+      const importResponse = await fetch('/leads/import-batch', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

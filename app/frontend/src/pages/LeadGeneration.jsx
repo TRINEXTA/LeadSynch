@@ -59,7 +59,7 @@ export default function LeadGeneration() {
 
     try {
       console.log("Appel API generate-leads-stream...");
-      const response = await fetch("http://localhost:3000/api/generate-leads-stream", {
+      const response = await fetch("/generate-leads-stream", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json", 
@@ -146,7 +146,7 @@ export default function LeadGeneration() {
 
   const handlePause = async () => {
     const token = localStorage.getItem("token");
-    await fetch("http://localhost:3000/api/pause-search", {
+    await fetch("/pause-search", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ searchId: searchIdRef.current })
@@ -157,7 +157,7 @@ export default function LeadGeneration() {
 
   const handleResume = async () => {
     const token = localStorage.getItem("token");
-    await fetch("http://localhost:3000/api/resume-search", {
+    await fetch("/resume-search", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ searchId: searchIdRef.current })
@@ -168,7 +168,7 @@ export default function LeadGeneration() {
 
   const handleStop = async () => {
     const token = localStorage.getItem("token");
-    await fetch("http://localhost:3000/api/stop-search", {
+    await fetch("/stop-search", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ searchId: searchIdRef.current })

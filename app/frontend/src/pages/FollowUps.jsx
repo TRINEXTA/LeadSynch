@@ -67,7 +67,7 @@ export default function FollowUps() {
   const fetchFollowups = async () => {
     try {
       setLoading(true);
-      let url = 'http://localhost:3000/api/follow-ups';
+      let url = '/follow-ups';
       
       // Manager peut filtrer par commercial
       if (isManager && selectedUser !== 'all') {
@@ -93,7 +93,7 @@ export default function FollowUps() {
 
   const fetchLeads = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/leads', {
+      const response = await fetch('/leads', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -114,7 +114,7 @@ export default function FollowUps() {
 
   const fetchTeamMembers = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/users', {
+      const response = await fetch('/users', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -171,7 +171,7 @@ export default function FollowUps() {
     try {
       const scheduledDateTime = `${newFollowup.scheduled_date}T${newFollowup.scheduled_time || '09:00'}:00`;
       
-      const response = await fetch('http://localhost:3000/api/follow-ups', {
+      const response = await fetch('/follow-ups', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -208,7 +208,7 @@ export default function FollowUps() {
 
   const handleComplete = async (id) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/follow-ups/${id}/complete`, {
+      const response = await fetch(`/follow-ups/${id}/complete`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -227,7 +227,7 @@ export default function FollowUps() {
     if (!confirm('Supprimer ce rappel ?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/follow-ups/${id}`, {
+      const response = await fetch(`/follow-ups/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -247,7 +247,7 @@ export default function FollowUps() {
     if (!newDate) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/follow-ups/${id}/reschedule`, {
+      const response = await fetch(`/follow-ups/${id}/reschedule`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

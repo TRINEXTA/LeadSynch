@@ -77,7 +77,7 @@ export default function LeadScoring() {
 
   const fetchDatabases = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/lead-databases', {
+      const response = await fetch('/lead-databases', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await response.json();
@@ -89,7 +89,7 @@ export default function LeadScoring() {
 
   const fetchCampaigns = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/campaigns-full', {
+      const response = await fetch('/campaigns-full', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await response.json();
@@ -101,7 +101,7 @@ export default function LeadScoring() {
 
   const fetchLeads = async () => {
     try {
-      let url = 'http://localhost:3000/api/leads';
+      let url = '/leads';
       
       // Filtrer par base de données
       if (selectedSource === 'database' && selectedDatabaseId) {
@@ -110,7 +110,7 @@ export default function LeadScoring() {
       
       // Filtrer par campagne
       if (selectedSource === 'campaign' && selectedCampaignId) {
-        url = `http://localhost:3000/api/campaign-leads?campaign_id=${selectedCampaignId}`;
+        url = `/campaign-leads?campaign_id=${selectedCampaignId}`;
       }
 
       const response = await fetch(url, {

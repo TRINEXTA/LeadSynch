@@ -18,7 +18,7 @@ export default function Leads() {
 
   const loadLeads = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/leads', {
+      const response = await fetch('/leads', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await response.json();

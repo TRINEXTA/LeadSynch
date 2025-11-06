@@ -8,7 +8,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/stats', {
+    fetch('/stats', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
