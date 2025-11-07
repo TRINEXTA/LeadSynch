@@ -20,16 +20,20 @@ async function handler(req, res) {
   try {
     // GET - List users
     if (method === 'GET') {
+      console.log('🔍 GET /api/users - User:', req.user.email, 'Tenant:', req.user.tenant_id);
+      
       const users = await queryAll(
         `SELECT u.id, u.email, u.first_name, u.last_name, u.role,  
                 u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
                 t.name as tenant_name
          FROM users u
-         JOIN tenants t ON u.tenant_id = t.id
+         LEFT JOIN tenants t ON u.tenant_id = t.id
          WHERE u.tenant_id = $1
          ORDER BY u.created_at DESC`,
         [req.user.tenant_id]
       );
+
+      console.log('✅ Users trouvés:', users.length);
 
       return res.status(200).json({
         success: true,
@@ -104,7 +108,8 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('Users API error:', error);
+    console.error('❌ Users API error:', error);
+    console.error('Stack:', error.stack);
 
     if (error.name === 'ZodError') {
       return res.status(400).json({
