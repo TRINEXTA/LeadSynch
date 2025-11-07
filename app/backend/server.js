@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -17,36 +19,24 @@ if (!process.env.POSTGRES_URL) {
 const app = express();
 app.set('trust proxy', 1);
 
-// ========== CORS ULTRA-PERMISSIF POUR DEBUG ==========
-const corsOptions = {
-  origin: (origin, callback) => {
-    console.log('[CORS] Request from origin:', origin);
-    
-    // Accepter TOUT pour debug
-    callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Authorization'],
-  maxAge: 86400
-};
-
-app.use(cors(corsOptions));
-
-// Gérer explicitement les OPTIONS
-app.options('*', cors(corsOptions));
-
-// ? FORCER LES HEADERS CORS SUR TOUTES LES RÉPONSES
+// ========= ?? CORS FIX (Ultra-compatible navigateur) =========
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+
   if (origin) {
-    res.header("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Origin", origin);
   }
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  res.header("Access-Control-Expose-Headers", "Authorization");
+
+  res.setHeader("Vary", "Origin"); // ? Indique à Render que la réponse dépend de l'origin
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.setHeader("Access-Control-Expose-Headers", "Authorization");
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204); // ? Répond directement aux preflight requests
+  }
+
   next();
 });
 
@@ -59,7 +49,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// === Routes ===
+// ========== ROUTES ==========
 app.get('/api/health', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
 import authLogin from './api/auth/login.js';
@@ -130,7 +120,7 @@ app.use('/api/pipeline-leads', pipelineLeadsRoute);
 
 import * as unsubscribeController from './controllers/unsubscribeController.js';
 app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
-app.post('/api/unsubscribe/:lead_id', unsubscribeController.processUnsubscribe);
+app.post('/api/unsubscribe/:lead_id', authMiddleware, unsubscribeController.processUnsubscribe);
 app.post('/api/resubscribe/:lead_id', authMiddleware, unsubscribeController.resubscribe);
 app.get('/api/unsubscribe-stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
 
@@ -145,22 +135,22 @@ app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage
 app.get('/api/images', authMiddleware, imageUploadController.getImages);
 app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
 
-import path from 'path';
-import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(errorHandler);
 
+// ========== LANCEMENT ==========
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('Backend demarre sur port', PORT);
+  console.log('Backend démarré sur port', PORT);
 
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
-      console.log('[EMAIL WORKER] Demarrage');
+      console.log('[EMAIL WORKER] Démarrage');
       startEmailWorker();
     })
     .catch(err => console.error('Erreur email worker:', err));
