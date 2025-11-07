@@ -1,8 +1,10 @@
 // server.js
 import express from 'express';
-import { authMiddleware } from './middleware/auth.js';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+
+import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -13,37 +15,52 @@ if (!process.env.POSTGRES_URL) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 
-// CORS CONFIGURE - Accepte production + previews Vercel
-app.use(cors({
+// ========== CORS ULTRA-PERMISSIF POUR DEBUG ==========
+const corsOptions = {
   origin: (origin, callback) => {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://leadsynch.com',
-      'https://www.leadsynch.com',
-      'https://app.leadsynch.com',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
+    console.log('[CORS] Request from origin:', origin);
     
-    // Accepter toutes les URLs Vercel (preview + production)
-    if (!origin || 
-        allowedOrigins.includes(origin) || 
-        origin.includes('.vercel.app')) {
-      callback(null, true);
-    } else {
-      console.log('[CORS] Origine refusee:', origin);
-      callback(new Error('CORS not allowed'));
-    }
+    // Accepter TOUT pour debug
+    callback(null, true);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Authorization'],
+  maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+
+// Gérer explicitement les OPTIONS
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '50mb' }));
+app.use(cookieParser());
 
-// --- Import routes ---
+// Log toutes les requêtes
+app.use((req, res, next) => {
+  console.log(`[${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
+  next();
+});
+
+// === Routes ===
+app.get('/api/health', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+import authLogin from './api/auth/login.js';
+import authMe from './api/auth/me.js';
+import changePasswordRoute from './api/auth/change-password.js';
+import resetPassword from './api/auth/reset-password.js';
+import authLogout from './api/auth/logout.js';
+
+app.all('/api/auth/login', authLogin);
+app.all('/api/auth/me', authMe);
+app.all('/api/auth/change-password', changePasswordRoute);
+app.all('/api/auth/reset-password', resetPassword);
+if (authLogout) app.all('/api/auth/logout', authLogout);
+
 import leadsRoute from './api/leads.js';
 import usersRoute from './api/users.js';
 import usersUpdateRoute from './api/users-update.js';
@@ -55,11 +72,7 @@ import prospectionSessionsRoute from './api/prospection-sessions.js';
 import statsRoute from './api/stats.js';
 import templatesRoute from './api/templates.js';
 import generateLeadsRoute from './api/generate-leads.js';
-import authLogin from './api/auth/login.js';
 import followUpsRoute from './api/follow-ups.js';
-import authMe from './api/auth/me.js';
-import changePasswordRoute from './api/auth/change-password.js';
-import resetPassword from './api/auth/reset-password.js';
 import quotasRoute from './api/quotas.js';
 import importCsvRoute from './api/import-csv.js';
 import asefiGenerateRoute from './api/asefi-generate.js';
@@ -69,19 +82,12 @@ import verifySiretRoute from './api/verify-siret.js';
 import sendCampaignEmailsRoute from './api/send-campaign-emails.js';
 import leadsCountRoute from './api/leads-count.js';
 import uploadAttachmentRoute from './api/upload-attachment.js';
-import sendTestEmailRoute from './api/send-test-email.js';
 import sectorsRoute from './api/sectors.js';
 import leadsCountMultiRoute from './api/leads-count-multi.js';
 import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 
-// --- Routes ---
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-app.all('/api/auth/login', authLogin);
-app.all('/api/auth/me', authMe);
-app.all('/api/auth/change-password', changePasswordRoute);
-app.all('/api/auth/reset-password', resetPassword);
 app.use('/api/leads', leadsRoute);
 app.use('/api/leads-count-multi', leadsCountMultiRoute);
 app.use('/api/sectors', sectorsRoute);
@@ -105,84 +111,59 @@ app.use('/api/verify-siret', verifySiretRoute);
 app.use('/api/send-campaign-emails', sendCampaignEmailsRoute);
 app.use('/api/leads/count', leadsCountRoute);
 app.use('/api/upload-attachment', uploadAttachmentRoute);
-app.use('/api/send-test-email', sendTestEmailRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
 
-// --- Unsubscribe (PUBLIC) ---
 import * as unsubscribeController from './controllers/unsubscribeController.js';
 app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
 app.post('/api/unsubscribe/:lead_id', unsubscribeController.processUnsubscribe);
-
-// --- Unsubscribe admin (PROTECTED) ---
 app.post('/api/resubscribe/:lead_id', authMiddleware, unsubscribeController.resubscribe);
 app.get('/api/unsubscribe-stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
 
-// --- Email Tracking ---
 import * as emailTrackingController from './controllers/emailTrackingController.js';
 app.get('/api/track/click', emailTrackingController.trackClick);
 app.get('/api/track/open', emailTrackingController.trackOpen);
 app.get('/api/tracking/lead/:lead_id/events', authMiddleware, emailTrackingController.getLeadEvents);
 app.get('/api/tracking/campaign/:campaign_id/stats', authMiddleware, emailTrackingController.getCampaignStats);
 
-// --- Upload Images ---
 import * as imageUploadController from './controllers/imageUploadController.js';
 app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage);
 app.get('/api/images', authMiddleware, imageUploadController.getImages);
 app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
 
-// Servir les images uploadees
-app.use('/uploads', express.static('uploads'));
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// --- AI Template Generator ---
-import * as aiTemplateController from './controllers/aiTemplateController.js';
-app.post('/api/ai/generate-template', authMiddleware, aiTemplateController.generateTemplate);
-app.post('/api/ai/improve-template', authMiddleware, aiTemplateController.improveTemplate);
-
-// --- Spam Analyzer ---
-import * as spamController from './controllers/spamController.js';
-app.post('/api/analyze-spam', authMiddleware, spamController.analyzeSpam);
-app.get('/api/analyze-template/:template_id', authMiddleware, spamController.analyzeTemplate);
-
-// --- Error handler (toujours en dernier) ---
 app.use(errorHandler);
 
-const PORT = 3000;
-
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('Backend demarre sur port', PORT);
 
-  // Demarrer le worker d'envoi d'emails
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
-      console.log('Demarrage du worker emails...');
+      console.log('[EMAIL WORKER] Demarrage');
       startEmailWorker();
     })
-    .catch(err => {
-      console.error('Erreur demarrage email worker:', err);
-    });
+    .catch(err => console.error('Erreur email worker:', err));
 
-  // Demarrer le polling Elastic Email
   import('./lib/elasticEmailPolling.js')
     .then(({ pollingService }) => {
-      console.log('Premier polling au demarrage...');
-      pollingService.syncAllActiveCampaigns().catch(e => {
-        console.error('Erreur premier polling:', e);
-      });
-
-      // Polling toutes les 10 minutes
+      console.log('[POLLING] Premier run');
+      pollingService.syncAllActiveCampaigns().catch(e => console.error('Erreur polling:', e));
       setInterval(async () => {
         try {
-          console.log('Polling automatique...');
+          console.log('[POLLING] Run auto');
           await pollingService.syncAllActiveCampaigns();
         } catch (e) {
-          console.error('Erreur polling automatique:', e);
+          console.error('Erreur polling auto:', e);
         }
       }, 10 * 60 * 1000);
     })
-    .catch(err => {
-      console.error('Erreur demarrage polling:', err);
-    });
+    .catch(err => console.error('Erreur polling:', err));
 });
