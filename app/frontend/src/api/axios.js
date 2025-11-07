@@ -20,6 +20,13 @@ api.interceptors.request.use((cfg) => {
   if (cfg.url && !cfg.url.startsWith("/api/") && !cfg.url.startsWith("http")) {
     cfg.url = "/api" + cfg.url;
   }
+  
+  // Ajouter le token depuis localStorage
+  const token = localStorage.getItem('token');
+  if (token) {
+    cfg.headers.Authorization = `Bearer ${token}`;
+  }
+  
   return cfg;
 });
 

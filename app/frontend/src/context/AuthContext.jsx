@@ -32,6 +32,12 @@ export function AuthProvider({ children }) {
       console.log('Login response status:', loginResponse.status);
       console.log('Login response data:', loginResponse.data);
       
+      // SAUVEGARDER LE TOKEN DANS LOCALSTORAGE
+      if (loginResponse.data.token) {
+        localStorage.setItem('token', loginResponse.data.token);
+        console.log('Token saved to localStorage');
+      }
+      
       console.log('Fetching user with GET /auth/me...');
       const me = await api.get('/auth/me');
       
@@ -60,6 +66,7 @@ export function AuthProvider({ children }) {
     } catch (e) {
       console.log('Logout error (ignoré):', e);
     }
+    localStorage.removeItem('token');
     setUser(null);
   };
 
