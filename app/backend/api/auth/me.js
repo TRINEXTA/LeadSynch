@@ -1,24 +1,25 @@
-﻿import { authMiddleware } from '../../middleware/auth.js';
-import { queryOne } from '../../lib/db.js';
+﻿// api/auth/me.js
+import { authMiddleware } from '../../middleware/auth.js';
 
 async function handler(req, res) {
-  try {
-    const userId = typeof req.user === 'string' ? req.user : req.user.id;
-    
-    const user = await queryOne(
-      'SELECT id, email, first_name, last_name, role, tenant_id, avatar_url FROM users WHERE id = \$1',
-      [userId]
-    );
-    
-    if (!user) {
-      return res.status(404).json({ error: 'Utilisateur non trouvé' });
-    }
-    
-    return res.json({ success: true, user });
-  } catch (error) {
-    console.error('Me error:', error);
-    return res.status(500).json({ error: 'Erreur serveur' });
+  console.log('========== /auth/me REQUEST ==========');
+  console.log('Method:', req.method);
+  console.log('Origin:', req.headers.origin);
+  console.log('Authorization header:', req.headers.authorization);
+  console.log('User from middleware:', req.user ? 'OK' : 'NULL');
+  
+  if (req.user) {
+    console.log('User ID:', req.user.id);
+    console.log('User email:', req.user.email);
   }
+  
+  return res.json({
+    id: req.user.id,
+    email: req.user.email,
+    name: req.user.name,
+    role: req.user.role,
+    tenant_id: req.user.tenant_id
+  });
 }
 
 export default authMiddleware(handler);
