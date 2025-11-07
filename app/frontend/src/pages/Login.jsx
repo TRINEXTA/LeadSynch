@@ -2,6 +2,7 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { LogoDark } from '../components/branding/LeadSynchLogo';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -31,8 +32,8 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo et titre */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-4 shadow-lg">
-            <span className="text-3xl font-bold text-white">LS</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <LogoDark size="large" animated={true} />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">LeadSynch</h1>
           <p className="text-gray-600">Connectez-vous à votre compte</p>
