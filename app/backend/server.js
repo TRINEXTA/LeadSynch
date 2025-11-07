@@ -37,6 +37,19 @@ app.use(cors(corsOptions));
 // Gérer explicitement les OPTIONS
 app.options('*', cors(corsOptions));
 
+// ? FORCER LES HEADERS CORS SUR TOUTES LES RÉPONSES
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Expose-Headers", "Authorization");
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
