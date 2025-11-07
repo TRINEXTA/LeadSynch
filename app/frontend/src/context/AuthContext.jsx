@@ -36,9 +36,14 @@ export function AuthProvider({ children }) {
       if (loginResponse.data.token) {
         localStorage.setItem('token', loginResponse.data.token);
         console.log('Token saved to localStorage');
+        
+        // Attendre un petit délai pour être sûr
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
       
       console.log('Fetching user with GET /auth/me...');
+      console.log('Token in localStorage:', localStorage.getItem('token')?.substring(0, 20) + '...');
+      
       const me = await api.get('/auth/me');
       
       console.log('Me response:', me.data);
@@ -54,6 +59,7 @@ export function AuthProvider({ children }) {
       console.error('Error response data:', error.response?.data);
       console.error('Error config URL:', error.config?.url);
       console.error('Error config baseURL:', error.config?.baseURL);
+      console.error('Error config headers:', error.config?.headers);
       console.error('Full error:', error);
       
       return { success: false, error: 'Identifiants incorrects' };
