@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Phone, MessageSquare, Send, ArrowRight, ArrowLeft, Database, Users, Calendar, Settings, Paperclip, X, Eye, TestTube, Check, Target, Clock, Zap, AlertCircle, Plus, Edit } from 'lucide-react';
 import api from '../api/axios';
@@ -155,14 +155,14 @@ export default function CampaignsManager() {
 
   const loadUsers = async () => {
     try {
-      console.log('?? Loading users...');
+      console.log('🔍 Loading users...');
       const response = await api.get('/users');
-      console.log('? Users response:', response.data);
-      console.log('?? Users array:', response.data.users);
-      console.log('?? Users count:', response.data.users?.length);
+      console.log('✅ Users response:', response.data);
+      console.log('👥 Users array:', response.data.users);
+      console.log('📊 Users count:', response.data.users?.length);
       setUsers(response.data.users || []);
     } catch (error) {
-      console.error('? Erreur users:', error);
+      console.error('❌ Erreur users:', error);
       console.error('Error details:', error.response?.data);
     }
   };
@@ -318,10 +318,10 @@ export default function CampaignsManager() {
         recipients: validEmails,
         attachments: attachments.map(a => a.id)
       });
-      alert('? Emails de test envoyes avec succes !');
+      alert('✅ Emails de test envoyes avec succes !');
     } catch (error) {
-      console.error('? Erreur test:', error);
-      alert('? Erreur envoi test: ' + (error.response?.data?.error || error.message));
+      console.error('❌ Erreur test:', error);
+      alert('❌ Erreur envoi test: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -343,7 +343,7 @@ export default function CampaignsManager() {
 
   const handleSaveDraft = async () => {
     try {
-      console.log('?? Sauvegarde brouillon, donn�es envoy�es:', {
+      console.log('🟡 Sauvegarde brouillon, données envoyées:', {
         ...formData,
         database_id: selectedDatabases[0],
         sectors: selectedSectors,
@@ -362,14 +362,14 @@ export default function CampaignsManager() {
       alert('Campagne enregistree en brouillon !');
       navigate('/campaigns');
     } catch (error) {
-      console.error('? Erreur brouillon:', error);
-      alert('? Erreur sauvegarde brouillon: ' + (error.response?.data?.error || error.message));
+      console.error('❌ Erreur brouillon:', error);
+      alert('❌ Erreur sauvegarde brouillon: ' + (error.response?.data?.error || error.message));
     }
   };
 
   const handleCreateCampaign = async (startNow = false) => {
     try {
-      console.log('?? Cr�ation campagne, donn�es envoy�es:', {
+      console.log('🚀 Création campagne, données envoyées:', {
         ...formData,
         database_id: selectedDatabases[0],
         sectors: selectedSectors,
@@ -395,8 +395,8 @@ export default function CampaignsManager() {
       
       navigate('/campaigns');
     } catch (error) {
-      console.error('? Erreur cr�ation:', error);
-      alert('? Erreur: ' + (error.response?.data?.error || error.message));
+      console.error('❌ Erreur création:', error);
+      alert('❌ Erreur: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -678,8 +678,7 @@ export default function CampaignsManager() {
                             {sector}
                           </button>
                         ))}
-                </div>
-              )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -760,8 +759,7 @@ export default function CampaignsManager() {
                             </button>
                           </div>
                         ))}
-                </div>
-              )}
+                      </div>
                     )}
                   </div>
                 </>
@@ -773,28 +771,27 @@ export default function CampaignsManager() {
           {((step === 4 && campaignType.id === 'email') || (step === 3 && campaignType.id !== 'email')) && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Affectation commerciaux</h2>
+{/* DEBUG INFO */}
+              {users.length === 0 && (
+                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-4">
+                  <AlertCircle className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-center text-gray-900">
+                    ⚠️ Aucun utilisateur chargé
+                  </p>
+                  <p className="text-xs text-center text-gray-600 mt-2">
+                    Vérifiez la console (F12) pour voir les logs de chargement
+                  </p>
+                </div>
+              )}
 
-              {/* DEBUG INFO */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
                 <p className="text-sm font-mono">
                   Step: {step} | Type: {campaignType?.id} | Users: {users.length}
                 </p>
-                <p className="text-xs text-gray-600 mt-1">
-                  {users.length === 0 ? '?? Aucun utilisateur charg�' : `? ${users.length} utilisateurs disponibles`}
-                </p>
               </div>
 
-              {users.length === 0 ? (
-                <div className="text-center py-8 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
-                  <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
-                  <p className="font-bold text-gray-900">Aucun utilisateur trouv�</p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    V�rifiez que des utilisateurs existent dans le syst�me
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {users.map(user => (
+              <div className="grid grid-cols-2 gap-4">
+                {users.map(user => (
                   <div
                     key={user.id}
                     onClick={() => {
@@ -867,10 +864,10 @@ export default function CampaignsManager() {
                         {estimatedDuration.minutes}min
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
-                        {estimatedDuration.cycles} cycles � {formData.emails_per_cycle} emails/cycle = {leadsCount} emails total
+                        {estimatedDuration.cycles} cycles × {formData.emails_per_cycle} emails/cycle = {leadsCount} emails total
                       </p>
                       <p className="text-xs text-gray-500">
-                        Temps total: {estimatedDuration.totalMinutes} minutes ({estimatedDuration.cycles} � 10min pause + {estimatedDuration.cycles}min envoi)
+                        Temps total: {estimatedDuration.totalMinutes} minutes ({estimatedDuration.cycles} × 10min pause + {estimatedDuration.cycles}min envoi)
                       </p>
                     </div>
                   )}
@@ -905,7 +902,7 @@ export default function CampaignsManager() {
                 {formData.start_date ? (
                   <div className="mt-2 bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
                     <p className="text-sm text-blue-700 font-semibold">
-                      ?? La campagne demarrera le {new Date(formData.start_date).toLocaleDateString('fr-FR', { 
+                      📅 La campagne demarrera le {new Date(formData.start_date).toLocaleDateString('fr-FR', { 
                         weekday: 'long', 
                         day: 'numeric', 
                         month: 'long', 
@@ -915,7 +912,7 @@ export default function CampaignsManager() {
                   </div>
                 ) : (
                   <p className="text-sm text-gray-600 mt-2">
-                    ? Sans date, la campagne demarrera immediatement apres creation
+                    ⚡ Sans date, la campagne demarrera immediatement apres creation
                   </p>
                 )}
               </div>
@@ -950,7 +947,7 @@ export default function CampaignsManager() {
                 </div>
                 <div className="mt-3 bg-white rounded-lg p-3 border-2 border-purple-200">
                   <p className="text-sm text-purple-700 font-semibold">
-                    ?? Envois quotidiens de {formData.send_time_start} a {formData.send_time_end}
+                    🕐 Envois quotidiens de {formData.send_time_start} a {formData.send_time_end}
                   </p>
                 </div>
               </div>
@@ -959,13 +956,13 @@ export default function CampaignsManager() {
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Jours d'envoi</label>
                 <div className="grid grid-cols-7 gap-2">
                   {[
-                    { id: 1, name: 'Lun', gradient: 'from-blue-400 via-blue-500 to-blue-600', icon: '??' },
-                    { id: 2, name: 'Mar', gradient: 'from-green-400 via-green-500 to-green-600', icon: '??' },
-                    { id: 3, name: 'Mer', gradient: 'from-yellow-400 via-orange-500 to-orange-600', icon: '???' },
-                    { id: 4, name: 'Jeu', gradient: 'from-pink-400 via-pink-500 to-pink-600', icon: '??' },
-                    { id: 5, name: 'Ven', gradient: 'from-purple-400 via-purple-500 to-purple-600', icon: '??' },
-                    { id: 6, name: 'Sam', gradient: 'from-indigo-400 via-indigo-500 to-indigo-600', icon: '??' },
-                    { id: 7, name: 'Dim', gradient: 'from-red-400 via-rose-500 to-rose-600', icon: '??' }
+                    { id: 1, name: 'Lun', gradient: 'from-blue-400 via-blue-500 to-blue-600', icon: '🌅' },
+                    { id: 2, name: 'Mar', gradient: 'from-green-400 via-green-500 to-green-600', icon: '🌞' },
+                    { id: 3, name: 'Mer', gradient: 'from-yellow-400 via-orange-500 to-orange-600', icon: '🌤️' },
+                    { id: 4, name: 'Jeu', gradient: 'from-pink-400 via-pink-500 to-pink-600', icon: '🌆' },
+                    { id: 5, name: 'Ven', gradient: 'from-purple-400 via-purple-500 to-purple-600', icon: '🌃' },
+                    { id: 6, name: 'Sam', gradient: 'from-indigo-400 via-indigo-500 to-indigo-600', icon: '🎨' },
+                    { id: 7, name: 'Dim', gradient: 'from-red-400 via-rose-500 to-rose-600', icon: '🌈' }
                   ].map((day) => {
                     const isSelected = formData.send_days.includes(day.id);
                     return (
@@ -1100,6 +1097,3 @@ export default function CampaignsManager() {
     </div>
   );
 }
-
-
-
