@@ -2,12 +2,11 @@
 
 // URL de base de l'API (doit contenir /api)
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
 console.log('✅ API URL:', API_BASE);
 
 const api = axios.create({
   baseURL: API_BASE,
-  withCredentials: true,
+  // ❌ ENLEVÉ withCredentials (pas nécessaire avec Bearer tokens)
   headers: { 
     "Content-Type": "application/json"
   }
