@@ -1,8 +1,8 @@
 ﻿// api/auth/me.js
 import { authMiddleware } from '../../middleware/auth.js';
 
-async function handler(req, res) {
-  // ✅ FORCER LES HEADERS CORS EXPLICITEMENT
+// Handler sans auth pour OPTIONS
+function optionsHandler(req, res) {
   const origin = req.headers.origin;
   if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
@@ -10,12 +10,11 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
-  
-  // Gérer OPTIONS pour preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
+  return res.status(200).end();
+}
+
+// Handler avec auth pour GET
+async function getHandler(req, res) {
   console.log('========== /auth/me REQUEST ==========');
   console.log('Method:', req.method);
   console.log('Origin:', req.headers.origin);
@@ -27,6 +26,12 @@ async function handler(req, res) {
     console.log('User email:', req.user.email);
   }
   
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  
   return res.json({
     id: req.user.id,
     email: req.user.email,
@@ -36,4 +41,11 @@ async function handler(req, res) {
   });
 }
 
-export default authMiddleware(handler);
+// Export un handler qui choisit selon la méthode
+export default function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return optionsHandler(req, res);
+  }
+  // Pour GET, utiliser authMiddleware
+  return authMiddleware(getHandler)(req, res);
+}
