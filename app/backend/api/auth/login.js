@@ -1,6 +1,6 @@
 ﻿import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import db from '../../config/database.js';
+import db from '../../config/db.js';
 
 async function handler(req, res) {
   console.log('========== LOGIN REQUEST ==========');
