@@ -70,5 +70,80 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/lead-databases - Créer une nouvelle base
+router.post('/', authMiddleware, async (req, res) => {
+  try {
+    const { tenant_id, id: user_id } = req.user;
+    const { name, description, source, segmentation } = req.body;
+
+    console.log('📊 Création base:', name);
+
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Nom requis' });
+    }
+
+    const query = `
+      INSERT INTO lead_databases (tenant_id, name, description, source, segmentation, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING *
+    `;
+
+    const result = await db.query(query, [
+      tenant_id,
+      name,
+      description || null,
+      source || 'import_csv',
+      JSON.stringify(segmentation || {}),
+      user_id
+    ]);
+
+    console.log('✅ Base créée:', result.rows[0].id);
+
+    res.json({
+      success: true,
+      database: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur POST /lead-databases:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/lead-databases/:id - Supprimer une base
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tenant_id } = req.user;
+
+    await db.query('DELETE FROM lead_database_relations WHERE database_id = $1', [id]);
+    await db.query('DELETE FROM lead_databases WHERE id = $1 AND tenant_id = $2', [id, tenant_id]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erreur DELETE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PATCH /api/lead-databases/:id/archive - Archiver une base
+router.patch('/:id/archive', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tenant_id } = req.user;
+
+    await db.query(
+      'UPDATE lead_databases SET archived = true, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
+      [id, tenant_id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erreur ARCHIVE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 export default router;
 
