@@ -19,22 +19,33 @@ if (!process.env.POSTGRES_URL) {
 const app = express();
 app.set('trust proxy', 1);
 
-// ========= ?? CORS FIX (Ultra-compatible navigateur) =========
+// ========= ?? CORS FIX (Production + Local) =========
+const allowedOrigins = [
+  'https://app.leadsynch.com',
+  'https://leadsynch.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  
+  console.log('?? Origin reçu:', origin);
 
-  if (origin) {
+  // ? Autoriser l'origin si dans la liste
+  if (origin && allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
-  res.setHeader("Vary", "Origin"); // ? Indique à Render que la réponse dépend de l'origin
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.setHeader("Access-Control-Expose-Headers", "Authorization");
 
+  // ? CRITIQUE : Répondre aux preflight OPTIONS
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(204); // ? Répond directement aux preflight requests
+    return res.status(200).end();
   }
 
   next();
