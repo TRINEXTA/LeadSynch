@@ -291,57 +291,51 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Si campagne PHONING/SMS/WHATSAPP : affecter les leads aux commerciaux ET injecter dans le pipeline
     if (type !== 'email' && assigned_users && assigned_users.length > 0) {
-      console.log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
+  console.log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
 
-      const INITIAL_LEADS_PER_USER = 50;
-      const perUserInjected = new Map(assigned_users.map(u => [u, 0]));
-      let totalInjected = 0;
-      const totalInitialLeads = Math.min(leads.length, INITIAL_LEADS_PER_USER * assigned_users.length);
+  const INITIAL_LEADS_PER_USER = 50;
+  const perUserInjected = new Map(assigned_users.map(u => [u, 0]));
+  let totalInjected = 0;
+  const totalInitialLeads = Math.min(leads.length, INITIAL_LEADS_PER_USER * assigned_users.length);
 
-      console.log(`🎯 Injection initiale: ${INITIAL_LEADS_PER_USER} leads par commercial (${totalInitialLeads} total)`);
+  console.log(`🎯 Injection initiale: ${INITIAL_LEADS_PER_USER} leads par commercial (${totalInitialLeads} total)`);
 
-      await execute('BEGIN');
+  await execute('BEGIN');
 
-      try {
-        for (let i = 0; i < leads.length; i++) {
-          const lead = leads[i];
-          const assignedUserId = assigned_users[i % assigned_users.length];
+  try {
+    for (let i = 0; i < leads.length; i++) {
+      const lead = leads[i];
+      const assignedUserId = assigned_users[i % assigned_users.length];
 
-          // 1) assignation du lead au commercial (round-robin)
-          await execute(
-            `UPDATE leads 
-               SET assigned_to = $1, status = 'assigned', updated_at = NOW()
-             WHERE id = $2 AND tenant_id = $3`,
-            [assignedUserId, lead.id, tenantId]
-          );
+      // 1) assignation du lead au commercial (round-robin)
+      await execute(
+        `UPDATE leads 
+         SET assigned_to = $1, status = 'assigned', updated_at = NOW()
+         WHERE id = $2 AND tenant_id = $3`,
+        [assignedUserId, lead.id, tenantId]
+      );
 
-          // 2) injection contrôlée dans le pipeline : max 50 par commercial
-          const alreadyForUser = perUserInjected.get(assignedUserId) || 0;
-          if (totalInjected < totalInitialLeads && alreadyForUser < INITIAL_LEADS_PER_USER) {
-            const res = await execute(
-              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-               VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-               ON CONFLICT (lead_id, campaign_id)
-               DO UPDATE SET
-                 stage = EXCLUDED.stage,
-                 assigned_user_id = EXCLUDED.assigned_user_id,
-                 updated_at = NOW()`,
-              [tenantId, lead.id, campaign.id, assignedUserId]
-            );
+      // 2) ✅ TOUJOURS injecter dans le pipeline (pas de limite)
+      await execute(
+        `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+         ON CONFLICT (lead_id, campaign_id)
+         DO UPDATE SET
+           stage = EXCLUDED.stage,
+           assigned_user_id = EXCLUDED.assigned_user_id,
+           updated_at = NOW()`,
+        [tenantId, lead.id, campaign.id, assignedUserId]
+      );
+    }
 
-            if (res.rowCount > 0) {
-              perUserInjected.set(assignedUserId, alreadyForUser + 1);
-              totalInjected++;
-            }
-          }
-        }
-
-        await execute('COMMIT');
-      } catch (e) {
-        await execute('ROLLBACK');
-        console.error('❌ Erreur affectation/injection :', e.message);
-        throw e;
-      }
+    await execute('COMMIT');
+    console.log(`✅ ${leads.length} leads affectés et injectés dans le pipeline`);
+  } catch (e) {
+    await execute('ROLLBACK');
+    console.error('❌ Erreur affectation/injection :', e.message);
+    throw e;
+  }
+}
 
       console.log(`✅ ${leads.length} leads affectés`);
       console.log(`🎯 ${totalInjected} leads injectés dans le pipeline (cold_call)`);
