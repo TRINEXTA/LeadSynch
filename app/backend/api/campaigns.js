@@ -1,6 +1,6 @@
 ﻿import express from 'express';
 import authenticateToken from '../middleware/auth.js';
-import db from '../config/db.js'; // ✅ CORRECTION: database.js au lieu de db.js
+import db from '../config/db.js';
 
 const router = express.Router();
 
@@ -47,7 +47,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== ✅ NOUVEAU : GET MY CAMPAIGNS (pour commerciaux) ====================
+// ==================== GET MY CAMPAIGNS ====================
 router.get('/my-campaigns', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
@@ -72,7 +72,6 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
 
     const params = [tenantId, userId];
 
-    // Si pas admin/manager, filtrer par assigned_users
     if (userRole !== 'admin' && userRole !== 'manager') {
       query += ` AND (
         c.assigned_users::jsonb ? $2::text
@@ -134,44 +133,22 @@ router.post('/', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const userId = req.user?.id;
     const {
-      name,
-      type,
-      objective,
-      subject,
-      goal_description,
-      message,
-      link,
-      database_id,
-      template_id,
-      assigned_users,
-      send_days,
-      send_time_start,
-      send_time_end,
-      start_date,
-      start_time,
-      emails_per_cycle,
-      cycle_interval_minutes,
-      status,
-      sectors,
-      attachments,
-      track_clicks,
-      auto_distribute
+      name, type, objective, subject, goal_description, message, link,
+      database_id, template_id, assigned_users, send_days,
+      send_time_start, send_time_end, start_date, start_time,
+      emails_per_cycle, cycle_interval_minutes, status, sectors,
+      attachments, track_clicks, auto_distribute
     } = req.body;
 
     console.log('📥 Données reçues:', req.body);
 
-    // Validation des champs requis
     if (!name || !type || !database_id) {
-      return res.status(400).json({ 
-        error: 'Champs requis: name, type, database_id' 
-      });
+      return res.status(400).json({ error: 'Champs requis: name, type, database_id' });
     }
 
-    // Récupération des leads depuis la base de données
     let leads = [];
     
     if (sectors && Object.keys(sectors).length > 0) {
-      // Filtrage par secteurs si spécifié
       const sectorFilter = Object.entries(sectors)
         .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
         .map(([dbId, sectorList]) => 
@@ -184,14 +161,11 @@ router.post('/', authenticateToken, async (req, res) => {
           `SELECT DISTINCT l.* 
            FROM leads l
            JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-           WHERE l.tenant_id = $1 
-           AND ldr.database_id = $2
-           AND (${sectorFilter})`,
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorFilter})`,
           [tenantId, database_id]
         );
       }
     } else {
-      // Récupération de tous les leads de la base
       leads = await queryAll(
         `SELECT DISTINCT l.* 
          FROM leads l
@@ -204,84 +178,40 @@ router.post('/', authenticateToken, async (req, res) => {
     console.log(`📊 ${leads.length} leads trouvés`);
 
     if (leads.length === 0) {
-      return res.status(400).json({ 
-        error: 'Aucun lead trouvé dans cette base' 
-      });
+      return res.status(400).json({ error: 'Aucun lead trouvé dans cette base' });
     }
-
-    // Création de la campagne dans la base de données
-    const campaign = await queryOne(
+	const campaign = await queryOne(
       `INSERT INTO campaigns (
-        tenant_id,
-        name,
-        type,
-        campaign_type,
-        objective,
-        subject,
-        description,
-        database_id,
-        sector,
-        template_id,
-        status,
-        send_days,
-        send_time_start,
-        send_time_end,
-        start_date,
-        emails_per_cycle,
-        cycle_interval_minutes,
-        assigned_users,
-        total_leads,
-        track_clicks,
-        auto_distribute,
-        created_by,
-        created_at,
-        updated_at
+        tenant_id, name, type, campaign_type, objective, subject, description,
+        database_id, sector, template_id, status, send_days,
+        send_time_start, send_time_end, start_date,
+        emails_per_cycle, cycle_interval_minutes, assigned_users,
+        total_leads, track_clicks, auto_distribute,
+        created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
-      )
-      RETURNING *`,
+      ) RETURNING *`,
       [
-        tenantId,
-        name,
-        type,
-        type,
-        objective || 'leads',
-        subject || null,
-        goal_description || null,
-        database_id,
-        sectors ? JSON.stringify(sectors) : null,
-        template_id || null,
-        status || 'draft',
-        JSON.stringify(send_days || [1,2,3,4,5]),
-        send_time_start || '08:00',
-        send_time_end || '18:00',
-        start_date || null,
-        emails_per_cycle || 50,
-        cycle_interval_minutes || 10,
-        JSON.stringify(assigned_users || []),
-        leads.length,
-        track_clicks !== false,
-        auto_distribute !== false,
-        userId
+        tenantId, name, type, type, objective || 'leads', subject || null,
+        goal_description || null, database_id,
+        sectors ? JSON.stringify(sectors) : null, template_id || null,
+        status || 'draft', JSON.stringify(send_days || [1,2,3,4,5]),
+        send_time_start || '08:00', send_time_end || '18:00', start_date || null,
+        emails_per_cycle || 50, cycle_interval_minutes || 10,
+        JSON.stringify(assigned_users || []), leads.length,
+        track_clicks !== false, auto_distribute !== false, userId
       ]
     );
 
     console.log('✅ Campagne créée:', campaign.id);
 
-    // Si campagne EMAIL : TOUJOURS ajouter les emails à la queue
     if (type === 'email') {
       console.log('📧 Ajout des emails à la queue...');
       
       for (const lead of leads) {
         await execute(
-          `INSERT INTO email_queue (
-            campaign_id,
-            lead_id,
-            tenant_id,
-            recipient_email,
-            status,
-            created_at
-          ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+          `INSERT INTO email_queue (campaign_id, lead_id, tenant_id, recipient_email, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())`,
           [campaign.id, lead.id, tenantId, lead.email, 'pending']
         );
       }
@@ -289,56 +219,40 @@ router.post('/', authenticateToken, async (req, res) => {
       console.log(`✅ ${leads.length} emails ajoutés à la queue`);
     }
 
-    // Si campagne PHONING/SMS/WHATSAPP : affecter les leads aux commerciaux ET injecter dans le pipeline
+    // ✅ CORRECTION ICI - LIGNE 337-370
     if (type !== 'email' && assigned_users && assigned_users.length > 0) {
-  console.log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
+      console.log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
 
-  const INITIAL_LEADS_PER_USER = 50;
-  const perUserInjected = new Map(assigned_users.map(u => [u, 0]));
-  let totalInjected = 0;
-  const totalInitialLeads = Math.min(leads.length, INITIAL_LEADS_PER_USER * assigned_users.length);
+      await execute('BEGIN');
 
-  console.log(`🎯 Injection initiale: ${INITIAL_LEADS_PER_USER} leads par commercial (${totalInitialLeads} total)`);
+      try {
+        for (let i = 0; i < leads.length; i++) {
+          const lead = leads[i];
+          const assignedUserId = assigned_users[i % assigned_users.length];
 
-  await execute('BEGIN');
+          await execute(
+            `UPDATE leads SET assigned_to = $1, status = 'assigned', updated_at = NOW()
+             WHERE id = $2 AND tenant_id = $3`,
+            [assignedUserId, lead.id, tenantId]
+          );
 
-  try {
-    for (let i = 0; i < leads.length; i++) {
-      const lead = leads[i];
-      const assignedUserId = assigned_users[i % assigned_users.length];
+          await execute(
+            `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+             ON CONFLICT (lead_id, campaign_id)
+             DO UPDATE SET stage = EXCLUDED.stage, assigned_user_id = EXCLUDED.assigned_user_id, updated_at = NOW()`,
+            [tenantId, lead.id, campaign.id, assignedUserId]
+          );
+        }
 
-      // 1) assignation du lead au commercial (round-robin)
-      await execute(
-        `UPDATE leads 
-         SET assigned_to = $1, status = 'assigned', updated_at = NOW()
-         WHERE id = $2 AND tenant_id = $3`,
-        [assignedUserId, lead.id, tenantId]
-      );
-
-      // 2) ✅ TOUJOURS injecter dans le pipeline (pas de limite)
-      await execute(
-        `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-         ON CONFLICT (lead_id, campaign_id)
-         DO UPDATE SET
-           stage = EXCLUDED.stage,
-           assigned_user_id = EXCLUDED.assigned_user_id,
-           updated_at = NOW()`,
-        [tenantId, lead.id, campaign.id, assignedUserId]
-      );
-    }
-
-    await execute('COMMIT');
-    console.log(`✅ ${leads.length} leads affectés et injectés dans le pipeline`);
-  } catch (e) {
-    await execute('ROLLBACK');
-    console.error('❌ Erreur affectation/injection :', e.message);
-    throw e;
-  }
-}
-
-      console.log(`✅ ${leads.length} leads affectés`);
-      console.log(`🎯 ${totalInjected} leads injectés dans le pipeline (cold_call)`);
+        await execute('COMMIT');
+        console.log(`✅ ${leads.length} leads affectés et injectés dans le pipeline`);
+        
+      } catch (e) {
+        await execute('ROLLBACK');
+        console.error('❌ Erreur affectation/injection :', e.message);
+        throw e;
+      }
     }
 
     return res.json({ success: true, campaign });
@@ -358,33 +272,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     const campaign = await queryOne(
       `UPDATE campaigns 
-       SET 
-         name = COALESCE($1, name),
-         subject = COALESCE($2, subject),
-         description = COALESCE($3, description),
-         template_id = COALESCE($4, template_id),
-         send_days = COALESCE($5, send_days),
-         send_time_start = COALESCE($6, send_time_start),
-         send_time_end = COALESCE($7, send_time_end),
-         start_date = COALESCE($8, start_date),
-         emails_per_cycle = COALESCE($9, emails_per_cycle),
-         assigned_users = COALESCE($10, assigned_users),
-         updated_at = NOW()
-       WHERE id = $11 AND tenant_id = $12
-       RETURNING *`,
+       SET name = COALESCE($1, name), subject = COALESCE($2, subject),
+           description = COALESCE($3, description), template_id = COALESCE($4, template_id),
+           send_days = COALESCE($5, send_days), send_time_start = COALESCE($6, send_time_start),
+           send_time_end = COALESCE($7, send_time_end), start_date = COALESCE($8, start_date),
+           emails_per_cycle = COALESCE($9, emails_per_cycle),
+           assigned_users = COALESCE($10, assigned_users), updated_at = NOW()
+       WHERE id = $11 AND tenant_id = $12 RETURNING *`,
       [
-        updates.name,
-        updates.subject,
-        updates.goal_description,
-        updates.template_id,
+        updates.name, updates.subject, updates.goal_description, updates.template_id,
         updates.send_days ? JSON.stringify(updates.send_days) : null,
-        updates.send_time_start,
-        updates.send_time_end,
-        updates.start_date,
+        updates.send_time_start, updates.send_time_end, updates.start_date,
         updates.emails_per_cycle,
         updates.assigned_users ? JSON.stringify(updates.assigned_users) : null,
-        campaignId,
-        tenantId
+        campaignId, tenantId
       ]
     );
 
@@ -393,7 +294,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     console.log('✅ Campagne mise à jour:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -409,10 +309,8 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
 
     const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET status = 'active', updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING *`,
+      `UPDATE campaigns SET status = 'active', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [campaignId, tenantId]
     );
 
@@ -428,8 +326,7 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
 
       if (existingEmails.count === 0) {
         const leads = await queryAll(
-          `SELECT DISTINCT l.* 
-           FROM leads l
+          `SELECT DISTINCT l.* FROM leads l
            JOIN lead_database_relations ldr ON l.id = ldr.lead_id
            WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
           [tenantId, campaign.database_id]
@@ -437,24 +334,16 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
 
         for (const lead of leads) {
           await execute(
-            `INSERT INTO email_queue (
-              campaign_id,
-              lead_id,
-              tenant_id,
-              recipient_email,
-              status,
-              created_at
-            ) VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+            `INSERT INTO email_queue (campaign_id, lead_id, tenant_id, recipient_email, status, created_at)
+             VALUES ($1, $2, $3, $4, 'pending', NOW())`,
             [campaignId, lead.id, tenantId, lead.email]
           );
         }
-
         console.log(`✅ ${leads.length} emails ajoutés à la queue`);
       }
     }
 
     console.log('🟢 Campagne démarrée:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -470,10 +359,8 @@ router.post('/:id/pause', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
 
     const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET status = 'paused', updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING *`,
+      `UPDATE campaigns SET status = 'paused', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [campaignId, tenantId]
     );
 
@@ -482,7 +369,6 @@ router.post('/:id/pause', authenticateToken, async (req, res) => {
     }
 
     console.log('⏸️ Campagne mise en pause:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -498,10 +384,8 @@ router.post('/:id/resume', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
 
     const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET status = 'active', updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING *`,
+      `UPDATE campaigns SET status = 'active', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [campaignId, tenantId]
     );
 
@@ -510,7 +394,6 @@ router.post('/:id/resume', authenticateToken, async (req, res) => {
     }
 
     console.log('▶️ Campagne reprise:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -526,10 +409,8 @@ router.post('/:id/stop', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
 
     const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET status = 'stopped', updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING *`,
+      `UPDATE campaigns SET status = 'stopped', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [campaignId, tenantId]
     );
 
@@ -538,7 +419,6 @@ router.post('/:id/stop', authenticateToken, async (req, res) => {
     }
 
     console.log('⏹️ Campagne arrêtée:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -554,10 +434,8 @@ router.post('/:id/archive', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
 
     const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET status = 'archived', updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING *`,
+      `UPDATE campaigns SET status = 'archived', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [campaignId, tenantId]
     );
 
@@ -566,7 +444,6 @@ router.post('/:id/archive', authenticateToken, async (req, res) => {
     }
 
     console.log('📦 Campagne archivée:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -582,10 +459,8 @@ router.post('/:id/unarchive', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
 
     const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET status = 'draft', updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING *`,
+      `UPDATE campaigns SET status = 'draft', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [campaignId, tenantId]
     );
 
@@ -594,7 +469,6 @@ router.post('/:id/unarchive', authenticateToken, async (req, res) => {
     }
 
     console.log('📂 Campagne désarchivée:', campaignId);
-
     return res.json({ success: true, campaign });
 
   } catch (error) {
@@ -602,7 +476,6 @@ router.post('/:id/unarchive', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-
 // ==================== RELAUNCH CAMPAIGN ====================
 router.post('/:id/relaunch', authenticateToken, async (req, res) => {
   try {
@@ -622,14 +495,8 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     }
     
     const excludedLeads = await queryAll(
-      `SELECT DISTINCT lead_id 
-       FROM email_queue 
-       WHERE campaign_id = $1 
-       AND (
-         bounced_at IS NOT NULL 
-         OR unsubscribed_at IS NOT NULL 
-         OR clicked_at IS NOT NULL
-       )`,
+      `SELECT DISTINCT lead_id FROM email_queue 
+       WHERE campaign_id = $1 AND (bounced_at IS NOT NULL OR unsubscribed_at IS NOT NULL OR clicked_at IS NOT NULL)`,
       [campaignId]
     );
     
@@ -637,8 +504,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     console.log(`📊 ${excludedIds.length} leads à exclure (RGPD)`);
     
     const allLeads = await queryAll(
-      `SELECT DISTINCT l.* 
-       FROM leads l
+      `SELECT DISTINCT l.* FROM leads l
        JOIN lead_database_relations ldr ON l.id = ldr.lead_id
        WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
       [tenantId, campaign.database_id]
@@ -649,58 +515,32 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     console.log(`✅ ${eligibleLeads.length} leads éligibles pour relance`);
     
     if (eligibleLeads.length === 0) {
-      return res.status(400).json({ 
-        error: 'Aucun lead éligible pour la relance' 
-      });
+      return res.status(400).json({ error: 'Aucun lead éligible pour la relance' });
     }
     
     const newCampaign = await queryOne(
       `INSERT INTO campaigns (
         tenant_id, name, type, campaign_type, objective, subject, description,
-        database_id, sector, template_id, status,
-        send_days, send_time_start, send_time_end,
-        start_date, emails_per_cycle, cycle_interval_minutes,
-        assigned_users, total_leads, track_clicks, auto_distribute,
-        created_by, created_at, updated_at
+        database_id, sector, template_id, status, send_days, send_time_start, send_time_end,
+        start_date, emails_per_cycle, cycle_interval_minutes, assigned_users, total_leads,
+        track_clicks, auto_distribute, created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
       ) RETURNING *`,
       [
-        campaign.tenant_id,
-        `${campaign.name} (Relance)`,
-        campaign.type,
-        campaign.campaign_type,
-        campaign.objective,
-        campaign.subject,
-        campaign.description,
-        campaign.database_id,
-        campaign.sector,
-        campaign.template_id,
-        'active',
-        campaign.send_days,
-        campaign.send_time_start,
-        campaign.send_time_end,
-        null,
-        campaign.emails_per_cycle,
-        campaign.cycle_interval_minutes,
-        campaign.assigned_users,
-        eligibleLeads.length,
-        campaign.track_clicks,
-        campaign.auto_distribute,
-        userId
+        campaign.tenant_id, `${campaign.name} (Relance)`, campaign.type, campaign.campaign_type,
+        campaign.objective, campaign.subject, campaign.description, campaign.database_id,
+        campaign.sector, campaign.template_id, 'active', campaign.send_days,
+        campaign.send_time_start, campaign.send_time_end, null, campaign.emails_per_cycle,
+        campaign.cycle_interval_minutes, campaign.assigned_users, eligibleLeads.length,
+        campaign.track_clicks, campaign.auto_distribute, userId
       ]
     );
     
     for (const lead of eligibleLeads) {
       await execute(
-        `INSERT INTO email_queue (
-          campaign_id,
-          lead_id,
-          tenant_id,
-          recipient_email,
-          status,
-          created_at
-        ) VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+        `INSERT INTO email_queue (campaign_id, lead_id, tenant_id, recipient_email, status, created_at)
+         VALUES ($1, $2, $3, $4, 'pending', NOW())`,
         [newCampaign.id, lead.id, tenantId, lead.email]
       );
     }
@@ -739,37 +579,19 @@ router.post('/:id/duplicate', authenticateToken, async (req, res) => {
     const newCampaign = await queryOne(
       `INSERT INTO campaigns (
         tenant_id, name, type, campaign_type, objective, subject, description,
-        database_id, sector, template_id, status,
-        send_days, send_time_start, send_time_end,
-        start_date, emails_per_cycle, cycle_interval_minutes,
-        assigned_users, total_leads, track_clicks, auto_distribute,
-        created_by, created_at, updated_at
+        database_id, sector, template_id, status, send_days, send_time_start, send_time_end,
+        start_date, emails_per_cycle, cycle_interval_minutes, assigned_users, total_leads,
+        track_clicks, auto_distribute, created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
       ) RETURNING *`,
       [
-        campaign.tenant_id,
-        `${campaign.name} (Copie)`,
-        campaign.type,
-        campaign.campaign_type,
-        campaign.objective,
-        campaign.subject,
-        campaign.description,
-        campaign.database_id,
-        campaign.sector,
-        campaign.template_id,
-        'draft',
-        campaign.send_days,
-        campaign.send_time_start,
-        campaign.send_time_end,
-        null,
-        campaign.emails_per_cycle,
-        campaign.cycle_interval_minutes,
-        campaign.assigned_users,
-        campaign.total_leads,
-        campaign.track_clicks,
-        campaign.auto_distribute,
-        userId
+        campaign.tenant_id, `${campaign.name} (Copie)`, campaign.type, campaign.campaign_type,
+        campaign.objective, campaign.subject, campaign.description, campaign.database_id,
+        campaign.sector, campaign.template_id, 'draft', campaign.send_days,
+        campaign.send_time_start, campaign.send_time_end, null, campaign.emails_per_cycle,
+        campaign.cycle_interval_minutes, campaign.assigned_users, campaign.total_leads,
+        campaign.track_clicks, campaign.auto_distribute, userId
       ]
     );
     
@@ -789,10 +611,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const campaignId = req.params.id;
     
-    await execute(
-      'DELETE FROM email_queue WHERE campaign_id = $1',
-      [campaignId]
-    );
+    await execute('DELETE FROM email_queue WHERE campaign_id = $1', [campaignId]);
     
     const campaign = await queryOne(
       'DELETE FROM campaigns WHERE id = $1 AND tenant_id = $2 RETURNING *',
@@ -820,15 +639,11 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
     const { template_id, recipients, attachments } = req.body;
     
     if (!template_id || !recipients || recipients.length === 0) {
-      return res.status(400).json({ 
-        error: 'Template et destinataires requis' 
-      });
+      return res.status(400).json({ error: 'Template et destinataires requis' });
     }
     
     if (recipients.length > 3) {
-      return res.status(400).json({ 
-        error: 'Maximum 3 destinataires' 
-      });
+      return res.status(400).json({ error: 'Maximum 3 destinataires' });
     }
     
     const template = await queryOne(
