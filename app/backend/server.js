@@ -12,56 +12,65 @@ import { errorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 if (!process.env.POSTGRES_URL) {
-  console.error('ERREUR: POSTGRES_URL manquant');
+  console.error('? ERREUR: POSTGRES_URL manquant');
   process.exit(1);
 }
 
 const app = express();
 app.set('trust proxy', 1);
 
-// ========= ? CORS FIX (Production + Local) =========
+// ========= ? CORS FIX COMPLET =========
 const allowedOrigins = [
-  'https://app.leadsynch.com',      // ? AJOUTÉ
+  'https://app.leadsynch.com',
   'https://leadsynch.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000'
 ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  console.log('?? Origin reçu:', origin);
+console.log('? CORS configuré pour:', allowedOrigins.join(', '));
 
-  // ? Autoriser l'origin si dans la liste
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  res.setHeader("Access-Control-Expose-Headers", "Authorization");
-
-  // ? CRITIQUE : Répondre aux preflight OPTIONS
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  next();
-});
+app.use(cors({
+  origin: function(origin, callback) {
+    // Autoriser les requêtes sans origin (Postman, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('?? Origin refusé:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  exposedHeaders: ['Authorization']
+}));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
-// Log toutes les requêtes
+// Log toutes les requêtes avec timing
 app.use((req, res, next) => {
-  console.log(`[${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
+  const start = Date.now();
+  console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
+  });
+  
   next();
 });
 
-// ========== ROUTES ==========
-app.get('/api/health', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+// ========== ROUTES AUTH ==========
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    ok: true, 
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development'
+  });
+});
 
 import authLogin from './api/auth/login.js';
 import authMe from './api/auth/me.js';
@@ -75,14 +84,11 @@ app.all('/api/auth/change-password', changePasswordRoute);
 app.all('/api/auth/reset-password', resetPassword);
 if (authLogout) app.all('/api/auth/logout', authLogout);
 
+// ========== ? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
 import leadsRoute from './api/leads.js';
 import usersRoute from './api/users.js';
-import usersUpdateRoute from './api/users-update.js';
 import teamsRoute from './api/teams.js';
 import campaignsRoute from './api/campaigns.js';
-import campaignsFullRoute from './api/campaigns-full.js';
-import campaignLeadsRoute from './api/campaign-leads.js';
-import prospectionSessionsRoute from './api/prospection-sessions.js';
 import statsRoute from './api/stats.js';
 import templatesRoute from './api/templates.js';
 import generateLeadsRoute from './api/generate-leads.js';
@@ -102,21 +108,24 @@ import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 
+// ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
 app.use('/api/leads-count-multi', leadsCountMultiRoute);
 app.use('/api/sectors', sectorsRoute);
+
+// ? USERS : Monter la route AVANT les autres pour éviter les conflits
 app.use('/api/users', usersRoute);
-app.all('/api/users-update*', usersUpdateRoute);
+
 app.use('/api/teams', teamsRoute);
-app.all('/api/campaigns-full*', campaignsFullRoute);
-app.all('/api/campaign-leads*', campaignLeadsRoute);
-app.all('/api/prospection-sessions*', prospectionSessionsRoute);
+
+// ? CAMPAIGNS : Routes spécifiques AVANT la route générique
 app.use('/api/campaigns', campaignsRoute);
+
 app.use('/api/stats', statsRoute);
-app.all('/api/templates*', templatesRoute);
-app.all('/api/generate-leads*', generateLeadsRoute);
-app.all('/api/quotas*', quotasRoute);
-app.all('/api/follow-ups*', followUpsRoute);
+app.use('/api/templates', templatesRoute);
+app.use('/api/generate-leads', generateLeadsRoute);
+app.use('/api/quotas', quotasRoute);
+app.use('/api/follow-ups', followUpsRoute);
 app.all('/api/import-csv', importCsvRoute);
 app.use('/api/asefi', asefiGenerateRoute);
 app.use('/api/email-templates', emailTemplatesRoute);
@@ -129,6 +138,7 @@ app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
 
+// ========== ROUTES TRACKING ==========
 import * as unsubscribeController from './controllers/unsubscribeController.js';
 app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
 app.post('/api/unsubscribe/:lead_id', authMiddleware, unsubscribeController.processUnsubscribe);
@@ -146,39 +156,60 @@ app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage
 app.get('/api/images', authMiddleware, imageUploadController.getImages);
 app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
 
+// ========== STATIC FILES ==========
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// ========== ERROR HANDLER (DOIT ÊTRE EN DERNIER) ==========
 app.use(errorHandler);
 
-// ========== LANCEMENT ==========
+// ========== ROUTE 404 ==========
+app.use((req, res) => {
+  console.log('? 404 Not Found:', req.method, req.url);
+  res.status(404).json({ 
+    error: 'Route non trouvée',
+    method: req.method,
+    url: req.url
+  });
+});
 
+// ========== LANCEMENT ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('? Backend démarré sur port', PORT);
-  console.log('? CORS configuré pour:', allowedOrigins.join(', '));
+  console.log('');
+  console.log('========================================');
+  console.log('? Backend LeadSynch démarré');
+  console.log('========================================');
+  console.log('?? Port:', PORT);
+  console.log('?? CORS:', allowedOrigins.join(', '));
+  console.log('?? Date:', new Date().toLocaleString('fr-FR'));
+  console.log('========================================');
+  console.log('');
 
+  // Démarrage email worker
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
-      console.log('[EMAIL WORKER] Démarrage');
+      console.log('?? [EMAIL WORKER] Démarrage');
       startEmailWorker();
     })
-    .catch(err => console.error('Erreur email worker:', err));
+    .catch(err => console.error('? Erreur email worker:', err));
 
+  // Démarrage polling Elastic Email
   import('./lib/elasticEmailPolling.js')
     .then(({ pollingService }) => {
-      console.log('[POLLING] Premier run');
-      pollingService.syncAllActiveCampaigns().catch(e => console.error('Erreur polling:', e));
+      console.log('?? [POLLING] Premier run');
+      pollingService.syncAllActiveCampaigns().catch(e => console.error('? Erreur polling:', e));
+      
       setInterval(async () => {
         try {
-          console.log('[POLLING] Run auto');
+          console.log('?? [POLLING] Run automatique');
           await pollingService.syncAllActiveCampaigns();
         } catch (e) {
-          console.error('Erreur polling auto:', e);
+          console.error('? Erreur polling auto:', e);
         }
-      }, 10 * 60 * 1000);
+      }, 10 * 60 * 1000); // 10 minutes
     })
-    .catch(err => console.error('Erreur polling:', err));
+    .catch(err => console.error('? Erreur polling:', err));
 });
