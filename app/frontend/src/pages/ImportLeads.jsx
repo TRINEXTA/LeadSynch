@@ -42,7 +42,7 @@ export default function ImportLeads() {
     }
   };
 
-  const analyzeFile = async () => {
+ const analyzeFile = async () => {
     if (!file || !databaseName) {
       alert('Veuillez remplir tous les champs');
       return;
@@ -51,94 +51,97 @@ export default function ImportLeads() {
     setLoading(true);
     setStep(2);
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await fetch('/leads/analyze-csv', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const csvContent = e.target.result;
       
-      if (data.success) {
-        setAnalysisResult(data.analysis);
+      try {
+        // Analyse simple côté client
+        const lines = csvContent.split('\n').filter(l => l.trim());
+        const headers = lines[0].split(',');
+        
+        setAnalysisResult({
+          totalLeads: lines.length - 1,
+          validLeads: lines.length - 1,
+          segmentation: { autre: lines.length - 1 }
+        });
         setStep(3);
-      } else {
-        alert('Erreur: ' + (data.error || 'Erreur inconnue'));
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur lors de l\'analyse');
         setStep(1);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Erreur:', error);
-      alert('Erreur lors de l\'analyse');
-      setStep(1);
-    } finally {
-      setLoading(false);
-    }
+    };
+    
+    reader.readAsText(file);
   };
 
   const createDatabaseAndImport = async () => {
     setLoading(true);
-    setStep(4); // Nouvelle étape : import en cours
+    setStep(4);
 
     try {
-      // 1. Créer la base de données
-      const createResponse = await fetch('/leads/import-csv', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: databaseName,
-          description: databaseDescription,
-          source: 'import_csv',
-          fileName: file.name,
-          segmentation: analysisResult.segmentation
-        })
-      });
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const csvContent = e.target.result;
 
-      const createData = await createResponse.json();
-      
-      if (!createData.success) {
-        throw new Error(createData.error || 'Erreur création base');
-      }
+        // 1. Créer la base de données
+        const createResponse = await fetch('/api/lead-databases', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: databaseName,
+            description: databaseDescription,
+            source: 'import_csv',
+            segmentation: analysisResult.segmentation
+          })
+        });
 
-      const databaseId = createData.database.id;
+        const createData = await createResponse.json();
+        
+        if (!createData.success) {
+          throw new Error(createData.error || 'Erreur création base');
+        }
 
-      // 2. Importer les leads par batch
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('database_id', databaseId);
+        const databaseId = createData.database.id;
 
-      const importResponse = await fetch('/leads/import-batch', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
+        // 2. Importer les leads
+        const importResponse = await fetch('/api/import-csv', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            database_id: databaseId,
+            csv_content: csvContent,
+            sector: 'autre'
+          })
+        });
 
-      const importData = await importResponse.json();
-      
-      if (importData.success) {
-        setImportProgress(100);
-        setTimeout(() => {
-          alert(`✅ ${importData.imported} leads importés avec succès !`);
-          window.location.href = '/lead-databases';
-        }, 500);
-      } else {
-        throw new Error(importData.error || 'Erreur import');
-      }
+        const importData = await importResponse.json();
+        
+        if (importData.success) {
+          setImportProgress(100);
+          setTimeout(() => {
+            alert(`✅ ${importData.stats.added} leads importés !`);
+            window.location.href = '/lead-databases';
+          }, 500);
+        } else {
+          throw new Error(importData.error || 'Erreur import');
+        }
+      };
+
+      reader.readAsText(file);
     } catch (error) {
       console.error('Erreur:', error);
       alert('Erreur: ' + error.message);
       setStep(3);
-    } finally {
       setLoading(false);
     }
   };
