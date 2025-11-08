@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Plus, Mail, Phone, MessageSquare, Send, Play, Pause, StopCircle, RefreshCw, Edit, Trash2, Archive, Clock, TrendingUp, Users, Target, Calendar, Filter, Search, Eye, MoreVertical, AlertCircle, CheckCircle, XCircle, BarChart3, X } from 'lucide-react';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 const CAMPAIGN_STATUS = {
   draft: { name: 'Brouillon', color: 'bg-gray-500', bgLight: 'bg-gray-50', textColor: 'text-gray-700', icon: Edit },
@@ -23,6 +24,7 @@ const CAMPAIGN_TYPES = {
 
 export default function Campaigns() {
   const navigate = useNavigate();
+  const { user } = useAuth(); // ✅ AJOUT
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -32,6 +34,10 @@ export default function Campaigns() {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
 
+  // ✅ AJOUT : Détection du rôle
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const isCommercial = user?.role === 'commercial' || user?.role === 'user';
+
   useEffect(() => {
     loadCampaigns();
     const interval = setInterval(loadCampaigns, 30000);
@@ -40,7 +46,11 @@ export default function Campaigns() {
 
   const loadCampaigns = async () => {
     try {
-      const response = await api.get('/campaigns');
+      // ✅ CORRECTION : Appeler /my-campaigns pour les commerciaux
+      const endpoint = isCommercial ? '/campaigns/my-campaigns' : '/campaigns';
+      console.log(`📋 Chargement campagnes depuis: ${endpoint}`);
+      
+      const response = await api.get(endpoint);
       console.log('📊 Campagnes chargées:', response.data.campaigns);
       setCampaigns(response.data.campaigns || []);
       setLoading(false);
@@ -244,17 +254,23 @@ export default function Campaigns() {
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
                   <Target className="w-6 h-6 text-white" />
                 </div>
-                Gestion des Campagnes
+                {/* ✅ CORRECTION : Titre adapté au rôle */}
+                {isCommercial ? 'Mes Campagnes' : 'Gestion des Campagnes'}
               </h1>
-              <p className="text-gray-600 ml-15">Pilotez toutes vos campagnes en temps reel</p>
+              <p className="text-gray-600 ml-15">
+                {isCommercial ? 'Campagnes qui vous sont assignées' : 'Pilotez toutes vos campagnes en temps reel'}
+              </p>
             </div>
-            <button
-              onClick={() => navigate('/CampaignsManager')}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Nouvelle campagne
-            </button>
+            {/* ✅ CORRECTION : Bouton visible seulement pour admin */}
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/CampaignsManager')}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Nouvelle campagne
+              </button>
+            )}
           </div>
         </div>
 
@@ -385,16 +401,18 @@ export default function Campaigns() {
               <p className="text-gray-500 mb-6">
                 {searchQuery || filterStatus !== 'all' || filterType !== 'all' 
                   ? 'Aucune campagne ne correspond à vos filtres'
-                  : 'Créez votre première campagne pour commencer'
+                  : isCommercial ? 'Aucune campagne ne vous est assignée' : 'Créez votre première campagne pour commencer'
                 }
               </p>
-              <button
-                onClick={() => navigate('/CampaignsManager')}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 inline-flex items-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Créer une campagne
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/CampaignsManager')}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 inline-flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Créer une campagne
+                </button>
+              )}
             </div>
           ) : (
             filteredCampaigns.map(campaign => {
@@ -492,8 +510,8 @@ export default function Campaigns() {
                                   Voir details
                                 </button>
 
-                                {/* Modifier */}
-                                {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
+                                {/* ✅ CORRECTION : Modifier visible seulement pour admin */}
+                                {isAdmin && (campaign.status === 'draft' || campaign.status === 'scheduled') && (
                                   <button
                                     onClick={() => {
                                       navigate(`/CampaignsManager?edit=${campaign.id}`);
@@ -508,117 +526,121 @@ export default function Campaigns() {
 
                                 <div className="border-t border-gray-200 my-2"></div>
 
-                                {/* Démarrer */}
-                                {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
-                                  <button
-                                    onClick={() => {
-                                      handleStart(campaign.id);
-                                      setShowActionMenu(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-green-50 flex items-center gap-2 text-green-600 font-semibold"
-                                  >
-                                    <Play className="w-4 h-4" />
-                                    Demarrer maintenant
-                                  </button>
+                                {/* ✅ Actions réservées aux admins */}
+                                {isAdmin && (
+                                  <>
+                                    {/* Démarrer */}
+                                    {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
+                                      <button
+                                        onClick={() => {
+                                          handleStart(campaign.id);
+                                          setShowActionMenu(null);
+                                        }}
+                                        className="w-full px-4 py-2 text-left hover:bg-green-50 flex items-center gap-2 text-green-600 font-semibold"
+                                      >
+                                        <Play className="w-4 h-4" />
+                                        Demarrer maintenant
+                                      </button>
+                                    )}
+
+                                    {/* Pause */}
+                                    {campaign.status === 'active' && (
+                                      <button
+                                        onClick={() => {
+                                          handlePause(campaign.id);
+                                          setShowActionMenu(null);
+                                        }}
+                                        className="w-full px-4 py-2 text-left hover:bg-yellow-50 flex items-center gap-2 text-yellow-600 font-semibold"
+                                      >
+                                        <Pause className="w-4 h-4" />
+                                        Mettre en pause
+                                      </button>
+                                    )}
+
+                                    {/* Reprendre */}
+                                    {campaign.status === 'paused' && (
+                                      <button
+                                        onClick={() => {
+                                          handleResume(campaign.id);
+                                          setShowActionMenu(null);
+                                        }}
+                                        className="w-full px-4 py-2 text-left hover:bg-green-50 flex items-center gap-2 text-green-600 font-semibold"
+                                      >
+                                        <Play className="w-4 h-4" />
+                                        Reprendre
+                                      </button>
+                                    )}
+
+                                    {/* Arrêter */}
+                                    {(campaign.status === 'active' || campaign.status === 'paused') && (
+                                      <button
+                                        onClick={() => {
+                                          handleStop(campaign.id);
+                                          setShowActionMenu(null);
+                                        }}
+                                        className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-red-600"
+                                      >
+                                        <StopCircle className="w-4 h-4" />
+                                        Arreter definitivement
+                                      </button>
+                                    )}
+
+                                    <div className="border-t border-gray-200 my-2"></div>
+
+                                    {/* Archiver */}
+                                    {campaign.status !== 'archived' && campaign.status !== 'draft' && (
+                                      <button
+                                        onClick={() => {
+                                          handleArchive(campaign.id);
+                                          setShowActionMenu(null);
+                                        }}
+                                        className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-600"
+                                      >
+                                        <Archive className="w-4 h-4" />
+                                        Archiver
+                                      </button>
+                                    )}
+
+                                    {/* Désarchiver */}
+                                    {campaign.status === 'archived' && (
+                                      <button
+                                        onClick={() => {
+                                          handleUnarchive(campaign.id);
+                                          setShowActionMenu(null);
+                                        }}
+                                        className="w-full px-4 py-2 text-left hover:bg-blue-50 flex items-center gap-2 text-blue-600"
+                                      >
+                                        <RefreshCw className="w-4 h-4" />
+                                        Desarchiver
+                                      </button>
+                                    )}
+
+                                    {/* Dupliquer */}
+                                    <button
+                                      onClick={() => {
+                                        handleDuplicate(campaign.id);
+                                        setShowActionMenu(null);
+                                      }}
+                                      className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                                    >
+                                      <RefreshCw className="w-4 h-4" />
+                                      Dupliquer
+                                    </button>
+
+                                    {/* SUPPRIMER - TOUJOURS VISIBLE */}
+                                    <div className="border-t border-gray-200 my-2"></div>
+                                    <button
+                                      onClick={() => {
+                                        handleDelete(campaign.id);
+                                        setShowActionMenu(null);
+                                      }}
+                                      className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-red-600 font-semibold"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Supprimer définitivement
+                                    </button>
+                                  </>
                                 )}
-
-                                {/* Pause */}
-                                {campaign.status === 'active' && (
-                                  <button
-                                    onClick={() => {
-                                      handlePause(campaign.id);
-                                      setShowActionMenu(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-yellow-50 flex items-center gap-2 text-yellow-600 font-semibold"
-                                  >
-                                    <Pause className="w-4 h-4" />
-                                    Mettre en pause
-                                  </button>
-                                )}
-
-                                {/* Reprendre */}
-                                {campaign.status === 'paused' && (
-                                  <button
-                                    onClick={() => {
-                                      handleResume(campaign.id);
-                                      setShowActionMenu(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-green-50 flex items-center gap-2 text-green-600 font-semibold"
-                                  >
-                                    <Play className="w-4 h-4" />
-                                    Reprendre
-                                  </button>
-                                )}
-
-                                {/* Arrêter */}
-                                {(campaign.status === 'active' || campaign.status === 'paused') && (
-                                  <button
-                                    onClick={() => {
-                                      handleStop(campaign.id);
-                                      setShowActionMenu(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-red-600"
-                                  >
-                                    <StopCircle className="w-4 h-4" />
-                                    Arreter definitivement
-                                  </button>
-                                )}
-
-                                <div className="border-t border-gray-200 my-2"></div>
-
-                                {/* Archiver */}
-                                {campaign.status !== 'archived' && campaign.status !== 'draft' && (
-                                  <button
-                                    onClick={() => {
-                                      handleArchive(campaign.id);
-                                      setShowActionMenu(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-600"
-                                  >
-                                    <Archive className="w-4 h-4" />
-                                    Archiver
-                                  </button>
-                                )}
-
-                                {/* Désarchiver */}
-                                {campaign.status === 'archived' && (
-                                  <button
-                                    onClick={() => {
-                                      handleUnarchive(campaign.id);
-                                      setShowActionMenu(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-blue-50 flex items-center gap-2 text-blue-600"
-                                  >
-                                    <RefreshCw className="w-4 h-4" />
-                                    Desarchiver
-                                  </button>
-                                )}
-
-                                {/* Dupliquer */}
-                                <button
-                                  onClick={() => {
-                                    handleDuplicate(campaign.id);
-                                    setShowActionMenu(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Dupliquer
-                                </button>
-
-                                {/* SUPPRIMER - TOUJOURS VISIBLE */}
-                                <div className="border-t border-gray-200 my-2"></div>
-                                <button
-                                  onClick={() => {
-                                    handleDelete(campaign.id);
-                                    setShowActionMenu(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-red-600 font-semibold"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Supprimer définitivement
-                                </button>
-
                               </div>
                             </>
                           )}
