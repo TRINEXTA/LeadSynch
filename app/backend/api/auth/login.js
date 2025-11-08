@@ -1,7 +1,6 @@
-﻿// api/auth/login.js
-import bcrypt from 'bcryptjs';
+﻿import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import db from '../../config/db.js';
+import db from '../../config/database.js';
 
 async function handler(req, res) {
   console.log('========== LOGIN REQUEST ==========');
@@ -16,7 +15,6 @@ async function handler(req, res) {
 
   try {
     const { email, password } = req.body;
-
     console.log('Email recu:', email);
     console.log('Password length:', password?.length);
 
@@ -62,7 +60,7 @@ async function handler(req, res) {
       return res.status(401).json({ error: 'Identifiants incorrects' });
     }
 
-    // ✅ CORRECTION 1 : Mettre à jour last_login
+    // ✅ CORRECTION : Mettre à jour last_login
     await db.query(
       'UPDATE users SET last_login = NOW() WHERE id = $1',
       [user.id]
@@ -86,7 +84,7 @@ async function handler(req, res) {
     console.log('Token genere avec succes');
     console.log('========== LOGIN SUCCESS ==========');
 
-    // ✅ CORRECTION 2 : Retourner first_name et last_name
+    // Retourner first_name et last_name
     return res.json({
       success: true,
       token,

@@ -24,7 +24,7 @@ const CAMPAIGN_TYPES = {
 
 export default function Campaigns() {
   const navigate = useNavigate();
-  const { user } = useAuth(); // ✅ AJOUT
+  const { user } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -34,7 +34,7 @@ export default function Campaigns() {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
 
-  // ✅ AJOUT : Détection du rôle
+  // ✅ CORRECTION 1/3 : Détection du rôle
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
   const isCommercial = user?.role === 'commercial' || user?.role === 'user';
 
@@ -46,7 +46,7 @@ export default function Campaigns() {
 
   const loadCampaigns = async () => {
     try {
-      // ✅ CORRECTION : Appeler /my-campaigns pour les commerciaux
+      // ✅ CORRECTION 2/3 : Appeler /my-campaigns pour les commerciaux
       const endpoint = isCommercial ? '/campaigns/my-campaigns' : '/campaigns';
       console.log(`📋 Chargement campagnes depuis: ${endpoint}`);
       
@@ -254,14 +254,14 @@ export default function Campaigns() {
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
                   <Target className="w-6 h-6 text-white" />
                 </div>
-                {/* ✅ CORRECTION : Titre adapté au rôle */}
+                {/* ✅ CORRECTION 3/3 : Titre adapté au rôle */}
                 {isCommercial ? 'Mes Campagnes' : 'Gestion des Campagnes'}
               </h1>
               <p className="text-gray-600 ml-15">
                 {isCommercial ? 'Campagnes qui vous sont assignées' : 'Pilotez toutes vos campagnes en temps reel'}
               </p>
             </div>
-            {/* ✅ CORRECTION : Bouton visible seulement pour admin */}
+            {/* Bouton visible seulement pour admin */}
             {isAdmin && (
               <button
                 onClick={() => navigate('/CampaignsManager')}
@@ -510,7 +510,7 @@ export default function Campaigns() {
                                   Voir details
                                 </button>
 
-                                {/* ✅ CORRECTION : Modifier visible seulement pour admin */}
+                                {/* Modifier visible seulement pour admin */}
                                 {isAdmin && (campaign.status === 'draft' || campaign.status === 'scheduled') && (
                                   <button
                                     onClick={() => {
@@ -526,7 +526,7 @@ export default function Campaigns() {
 
                                 <div className="border-t border-gray-200 my-2"></div>
 
-                                {/* ✅ Actions réservées aux admins */}
+                                {/* Actions réservées aux admins */}
                                 {isAdmin && (
                                   <>
                                     {/* Démarrer */}

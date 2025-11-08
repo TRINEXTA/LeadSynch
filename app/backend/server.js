@@ -19,9 +19,9 @@ if (!process.env.POSTGRES_URL) {
 const app = express();
 app.set('trust proxy', 1);
 
-// ========= ?? CORS FIX (Production + Local) =========
+// ========= ? CORS FIX (Production + Local) =========
 const allowedOrigins = [
-  'https://app.leadsynch.com',
+  'https://app.leadsynch.com',      // ? AJOUTÉ
   'https://leadsynch.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000'
@@ -156,7 +156,8 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('Backend démarré sur port', PORT);
+  console.log('? Backend démarré sur port', PORT);
+  console.log('? CORS configuré pour:', allowedOrigins.join(', '));
 
   import('./workers/emailWorker.js')
     .then((module) => {
