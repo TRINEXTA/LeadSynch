@@ -25,7 +25,7 @@ async function handler(req, res) {
       return res.status(400).json({ error: 'Email et mot de passe requis' });
     }
 
-    // Chercher l'utilisateur
+    // Chercher l'utilisateur avec first_name et last_name
     const { rows } = await db.query(
       `SELECT u.*, t.name as tenant_name 
        FROM users u
@@ -45,7 +45,7 @@ async function handler(req, res) {
     console.log('User ID:', user.id);
     console.log('User role:', user.role);
     console.log('User active:', user.is_active);
-    console.log('Hash en DB (50 premiers car):', user.password_hash?.substring(0, 50));
+    console.log('User name:', user.first_name, user.last_name);
 
     if (!user.is_active) {
       console.log('ERREUR: Compte desactive');
@@ -62,13 +62,22 @@ async function handler(req, res) {
       return res.status(401).json({ error: 'Identifiants incorrects' });
     }
 
-    // Générer le token JWT
+    // ✅ CORRECTION 1 : Mettre à jour last_login
+    await db.query(
+      'UPDATE users SET last_login = NOW() WHERE id = $1',
+      [user.id]
+    );
+    console.log('✅ last_login mis à jour');
+
+    // Générer le token JWT avec first_name et last_name
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email,
         role: user.role,
-        tenant_id: user.tenant_id
+        tenant_id: user.tenant_id,
+        first_name: user.first_name,
+        last_name: user.last_name
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
@@ -77,13 +86,15 @@ async function handler(req, res) {
     console.log('Token genere avec succes');
     console.log('========== LOGIN SUCCESS ==========');
 
+    // ✅ CORRECTION 2 : Retourner first_name et last_name
     return res.json({
       success: true,
       token,
       user: {
         id: user.id,
         email: user.email,
-        name: user.name,
+        first_name: user.first_name,
+        last_name: user.last_name,
         role: user.role,
         tenant_id: user.tenant_id,
         tenant_name: user.tenant_name

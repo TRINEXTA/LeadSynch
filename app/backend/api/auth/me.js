@@ -24,6 +24,7 @@ async function getHandler(req, res) {
   if (req.user) {
     console.log('User ID:', req.user.id);
     console.log('User email:', req.user.email);
+    console.log('User name:', req.user.first_name, req.user.last_name);
   }
   
   const origin = req.headers.origin;
@@ -32,10 +33,12 @@ async function getHandler(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   
+  // ✅ CORRECTION : Retourner first_name et last_name
   return res.json({
     id: req.user.id,
     email: req.user.email,
-    name: req.user.name,
+    first_name: req.user.first_name,
+    last_name: req.user.last_name,
     role: req.user.role,
     tenant_id: req.user.tenant_id
   });

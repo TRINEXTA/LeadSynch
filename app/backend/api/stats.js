@@ -1,7 +1,11 @@
 ﻿import { Router } from "express";
 import { query } from "../lib/db.js";
+import { authMiddleware } from "../middleware/auth.js";
 
 const router = Router();
+
+// Appliquer l'authentification à toutes les routes
+router.use(authMiddleware);
 
 /** Helper: construit les bornes temps Europe/Paris -> UTC pour UNE requête */
 function buildBounds(df, dt) {
@@ -31,28 +35,21 @@ function buildBounds(df, dt) {
   return { sql, params: p, nextIndex: i };
 }
 
-
 // ===============================================
 // GET /api/stats
 // Stats globales pour le dashboard
 // ===============================================
 router.get("/", async (req, res, next) => {
   try {
-    const tenantId = req.user?.tenant_id || req.tenant_id || null;
+    const tenantId = req.user?.tenant_id;
 
     // Total leads
-    const totalQuery = tenantId 
-      ? `SELECT COUNT(*)::int AS total FROM leads WHERE tenant_id = // ===============================================
-// GET /api/stats/commercial`
-      : `SELECT COUNT(*)::int AS total FROM leads`;
-    const totalParams = tenantId ? [tenantId] : [];
+    const totalQuery = `SELECT COUNT(*)::int AS total FROM leads WHERE tenant_id = $1`;
+    const totalParams = [tenantId];
 
     // Par statut
-    const statusQuery = tenantId
-      ? `SELECT status, COUNT(*)::int AS count FROM leads WHERE tenant_id = // ===============================================
-// GET /api/stats/commercial GROUP BY status ORDER BY count DESC`
-      : `SELECT status, COUNT(*)::int AS count FROM leads GROUP BY status ORDER BY count DESC`;
-    const statusParams = tenantId ? [tenantId] : [];
+    const statusQuery = `SELECT status, COUNT(*)::int AS count FROM leads WHERE tenant_id = $1 GROUP BY status ORDER BY count DESC`;
+    const statusParams = [tenantId];
 
     const [{ rows: totalRows }, { rows: statusRows }] = await Promise.all([
       query(totalQuery, totalParams),
@@ -70,13 +67,119 @@ router.get("/", async (req, res, next) => {
     next(err);
   }
 });
+
 // ===============================================
-// GET /api/stats/commercial
-// Query: date_from (YYYY-MM-DD), date_to (YYYY-MM-DD), user_id (UUID optionnel)
+// ✅ NOUVEAU : GET /api/stats/commercial
+// Stats pour le dashboard commercial individuel
 // ===============================================
 router.get("/commercial", async (req, res, next) => {
   try {
-    const tenantId = req.user?.tenant_id || req.tenant_id || null;
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    console.log(`📊 Stats commercial pour user ${userId} (${userRole})`);
+
+    // Si admin/manager, peut voir les stats d'un autre user via query param
+    const targetUserId = (userRole === 'admin' || userRole === 'manager') 
+      ? (req.query.user_id || userId) 
+      : userId;
+
+    // 1️⃣ Appels du jour
+    const callsToday = await query(
+      `SELECT COUNT(*)::int as calls_today
+       FROM call_history ch
+       JOIN pipeline_leads pl ON ch.pipeline_lead_id = pl.id
+       WHERE pl.tenant_id = $1
+       AND pl.assigned_user_id = $2
+       AND DATE(ch.created_at) = CURRENT_DATE`,
+      [tenantId, targetUserId]
+    );
+
+    // 2️⃣ Emails envoyés aujourd'hui
+    const emailsToday = await query(
+      `SELECT COUNT(*)::int as emails_today
+       FROM email_queue eq
+       JOIN campaigns c ON eq.campaign_id = c.id
+       WHERE c.tenant_id = $1
+       AND c.assigned_users::jsonb ? $2::text
+       AND DATE(eq.sent_at) = CURRENT_DATE
+       AND eq.status = 'sent'`,
+      [tenantId, targetUserId]
+    );
+
+    // 3️⃣ Leads du jour (assignés aujourd'hui)
+    const leadsToday = await query(
+      `SELECT COUNT(*)::int as leads_today
+       FROM leads l
+       WHERE l.tenant_id = $1
+       AND l.assigned_to = $2
+       AND DATE(l.created_at) = CURRENT_DATE`,
+      [tenantId, targetUserId]
+    );
+
+    // 4️⃣ Conversions (leads qualifiés ce mois-ci)
+    const conversionsMonth = await query(
+      `SELECT COUNT(*)::int as conversions
+       FROM pipeline_leads pl
+       WHERE pl.tenant_id = $1
+       AND pl.assigned_user_id = $2
+       AND pl.stage IN ('qualifie', 'tres_qualifie', 'proposition', 'negoce', 'gagne')
+       AND DATE_TRUNC('month', pl.updated_at) = DATE_TRUNC('month', CURRENT_DATE)`,
+      [tenantId, targetUserId]
+    );
+
+    // 5️⃣ Total leads assignés (actifs)
+    const totalLeads = await query(
+      `SELECT COUNT(*)::int as total_leads
+       FROM pipeline_leads pl
+       WHERE pl.tenant_id = $1
+       AND pl.assigned_user_id = $2
+       AND pl.stage NOT IN ('perdu', 'hors_scope')`,
+      [tenantId, targetUserId]
+    );
+
+    // 6️⃣ Calcul taux de conversion (ce mois)
+    const totalMonthLeads = await query(
+      `SELECT COUNT(*)::int as total
+       FROM pipeline_leads pl
+       WHERE pl.tenant_id = $1
+       AND pl.assigned_user_id = $2
+       AND DATE_TRUNC('month', pl.created_at) = DATE_TRUNC('month', CURRENT_DATE)`,
+      [tenantId, targetUserId]
+    );
+
+    const conversionRate = totalMonthLeads.rows[0]?.total > 0
+      ? Math.round((conversionsMonth.rows[0]?.conversions / totalMonthLeads.rows[0]?.total) * 100)
+      : 0;
+
+    console.log(`✅ Stats chargées: ${callsToday.rows[0]?.calls_today} appels, ${emailsToday.rows[0]?.emails_today} emails`);
+
+    res.json({
+      success: true,
+      stats: {
+        calls_today: callsToday.rows[0]?.calls_today || 0,
+        emails_today: emailsToday.rows[0]?.emails_today || 0,
+        leads_today: leadsToday.rows[0]?.leads_today || 0,
+        conversions_month: conversionsMonth.rows[0]?.conversions || 0,
+        total_leads: totalLeads.rows[0]?.total_leads || 0,
+        conversion_rate: conversionRate
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Erreur stats commercial:', err);
+    next(err);
+  }
+});
+
+// ===============================================
+// GET /api/stats/advanced-commercial
+// Stats avancées avec filtres de date
+// ===============================================
+router.get("/advanced-commercial", async (req, res, next) => {
+  try {
+    const tenantId = req.user?.tenant_id;
     const df = req.query.date_from || null;
     const dt = req.query.date_to || null;
     const userId = req.query.user_id || null;
@@ -203,4 +306,3 @@ router.get("/commercial", async (req, res, next) => {
 });
 
 export default router;
-

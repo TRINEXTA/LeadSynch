@@ -37,12 +37,62 @@ router.get('/', authenticateToken, async (req, res) => {
       [tenantId]
     );
     
-    console.log('?? Campagnes charg?es:', campaigns.length);
+    console.log('📋 Campagnes chargées:', campaigns.length);
     
     return res.json({ success: true, campaigns });
     
   } catch (error) {
-    console.error('? Erreur GET campaigns:', error);
+    console.error('❌ Erreur GET campaigns:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ✅ NOUVEAU : GET MY CAMPAIGNS (pour commerciaux) ====================
+router.get('/my-campaigns', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    console.log(`📋 Chargement campagnes pour user ${userId} (${userRole})`);
+
+    let query = `
+      SELECT c.*,
+             ld.name as database_name,
+             et.name as template_name,
+             COUNT(DISTINCT pl.id) as my_leads_count,
+             COUNT(DISTINCT CASE WHEN eq.status = 'sent' THEN eq.id END) as emails_sent
+      FROM campaigns c
+      LEFT JOIN lead_databases ld ON c.database_id = ld.id
+      LEFT JOIN email_templates et ON c.template_id = et.id
+      LEFT JOIN pipeline_leads pl ON c.id = pl.campaign_id AND pl.assigned_user_id = $2
+      LEFT JOIN email_queue eq ON c.id = eq.campaign_id
+      WHERE c.tenant_id = $1
+    `;
+
+    const params = [tenantId, userId];
+
+    // Si pas admin/manager, filtrer par assigned_users
+    if (userRole !== 'admin' && userRole !== 'manager') {
+      query += ` AND (
+        c.assigned_users::jsonb ? $2::text
+        OR c.created_by = $2
+      )`;
+    }
+
+    query += ` 
+      GROUP BY c.id, ld.name, et.name
+      ORDER BY c.created_at DESC
+    `;
+
+    const campaigns = await queryAll(query, params);
+
+    console.log(`✅ ${campaigns.length} campagnes trouvées pour ${userRole}`);
+
+    return res.json({ success: true, campaigns });
+
+  } catch (error) {
+    console.error('❌ Erreur my-campaigns:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -67,13 +117,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
     );
     
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
     
     return res.json({ success: true, campaign });
     
   } catch (error) {
-    console.error('? Erreur GET campaign:', error);
+    console.error('❌ Erreur GET campaign:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -108,7 +158,7 @@ router.post('/', authenticateToken, async (req, res) => {
       auto_distribute
     } = req.body;
 
-    console.log('?? Donn?es re?ues:', req.body);
+    console.log('📥 Données reçues:', req.body);
 
     // Validation des champs requis
     if (!name || !type || !database_id) {
@@ -117,11 +167,11 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // R?cup?ration des leads depuis la base de donn?es
+    // Récupération des leads depuis la base de données
     let leads = [];
     
     if (sectors && Object.keys(sectors).length > 0) {
-      // Filtrage par secteurs si sp?cifi?
+      // Filtrage par secteurs si spécifié
       const sectorFilter = Object.entries(sectors)
         .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
         .map(([dbId, sectorList]) => 
@@ -141,7 +191,7 @@ router.post('/', authenticateToken, async (req, res) => {
         );
       }
     } else {
-      // R?cup?ration de tous les leads de la base
+      // Récupération de tous les leads de la base
       leads = await queryAll(
         `SELECT DISTINCT l.* 
          FROM leads l
@@ -151,15 +201,15 @@ router.post('/', authenticateToken, async (req, res) => {
       );
     }
 
-    console.log(`? ${leads.length} leads trouv?s`);
+    console.log(`📊 ${leads.length} leads trouvés`);
 
     if (leads.length === 0) {
       return res.status(400).json({ 
-        error: 'Aucun lead trouv? dans cette base' 
+        error: 'Aucun lead trouvé dans cette base' 
       });
     }
 
-    // Cr?ation de la campagne dans la base de donn?es
+    // Création de la campagne dans la base de données
     const campaign = await queryOne(
       `INSERT INTO campaigns (
         tenant_id,
@@ -216,11 +266,11 @@ router.post('/', authenticateToken, async (req, res) => {
       ]
     );
 
-    console.log('? Campagne cr??e:', campaign.id);
+    console.log('✅ Campagne créée:', campaign.id);
 
-    // Si campagne EMAIL : TOUJOURS ajouter les emails ? la queue
+    // Si campagne EMAIL : TOUJOURS ajouter les emails à la queue
     if (type === 'email') {
-      console.log('?? Ajout des emails ? la queue...');
+      console.log('📧 Ajout des emails à la queue...');
       
       for (const lead of leads) {
         await execute(
@@ -236,38 +286,37 @@ router.post('/', authenticateToken, async (req, res) => {
         );
       }
       
-      console.log(`? ${leads.length} emails ajout?s ? la queue`);
+      console.log(`✅ ${leads.length} emails ajoutés à la queue`);
     }
 
     // Si campagne PHONING/SMS/WHATSAPP : affecter les leads aux commerciaux ET injecter dans le pipeline
     if (type !== 'email' && assigned_users && assigned_users.length > 0) {
-      console.log(`?? Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
+      console.log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
 
       const INITIAL_LEADS_PER_USER = 50;
-      // Compteur d'injection par commercial
       const perUserInjected = new Map(assigned_users.map(u => [u, 0]));
       let totalInjected = 0;
       const totalInitialLeads = Math.min(leads.length, INITIAL_LEADS_PER_USER * assigned_users.length);
 
-      console.log(`?? Injection initiale: ${INITIAL_LEADS_PER_USER} leads par commercial (${totalInitialLeads} total)`);
+      console.log(`🎯 Injection initiale: ${INITIAL_LEADS_PER_USER} leads par commercial (${totalInitialLeads} total)`);
 
       await execute('BEGIN');
 
       try {
         for (let i = 0; i < leads.length; i++) {
           const lead = leads[i];
-          const userId = assigned_users[i % assigned_users.length];
+          const assignedUserId = assigned_users[i % assigned_users.length];
 
           // 1) assignation du lead au commercial (round-robin)
           await execute(
             `UPDATE leads 
                SET assigned_to = $1, status = 'assigned', updated_at = NOW()
              WHERE id = $2 AND tenant_id = $3`,
-            [userId, lead.id, tenantId]
+            [assignedUserId, lead.id, tenantId]
           );
 
           // 2) injection contrôlée dans le pipeline : max 50 par commercial
-          const alreadyForUser = perUserInjected.get(userId) || 0;
+          const alreadyForUser = perUserInjected.get(assignedUserId) || 0;
           if (totalInjected < totalInitialLeads && alreadyForUser < INITIAL_LEADS_PER_USER) {
             const res = await execute(
               `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
@@ -277,12 +326,11 @@ router.post('/', authenticateToken, async (req, res) => {
                  stage = EXCLUDED.stage,
                  assigned_user_id = EXCLUDED.assigned_user_id,
                  updated_at = NOW()`,
-              [tenantId, lead.id, campaign.id, userId]
+              [tenantId, lead.id, campaign.id, assignedUserId]
             );
 
-            // Si une ligne a été insérée OU updatée, on incrémente
             if (res.rowCount > 0) {
-              perUserInjected.set(userId, alreadyForUser + 1);
+              perUserInjected.set(assignedUserId, alreadyForUser + 1);
               totalInjected++;
             }
           }
@@ -291,19 +339,18 @@ router.post('/', authenticateToken, async (req, res) => {
         await execute('COMMIT');
       } catch (e) {
         await execute('ROLLBACK');
-        console.error('? Erreur affectation/injection :', e.message);
+        console.error('❌ Erreur affectation/injection :', e.message);
         throw e;
       }
 
-      console.log(`? ${leads.length} leads affectés`);
-      console.log(`?? ${totalInjected} leads injectés dans le pipeline (cold_call)`);
+      console.log(`✅ ${leads.length} leads affectés`);
+      console.log(`🎯 ${totalInjected} leads injectés dans le pipeline (cold_call)`);
     }
-
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur cr?ation campagne:', error);
+    console.error('❌ Erreur création campagne:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -348,15 +395,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('? Campagne mise ? jour:', campaignId);
+    console.log('✅ Campagne mise à jour:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur update:', error);
+    console.error('❌ Erreur update:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -376,10 +423,9 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    // Ajouter les emails ? la queue si pas d?j? fait (pour campagnes email)
     if (campaign.type === 'email') {
       const existingEmails = await queryOne(
         'SELECT COUNT(*) as count FROM email_queue WHERE campaign_id = $1',
@@ -409,16 +455,16 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
           );
         }
 
-        console.log(`? ${leads.length} emails ajout?s ? la queue`);
+        console.log(`✅ ${leads.length} emails ajoutés à la queue`);
       }
     }
 
-    console.log('?? Campagne d?marr?e:', campaignId);
+    console.log('🟢 Campagne démarrée:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur start:', error);
+    console.error('❌ Erreur start:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -438,15 +484,15 @@ router.post('/:id/pause', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('?? Campagne mise en pause:', campaignId);
+    console.log('⏸️ Campagne mise en pause:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur pause:', error);
+    console.error('❌ Erreur pause:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -466,15 +512,15 @@ router.post('/:id/resume', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('?? Campagne reprise:', campaignId);
+    console.log('▶️ Campagne reprise:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur resume:', error);
+    console.error('❌ Erreur resume:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -494,15 +540,15 @@ router.post('/:id/stop', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('?? Campagne arr?t?e:', campaignId);
+    console.log('⏹️ Campagne arrêtée:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur stop:', error);
+    console.error('❌ Erreur stop:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -522,15 +568,15 @@ router.post('/:id/archive', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('?? Campagne archiv?e:', campaignId);
+    console.log('📦 Campagne archivée:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur archive:', error);
+    console.error('❌ Erreur archive:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -550,15 +596,15 @@ router.post('/:id/unarchive', authenticateToken, async (req, res) => {
     );
 
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('?? Campagne d?sarchiv?e:', campaignId);
+    console.log('📂 Campagne désarchivée:', campaignId);
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('? Erreur unarchive:', error);
+    console.error('❌ Erreur unarchive:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -570,7 +616,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const campaignId = req.params.id;
     
-    console.log('?? Relance campagne:', campaignId);
+    console.log('🔄 Relance campagne:', campaignId);
     
     const campaign = await queryOne(
       'SELECT * FROM campaigns WHERE id = $1 AND tenant_id = $2',
@@ -578,10 +624,9 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     );
     
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
     
-    // R?cup?rer les leads exclus (RGPD: bounce, unsubscribe, clicked)
     const excludedLeads = await queryAll(
       `SELECT DISTINCT lead_id 
        FROM email_queue 
@@ -595,9 +640,8 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     );
     
     const excludedIds = excludedLeads.map(l => l.lead_id);
-    console.log(`? ${excludedIds.length} leads ? exclure (RGPD)`);
+    console.log(`📊 ${excludedIds.length} leads à exclure (RGPD)`);
     
-    // R?cup?rer tous les leads de la base
     const allLeads = await queryAll(
       `SELECT DISTINCT l.* 
        FROM leads l
@@ -608,15 +652,14 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     
     const eligibleLeads = allLeads.filter(l => !excludedIds.includes(l.id));
     
-    console.log(`? ${eligibleLeads.length} leads ?ligibles pour relance`);
+    console.log(`✅ ${eligibleLeads.length} leads éligibles pour relance`);
     
     if (eligibleLeads.length === 0) {
       return res.status(400).json({ 
-        error: 'Aucun lead ?ligible pour la relance' 
+        error: 'Aucun lead éligible pour la relance' 
       });
     }
     
-    // Cr?er une nouvelle campagne de relance
     const newCampaign = await queryOne(
       `INSERT INTO campaigns (
         tenant_id, name, type, campaign_type, objective, subject, description,
@@ -654,7 +697,6 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
       ]
     );
     
-    // Ajouter les leads ?ligibles ? la queue
     for (const lead of eligibleLeads) {
       await execute(
         `INSERT INTO email_queue (
@@ -669,7 +711,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
       );
     }
     
-    console.log(`? Relance cr??e: ${eligibleLeads.length} emails en queue`);
+    console.log(`✅ Relance créée: ${eligibleLeads.length} emails en queue`);
     
     return res.json({ 
       success: true, 
@@ -679,7 +721,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('? Erreur relance:', error);
+    console.error('❌ Erreur relance:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -697,7 +739,7 @@ router.post('/:id/duplicate', authenticateToken, async (req, res) => {
     );
     
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
     
     const newCampaign = await queryOne(
@@ -737,12 +779,12 @@ router.post('/:id/duplicate', authenticateToken, async (req, res) => {
       ]
     );
     
-    console.log('?? Campagne dupliqu?e:', newCampaign.id);
+    console.log('📋 Campagne dupliquée:', newCampaign.id);
     
     return res.json({ success: true, campaign: newCampaign });
     
   } catch (error) {
-    console.error('? Erreur duplication:', error);
+    console.error('❌ Erreur duplication:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -753,28 +795,26 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const campaignId = req.params.id;
     
-    // Supprimer d'abord les emails de la queue
     await execute(
       'DELETE FROM email_queue WHERE campaign_id = $1',
       [campaignId]
     );
     
-    // Puis supprimer la campagne
     const campaign = await queryOne(
       'DELETE FROM campaigns WHERE id = $1 AND tenant_id = $2 RETURNING *',
       [campaignId, tenantId]
     );
     
     if (!campaign) {
-      return res.status(404).json({ error: 'Campagne non trouv?e' });
+      return res.status(404).json({ error: 'Campagne non trouvée' });
     }
     
-    console.log('??? Campagne supprim?e:', campaignId);
+    console.log('🗑️ Campagne supprimée:', campaignId);
     
-    return res.json({ success: true, message: 'Campagne supprim?e' });
+    return res.json({ success: true, message: 'Campagne supprimée' });
     
   } catch (error) {
-    console.error('? Erreur suppression:', error);
+    console.error('❌ Erreur suppression:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -803,12 +843,11 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
     );
     
     if (!template) {
-      return res.status(404).json({ error: 'Template non trouv?' });
+      return res.status(404).json({ error: 'Template non trouvé' });
     }
     
-    console.log(`?? Envoi de ${recipients.length} emails de test...`);
+    console.log(`📧 Envoi de ${recipients.length} emails de test...`);
     
-    // Importer le service Elastic Email
     const { sendTestEmail } = await import('../services/elasticEmail.js');
     
     const results = {
@@ -816,7 +855,6 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
       failed: []
     };
     
-    // Envoyer ? chaque destinataire
     for (const recipient of recipients) {
       try {
         await sendTestEmail({
@@ -826,25 +864,24 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
         });
         results.success.push(recipient);
       } catch (error) {
-        console.error(`? Erreur envoi ? ${recipient}:`, error);
+        console.error(`❌ Erreur envoi à ${recipient}:`, error);
         results.failed.push({ email: recipient, error: error.message });
       }
     }
     
-    console.log(`? Envoi termin?: ${results.success.length} succ?s, ${results.failed.length} ?checs`);
+    console.log(`✅ Envoi terminé: ${results.success.length} succès, ${results.failed.length} échecs`);
     
     return res.json({ 
       success: true, 
-      message: `${results.success.length}/${recipients.length} email(s) de test envoy?(s)`,
+      message: `${results.success.length}/${recipients.length} email(s) de test envoyé(s)`,
       results
     });
     
   } catch (error) {
-    console.error('? Erreur envoi test:', error);
+    console.error('❌ Erreur envoi test:', error);
     return res.status(500).json({ error: error.message });
   }
 });
-
 
 // ==================== FORCE SYNC STATS ====================
 router.post('/:id/force-sync', authenticateToken, async (req, res) => {
@@ -852,19 +889,18 @@ router.post('/:id/force-sync', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
     const tenantId = req.user?.tenant_id;
 
-    console.log('?? [FORCE SYNC] Synchronisation forc?e pour:', campaignId);
+    console.log('🔄 [FORCE SYNC] Synchronisation forcée pour:', campaignId);
 
-    // Importer le service de polling
     const { pollingService } = await import('../lib/elasticEmailPolling.js');
     
-    // Forcer la sync de cette campagne
     await pollingService.syncCampaignStats(campaignId);
     
-    return res.json({ success: true, message: 'Synchronisation forc?e lanc?e' });
+    return res.json({ success: true, message: 'Synchronisation forcée lancée' });
     
   } catch (error) {
-    console.error('? Erreur force sync:', error);
+    console.error('❌ Erreur force sync:', error);
     return res.status(500).json({ error: error.message });
   }
 });
+
 export default router;
