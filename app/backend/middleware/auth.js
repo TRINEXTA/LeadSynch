@@ -1,5 +1,5 @@
 ﻿import jwt from 'jsonwebtoken';
-import db from '../config/db.js';
+import db from '../config/database.js'; // ✅ CORRECTION ICI
 
 /**
  * Middleware d'authentification HYBRIDE
@@ -16,11 +16,9 @@ export function authMiddleware(handlerOrReq, res, next) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-
       if (req.method === 'OPTIONS') {
         return res.status(200).end();
       }
-
       try {
         const authHeader = req.headers.authorization;
         
@@ -28,13 +26,12 @@ export function authMiddleware(handlerOrReq, res, next) {
           console.log('⚠️ Token manquant');
           return res.status(401).json({ error: 'Non autorisé - Token manquant' });
         }
-
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         console.log('✅ Token valide pour:', decoded.email || decoded.id);
         
-        // ✅ CORRECTION : Charger les infos complètes de l'utilisateur depuis la DB
+        // Charger les infos complètes de l'utilisateur depuis la DB
         const { rows } = await db.query(
           `SELECT id, email, first_name, last_name, role, tenant_id 
            FROM users 
@@ -74,13 +71,12 @@ export function authMiddleware(handlerOrReq, res, next) {
         console.log('⚠️ Token manquant');
         return res.status(401).json({ error: 'Non autorisé - Token manquant' });
       }
-
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       console.log('✅ Token valide pour:', decoded.email || decoded.id);
       
-      // ✅ CORRECTION : Charger les infos complètes de l'utilisateur depuis la DB
+      // Charger les infos complètes de l'utilisateur depuis la DB
       const { rows } = await db.query(
         `SELECT id, email, first_name, last_name, role, tenant_id 
          FROM users 
