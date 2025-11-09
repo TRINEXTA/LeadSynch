@@ -37,6 +37,12 @@ async function handler(req, res) {
 
       for (const record of records) {
         try {
+          // DEBUG: Afficher les 3 premières colonnes du premier record
+          if (added === 0 && updated === 0 && skipped === 0) {
+            console.log('📝 Premier record, colonnes détectées:', Object.keys(record).slice(0, 10));
+            console.log('📝 Valeurs:', Object.values(record).slice(0, 3));
+          }
+
           // ✅ Mapping flexible des colonnes (FRANÇAIS + ANGLAIS)
           const company_name = record['Nom de la société'] || record.company_name || record.nom || record.entreprise || record.name || record.Company;
           const phone = record['Téléphone'] || record.phone || record.telephone || record.tel || record.Phone;
@@ -63,7 +69,11 @@ async function handler(req, res) {
           const etiquette = record['Etiquette'] || '';
 
           if (!company_name || company_name.length < 2) {
-            console.log('⚠️ Lead ignoré (nom invalide):', company_name);
+            console.log('⚠️ Lead ignoré (nom invalide):', {
+              company_name,
+              'Nom de la société': record['Nom de la société'],
+              raw_record: Object.keys(record).slice(0, 5)
+            });
             skipped++;
             continue;
           }
