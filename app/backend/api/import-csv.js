@@ -1,9 +1,10 @@
 import { authMiddleware } from '../middleware/auth.js';
-import { queryAll, execute } from '../lib/db.js';
+import db from '../config/db.js';
 import { parse } from 'csv-parse/sync';
 
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
+  const user_id = req.user.id;
 
   try {
     if (req.method === 'POST') {
@@ -15,115 +16,106 @@ async function handler(req, res) {
         });
       }
 
+      console.log(`📊 Import CSV pour base ${database_id}`);
+
       // Parser le CSV
       const records = parse(csv_content, {
         columns: true,
         skip_empty_lines: true,
-        trim: true
+        trim: true,
+        relax_column_count: true
       });
 
-      console.log(`📊 ${records.length} lignes CSV à traiter`);
+      console.log(`📋 ${records.length} lignes CSV détectées`);
 
       let added = 0;
       let updated = 0;
       let skipped = 0;
 
+      const sectorsDetected = {};
+
       for (const record of records) {
-        // Extraire les données (mapping flexible)
-        const company_name = record.company_name || record.nom || record.entreprise || record.name;
-        const phone = record.phone || record.telephone || record.tel;
-        const email = record.email || record.mail;
-        const website = record.website || record.site || record.web;
-        const address = record.address || record.adresse;
-        const city = record.city || record.ville;
+        try {
+          // Mapping flexible des colonnes
+          const company_name = record.company_name || record.nom || record.entreprise || record.name || record.Company;
+          const phone = record.phone || record.telephone || record.tel || record.Phone;
+          const email = record.email || record.mail || record.Email;
+          const website = record.website || record.site || record.web || record.Website;
+          const address = record.address || record.adresse || record.Address;
+          const city = record.city || record.ville || record.City;
+          const siret = record.siret || record.Siret || record.SIRET;
+          const naf = record.naf || record.NAF || record.code_naf;
 
-        if (!company_name) {
-          skipped++;
-          continue;
-        }
+          if (!company_name || company_name.length < 2) {
+            skipped++;
+            continue;
+          }
 
-        // 1. Vérifier si existe dans global_leads
-        const existingGlobal = await queryAll(
-          `SELECT * FROM global_leads 
-           WHERE LOWER(company_name) = LOWER($1)
-           AND (city ILIKE $2 OR $2 IS NULL)
-           LIMIT 1`,
-          [company_name, city]
-        );
-
-        let globalLeadId;
-
-        if (existingGlobal.length > 0) {
-          // Lead existe déjà dans global_leads
-          const existing = existingGlobal[0];
+          // 🤖 Détection automatique du secteur basée sur NAF ou nom
+          let detectedSector = sector || 'autre';
           
-          // Comparer et garder les infos les plus récentes
-          const shouldUpdate = 
-            (!existing.phone && phone) ||
-            (!existing.email && email) ||
-            (!existing.website && website) ||
-            (!existing.address && address);
+          if (naf) {
+            const nafCode = naf.substring(0, 2);
+            detectedSector = detectSectorFromNAF(nafCode);
+          } else if (company_name) {
+            detectedSector = detectSectorFromName(company_name);
+          }
 
-          if (shouldUpdate) {
-            await execute(
-              `UPDATE global_leads 
+          sectorsDetected[detectedSector] = (sectorsDetected[detectedSector] || 0) + 1;
+
+          // ✅ Vérifier si le lead existe DANS CETTE BASE
+          const existingInDb = await db.query(
+            `SELECT id FROM leads 
+             WHERE tenant_id = $1 
+             AND database_id = $2
+             AND LOWER(company_name) = LOWER($3)`,
+            [tenant_id, database_id, company_name]
+          );
+
+          if (existingInDb.rows.length > 0) {
+            // Lead existe déjà dans cette base → Update
+            await db.query(
+              `UPDATE leads 
                SET phone = COALESCE($1, phone),
                    email = COALESCE($2, email),
                    website = COALESCE($3, website),
                    address = COALESCE($4, address),
-                   last_verified_at = NOW()
-               WHERE id = $5`,
-              [phone, email, website, address, existing.id]
+                   city = COALESCE($5, city),
+                   sector = COALESCE($6, sector),
+                   siret = COALESCE($7, siret),
+                   naf_code = COALESCE($8, naf_code),
+                   updated_at = NOW()
+               WHERE id = $9`,
+              [phone, email, website, address, city, detectedSector, siret, naf, existingInDb.rows[0].id]
             );
             updated++;
-            console.log(`🔄 Enrichi: ${company_name}`);
           } else {
-            console.log(`⏭️  Skip: ${company_name} (déjà complet)`);
+            // ✅ Nouveau lead → Ajouter
+            await db.query(
+              `INSERT INTO leads 
+              (tenant_id, database_id, company_name, phone, email, website, address, city, sector, siret, naf_code, status, source, created_by, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'nouveau', 'import_csv', $12, NOW(), NOW())`,
+              [tenant_id, database_id, company_name, phone, email, website, address, city, detectedSector, siret, naf, user_id]
+            );
+            added++;
           }
-
-          globalLeadId = existing.id;
-        } else {
-          // Nouveau lead → Ajouter à global_leads
-          const newGlobal = await execute(
-            `INSERT INTO global_leads 
-            (company_name, phone, email, website, address, city, industry, source, first_discovered_by, last_verified_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'import_csv', $8, NOW())
-            RETURNING id`,
-            [company_name, phone, email, website, address, city, sector, tenant_id]
-          );
-          
-          globalLeadId = newGlobal.id;
-          added++;
-          console.log(`✅ Ajouté: ${company_name}`);
-        }
-
-        // 2. Vérifier si existe déjà dans la base privée
-        const existingPrivate = await queryAll(
-          `SELECT id FROM leads 
-           WHERE database_id = $1 
-           AND LOWER(company_name) = LOWER($2)`,
-          [database_id, company_name]
-        );
-
-        if (existingPrivate.length === 0) {
-          // Ajouter à la base privée
-          await execute(
-            `INSERT INTO leads 
-            (database_id, tenant_id, global_lead_id, company_name, phone, email, website, address, city, industry, status, score)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'nouveau', 50)`,
-            [database_id, tenant_id, globalLeadId, company_name, phone, email, website, address, city, sector]
-          );
+        } catch (lineError) {
+          console.error('❌ Erreur ligne:', lineError.message);
+          skipped++;
         }
       }
 
-      // Mettre à jour le compteur total_leads
-      await execute(
+      // ✅ Mettre à jour la segmentation de la base
+      await db.query(
         `UPDATE lead_databases 
-         SET total_leads = (SELECT COUNT(*) FROM leads WHERE database_id = $1),
+         SET segmentation = $1,
+             total_leads = (SELECT COUNT(*) FROM leads WHERE database_id = $2),
              updated_at = NOW()
-         WHERE id = $1`,
-        [database_id]
+         WHERE id = $2`,
+        [JSON.stringify(sectorsDetected), database_id]
       );
+
+      console.log(`✅ Import terminé: ${added} ajoutés, ${updated} mis à jour, ${skipped} ignorés`);
 
       return res.json({
         success: true,
@@ -132,19 +124,67 @@ async function handler(req, res) {
           added,
           updated,
           skipped
-        }
+        },
+        segmentation: sectorsDetected
       });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Import CSV error:', error);
+    console.error('❌ Import CSV error:', error);
     return res.status(500).json({ 
       error: 'Erreur import',
       details: error.message 
     });
   }
+}
+
+// 🤖 Détection secteur basée sur code NAF
+function detectSectorFromNAF(nafCode) {
+  const mapping = {
+    '01': 'agriculture', '02': 'agriculture', '03': 'agriculture',
+    '05': 'industrie', '06': 'industrie', '07': 'industrie', '08': 'industrie',
+    '10': 'industrie', '11': 'industrie', '12': 'industrie',
+    '41': 'btp', '42': 'btp', '43': 'btp',
+    '45': 'automobile', '46': 'commerce', '47': 'commerce',
+    '49': 'logistique', '50': 'logistique', '51': 'logistique', '52': 'logistique', '53': 'logistique',
+    '55': 'hotellerie', '56': 'hotellerie',
+    '58': 'informatique', '59': 'informatique', '60': 'informatique', '61': 'informatique', '62': 'informatique', '63': 'informatique',
+    '64': 'services', '65': 'services', '66': 'services',
+    '68': 'immobilier',
+    '69': 'juridique', '70': 'consulting',
+    '71': 'consulting', '72': 'informatique', '73': 'consulting', '74': 'consulting',
+    '75': 'services',
+    '77': 'services', '78': 'rh', '79': 'services',
+    '80': 'services', '81': 'services', '82': 'services',
+    '85': 'education', '86': 'sante', '87': 'sante', '88': 'sante',
+    '90': 'services', '91': 'services', '92': 'services', '93': 'services',
+    '94': 'services', '95': 'services', '96': 'services'
+  };
+  return mapping[nafCode] || 'autre';
+}
+
+// 🤖 Détection secteur basée sur le nom de l'entreprise
+function detectSectorFromName(name) {
+  const lowerName = name.toLowerCase();
+  
+  if (/avoca|juridi|legal|notai|huissi/.test(lowerName)) return 'juridique';
+  if (/compta|expert.compta|audit/.test(lowerName)) return 'comptabilite';
+  if (/medic|santé|clinic|hospit|pharma|dentist|infirmi/.test(lowerName)) return 'sante';
+  if (/inform|digital|web|soft|tech|dev|cyber|data/.test(lowerName)) return 'informatique';
+  if (/btp|construct|maçon|plomb|electric|charpent/.test(lowerName)) return 'btp';
+  if (/hotel|restaura|cafe|bar|traiteur/.test(lowerName)) return 'hotellerie';
+  if (/immo|foncier|gestion.locative/.test(lowerName)) return 'immobilier';
+  if (/transport|logistiq|livraison|courier/.test(lowerName)) return 'logistique';
+  if (/commerce|retail|boutique|magasin/.test(lowerName)) return 'commerce';
+  if (/ecole|formation|educat|enseign/.test(lowerName)) return 'education';
+  if (/consult|conseil|strateg/.test(lowerName)) return 'consulting';
+  if (/recrut|rh|ressources.humaines/.test(lowerName)) return 'rh';
+  if (/auto|garage|meca/.test(lowerName)) return 'automobile';
+  if (/indust|fabri|usine/.test(lowerName)) return 'industrie';
+  
+  return 'autre';
 }
 
 export default authMiddleware(handler);
