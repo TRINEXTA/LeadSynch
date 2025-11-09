@@ -23,7 +23,8 @@ async function handler(req, res) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-        relax_column_count: true
+        relax_column_count: true,
+        bom: true // Support BOM UTF-8
       });
 
       console.log(`📋 ${records.length} lignes CSV détectées`);
@@ -36,44 +37,68 @@ async function handler(req, res) {
 
       for (const record of records) {
         try {
-          // Mapping flexible des colonnes
-          const company_name = record.company_name || record.nom || record.entreprise || record.name || record.Company;
-          const phone = record.phone || record.telephone || record.tel || record.Phone;
-          const email = record.email || record.mail || record.Email;
-          const website = record.website || record.site || record.web || record.Website;
-          const address = record.address || record.adresse || record.Address;
-          const city = record.city || record.ville || record.City;
-          const siret = record.siret || record.Siret || record.SIRET;
-          const naf = record.naf || record.NAF || record.code_naf;
+          // ✅ Mapping flexible des colonnes (FRANÇAIS + ANGLAIS)
+          const company_name = record['Nom de la société'] || record.company_name || record.nom || record.entreprise || record.name || record.Company;
+          const phone = record['Téléphone'] || record.phone || record.telephone || record.tel || record.Phone;
+          const email = record['Email'] || record.email || record.mail;
+          const website = record['website'] || record.site || record.web || record.Website;
+          const rue = record['rue'] || record.address || record.adresse || record.Address;
+          const codePostal = record['code postal'] || record.cp || record.postal_code;
+          const city = record['City'] || record.city || record.ville;
+          const address = rue && codePostal ? `${rue}, ${codePostal} ${city}` : (rue || '');
+          
+          // ✅ Nom du contact
+          const contact_name = record['Nom du contact'] || record.contact_name || record.contact || record.nom_contact || null;
+          
+          // ✅ Extraction SIRET depuis la description
+          const description = record['Description'] || '';
+          const siretMatch = description.match(/SIRET\s*:\s*(\d+)/i);
+          const siret = siretMatch ? siretMatch[1] : (record.siret || record.Siret || record.SIRET || null);
+          
+          // ✅ Extraction code NAF depuis la description
+          const nafMatch = description.match(/Code NAF\s*:\s*([A-Z0-9.]+)/i);
+          const naf = nafMatch ? nafMatch[1] : (record.naf || record.NAF || record.code_naf || null);
+
+          // ✅ Extraction secteur depuis Etiquette
+          const etiquette = record['Etiquette'] || '';
 
           if (!company_name || company_name.length < 2) {
+            console.log('⚠️ Lead ignoré (nom invalide):', company_name);
             skipped++;
             continue;
           }
 
-          // 🤖 Détection automatique du secteur basée sur NAF ou nom
+          // 🤖 Détection automatique du secteur
           let detectedSector = sector || 'autre';
           
-          if (naf) {
-            const nafCode = naf.substring(0, 2);
+          // Priorité 1: Etiquette du CSV
+          if (etiquette) {
+            detectedSector = mapEtiquetteToSector(etiquette);
+          }
+          // Priorité 2: Code NAF
+          else if (naf) {
+            const nafCode = naf.replace(/\./g, '').substring(0, 2);
             detectedSector = detectSectorFromNAF(nafCode);
-          } else if (company_name) {
+          }
+          // Priorité 3: Nom de l'entreprise
+          else if (company_name) {
             detectedSector = detectSectorFromName(company_name);
           }
 
           sectorsDetected[detectedSector] = (sectorsDetected[detectedSector] || 0) + 1;
 
-          // ✅ Vérifier si le lead existe DANS CETTE BASE
-          const existingInDb = await db.query(
-            `SELECT id FROM leads 
-             WHERE tenant_id = $1 
-             AND database_id = $2
-             AND LOWER(company_name) = LOWER($3)`,
+          // ✅ Vérifier si le lead existe
+          const existingLead = await db.query(
+            `SELECT l.id FROM leads l
+             JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+             WHERE l.tenant_id = $1 
+             AND ldr.database_id = $2
+             AND LOWER(l.company_name) = LOWER($3)`,
             [tenant_id, database_id, company_name]
           );
 
-          if (existingInDb.rows.length > 0) {
-            // Lead existe déjà dans cette base → Update
+          if (existingLead.rows.length > 0) {
+            // Lead existe → Update
             await db.query(
               `UPDATE leads 
                SET phone = COALESCE($1, phone),
@@ -84,19 +109,29 @@ async function handler(req, res) {
                    sector = COALESCE($6, sector),
                    siret = COALESCE($7, siret),
                    naf_code = COALESCE($8, naf_code),
+                   contact_name = COALESCE($9, contact_name),
                    updated_at = NOW()
-               WHERE id = $9`,
-              [phone, email, website, address, city, detectedSector, siret, naf, existingInDb.rows[0].id]
+               WHERE id = $10`,
+              [phone, email, website, address, city, detectedSector, siret, naf, contact_name, existingLead.rows[0].id]
             );
             updated++;
           } else {
-            // ✅ Nouveau lead → Ajouter
-            await db.query(
+            // ✅ Nouveau lead → INSERT
+            const newLead = await db.query(
               `INSERT INTO leads 
-              (tenant_id, database_id, company_name, phone, email, website, address, city, sector, siret, naf_code, status, source, created_by, created_at, updated_at)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'nouveau', 'import_csv', $12, NOW(), NOW())`,
-              [tenant_id, database_id, company_name, phone, email, website, address, city, detectedSector, siret, naf, user_id]
+              (tenant_id, company_name, contact_name, phone, email, website, address, city, sector, siret, naf_code, status, source, created_by, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'nouveau', 'import_csv', $12, NOW(), NOW())
+              RETURNING id`,
+              [tenant_id, company_name, contact_name, phone, email, website, address, city, detectedSector, siret, naf, user_id]
             );
+            
+            // ✅ Créer la relation lead <-> database
+            await db.query(
+              `INSERT INTO lead_database_relations (lead_id, database_id, added_at)
+               VALUES ($1, $2, NOW())`,
+              [newLead.rows[0].id, database_id]
+            );
+            
             added++;
           }
         } catch (lineError) {
@@ -109,13 +144,14 @@ async function handler(req, res) {
       await db.query(
         `UPDATE lead_databases 
          SET segmentation = $1,
-             total_leads = (SELECT COUNT(*) FROM leads WHERE database_id = $2),
+             total_leads = (SELECT COUNT(DISTINCT ldr.lead_id) FROM lead_database_relations ldr WHERE ldr.database_id = $2),
              updated_at = NOW()
          WHERE id = $2`,
         [JSON.stringify(sectorsDetected), database_id]
       );
 
       console.log(`✅ Import terminé: ${added} ajoutés, ${updated} mis à jour, ${skipped} ignorés`);
+      console.log(`📊 Secteurs détectés:`, sectorsDetected);
 
       return res.json({
         success: true,
@@ -138,6 +174,35 @@ async function handler(req, res) {
       details: error.message 
     });
   }
+}
+
+// 🤖 Mapper l'étiquette vers un secteur
+function mapEtiquetteToSector(etiquette) {
+  const mapping = {
+    'Santé / Médico-social': 'sante',
+    'Commerce / Distribution': 'commerce',
+    'Hébergement / Restauration': 'hotellerie',
+    'BTP / Construction': 'btp',
+    'Informatique / IT': 'informatique',
+    'Juridique / Legal': 'juridique',
+    'Comptabilité': 'comptabilite',
+    'Immobilier': 'immobilier',
+    'Transport / Logistique': 'logistique',
+    'Automobile': 'automobile',
+    'Industrie': 'industrie',
+    'Services': 'services',
+    'Consulting': 'consulting',
+    'Education': 'education',
+    'RH': 'rh'
+  };
+  
+  for (const [key, value] of Object.entries(mapping)) {
+    if (etiquette.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  
+  return 'autre';
 }
 
 // 🤖 Détection secteur basée sur code NAF
@@ -171,13 +236,13 @@ function detectSectorFromName(name) {
   
   if (/avoca|juridi|legal|notai|huissi/.test(lowerName)) return 'juridique';
   if (/compta|expert.compta|audit/.test(lowerName)) return 'comptabilite';
-  if (/medic|santé|clinic|hospit|pharma|dentist|infirmi/.test(lowerName)) return 'sante';
+  if (/medic|santé|clinic|hospit|pharma|dentist|infirmi|creche/.test(lowerName)) return 'sante';
   if (/inform|digital|web|soft|tech|dev|cyber|data/.test(lowerName)) return 'informatique';
   if (/btp|construct|maçon|plomb|electric|charpent/.test(lowerName)) return 'btp';
   if (/hotel|restaura|cafe|bar|traiteur/.test(lowerName)) return 'hotellerie';
   if (/immo|foncier|gestion.locative/.test(lowerName)) return 'immobilier';
   if (/transport|logistiq|livraison|courier/.test(lowerName)) return 'logistique';
-  if (/commerce|retail|boutique|magasin/.test(lowerName)) return 'commerce';
+  if (/commerce|retail|boutique|magasin|garage|cave|caviste/.test(lowerName)) return 'commerce';
   if (/ecole|formation|educat|enseign/.test(lowerName)) return 'education';
   if (/consult|conseil|strateg/.test(lowerName)) return 'consulting';
   if (/recrut|rh|ressources.humaines/.test(lowerName)) return 'rh';
