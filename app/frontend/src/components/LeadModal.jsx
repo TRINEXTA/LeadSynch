@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, Building, User, Mail, Phone, MapPin, Globe, DollarSign, Tag } from 'lucide-react';
+import LeadHistoryPanel from "./LeadHistoryPanel";
 
 export default function LeadModal({ lead, stage, onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -69,7 +70,14 @@ export default function LeadModal({ lead, stage, onClose, onSave }) {
     setLoading(true);
 
     try {
-      await onSave(formData);
+      // ✅ Nettoyer les données avant envoi
+      const cleanedData = {
+        ...formData,
+        deal_value: formData.deal_value === '' ? null : parseFloat(formData.deal_value) || null,
+        score: formData.score === '' ? 50 : parseInt(formData.score) || 50
+      };
+      
+      await onSave(cleanedData);
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
     } finally {
@@ -300,6 +308,14 @@ export default function LeadModal({ lead, stage, onClose, onSave }) {
               className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 transition-all resize-none"
             />
           </div>
+
+          {/* 🆕 HISTORIQUE DES ACTIONS */}
+          {lead && lead.id && (
+            <LeadHistoryPanel 
+              pipelineLeadId={lead.pipeline_lead_id || lead.id}
+              leadId={lead.lead_id || lead.id}
+            />
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">

@@ -1,29 +1,29 @@
 ﻿import axios from "axios";
 
-// URL de base de l'API (doit contenir /api)
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// URL de base SANS /api
+const API_BASE = 'http://localhost:3000';
 console.log('✅ API URL:', API_BASE);
 
 const api = axios.create({
-  baseURL: API_BASE,
-  // ❌ ENLEVÉ withCredentials (pas nécessaire avec Bearer tokens)
+  baseURL: `${API_BASE}/api`,
   headers: { 
     "Content-Type": "application/json"
   }
 });
 
 // Interceptor pour ajouter le token automatiquement
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  }, 
+  (error) => {
+    return Promise.reject(error);
   }
-  
-  return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+);
 
 // Interceptor de réponse pour gérer les erreurs
 api.interceptors.response.use(

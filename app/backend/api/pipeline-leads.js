@@ -211,8 +211,9 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
 router.post('/:id/qualify', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
     const { id } = req.params;
-    const { qualification, notes, follow_up_date, deal_value } = req.body;
+    const { qualification, notes, follow_up_date, deal_value, call_duration, next_action, scheduled_date } = req.body;
 
     if (!qualification) {
       return res.status(400).json({ error: 'qualification requise' });
@@ -235,12 +236,29 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       'disqualified': 'hors_scope',
       'nrp': 'nrp',
       'no_answer': 'nrp',
-      'wrong_number': 'nrp'
+      'wrong_number': 'nrp',
+      'tres_qualifie': 'tres_qualifie',
+      'qualifie': 'qualifie',
+      'a_relancer': 'relancer',
+      'pas_interesse': 'hors_scope'
     };
 
     const newStage = stageMapping[qualification] || 'cold_call';
 
-    // Mettre à jour le stage dans pipeline_leads
+    // 1. Récupérer le lead pipeline actuel pour avoir l'ancien stage
+    const { rows: currentRows } = await q(
+      `SELECT * FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+
+    if (!currentRows.length) {
+      return res.status(404).json({ error: 'Lead pipeline non trouvé' });
+    }
+
+    const pipelineLead = currentRows[0];
+    const oldStage = pipelineLead.stage;
+
+    // 2. Mettre à jour le stage dans pipeline_leads
     const { rows } = await q(
       `UPDATE pipeline_leads 
        SET stage = $1, updated_at = NOW()
@@ -249,38 +267,90 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       [newStage, id, tenantId]
     );
 
-    if (!rows.length) {
-      return res.status(404).json({ error: 'Lead pipeline non trouvé' });
-    }
-
-    const pipelineLead = rows[0];
-
-    // Mettre à jour aussi le lead dans la table leads
+    // 3. Mettre à jour aussi le lead dans la table leads
     if (pipelineLead.lead_id) {
-      // Construire la requête dynamiquement selon si notes est présent
-      let updateQuery = `UPDATE leads 
+      await q(
+        `UPDATE leads 
          SET pipeline_stage = $1,
              last_call_date = NOW(),
              next_follow_up = $2,
              deal_value = COALESCE($3, deal_value),
-             updated_at = NOW()`;
-      
-      let params = [qualification, follow_up_date, deal_value];
-      
-      if (notes) {
-        updateQuery += `, notes = COALESCE(notes || E'\\n\\n', '') || $4`;
-        params.push(notes);
-      }
-      
-      updateQuery += ` WHERE id = $${params.length + 1}`;
-      params.push(pipelineLead.lead_id);
-      
-      await q(updateQuery, params);
+             updated_at = NOW()
+         WHERE id = $4`,
+        [qualification, follow_up_date || scheduled_date, deal_value, pipelineLead.lead_id]
+      );
     }
 
-    console.log(`✅ Lead ${id} qualifié: ${qualification} → stage: ${newStage}`);
+    // 4. 🆕 SAUVEGARDER L'HISTORIQUE dans lead_call_history
+    if (notes && notes.trim()) {
+      await q(
+        `INSERT INTO lead_call_history 
+         (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type, 
+          stage_before, stage_after, qualification, notes, call_duration, 
+          next_action, scheduled_date, deal_value, created_by)
+         VALUES ($1, $2, $3, $4, 'qualification', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          tenantId,
+          pipelineLead.lead_id,
+          pipelineLead.id,
+          pipelineLead.campaign_id,
+          oldStage,
+          newStage,
+          qualification,
+          notes.trim(),
+          call_duration || null,
+          next_action || null,
+          scheduled_date || null,
+          deal_value || null,
+          userId
+        ]
+      );
+    }
 
-    return res.json({ success: true, lead: pipelineLead, newStage });
+    // 5. 🆕 CRÉER UN FOLLOW-UP si date de rappel renseignée
+    if (scheduled_date || follow_up_date) {
+      const followUpDate = scheduled_date || follow_up_date;
+      const followUpType = qualification === 'callback' || qualification === 'a_relancer' ? 'call' : 'meeting';
+      const followUpTitle = `Rappel: ${qualification}`;
+      
+      try {
+        // ✅ Récupérer le VRAI lead UUID depuis la table leads
+        const { rows: leadRows } = await q(
+          'SELECT id FROM leads WHERE id = $1 AND tenant_id = $2',
+          [pipelineLead.lead_id, tenantId]
+        );
+        
+        if (leadRows.length > 0) {
+          const realLeadId = leadRows[0].id;
+          
+          await q(
+            `INSERT INTO follow_ups 
+             (tenant_id, lead_id, user_id, type, priority, title, notes, scheduled_date, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+             ON CONFLICT DO NOTHING`,
+            [
+              tenantId,
+              realLeadId, // ✅ Utiliser le vrai UUID
+              userId,
+              followUpType,
+              newStage === 'tres_qualifie' ? 'high' : newStage === 'qualifie' ? 'medium' : 'low',
+              followUpTitle,
+              notes?.trim() || next_action || null,
+              followUpDate
+            ]
+          );
+          console.log(`📅 Follow-up créé automatiquement pour lead ${realLeadId}`);
+        } else {
+          console.warn(`⚠️ Lead introuvable: ${pipelineLead.lead_id}`);
+        }
+      } catch (followUpError) {
+        console.warn('⚠️ Erreur création follow-up:', followUpError.message);
+      }
+    }
+
+    console.log(`✅ Lead ${id} qualifié: ${qualification} → stage: ${oldStage} → ${newStage}`);
+
+    return res.json({ success: true, lead: rows[0], oldStage, newStage });
 
   } catch (error) {
     console.error('❌ Erreur qualification:', error);
@@ -318,6 +388,49 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erreur PATCH pipeline-lead:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================
+// GET /pipeline-leads/:id/history
+// Récupère l'historique complet des actions sur un lead
+// =============================
+router.get('/:id/history', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { id } = req.params;
+
+    // Vérifier que le pipeline lead existe
+    const { rows: plRows } = await q(
+      `SELECT lead_id FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+
+    if (!plRows.length) {
+      return res.status(404).json({ error: 'Lead pipeline non trouvé' });
+    }
+
+    const leadId = plRows[0].lead_id;
+
+    // Récupérer tout l'historique
+    const { rows } = await q(
+      `SELECT 
+        lch.*,
+        u.first_name,
+        u.last_name,
+        (u.first_name || ' ' || u.last_name) as author_name
+       FROM lead_call_history lch
+       LEFT JOIN users u ON lch.created_by = u.id
+       WHERE lch.lead_id = $1 AND lch.tenant_id = $2
+       ORDER BY lch.created_at DESC`,
+      [leadId, tenantId]
+    );
+
+    return res.json({ success: true, history: rows });
+
+  } catch (error) {
+    console.error('❌ Erreur GET history:', error);
     return res.status(500).json({ error: error.message });
   }
 });

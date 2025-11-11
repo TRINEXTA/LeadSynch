@@ -150,7 +150,7 @@ export default function LeadDatabases() {
             
             <div className="flex gap-3">
               <button
-                onClick={() => navigate('/import-leads')}
+                onClick={() => navigate('/ImportLeads')}
                 className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg flex items-center gap-2"
               >
                 <Upload className="w-5 h-5" />
@@ -158,12 +158,12 @@ export default function LeadDatabases() {
               </button>
               
               <button
-                onClick={() => navigate('/lead-generation')}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg flex items-center gap-2"
-              >
-                <Zap className="w-5 h-5" />
-                Generer avec IA
-              </button>
+  onClick={() => navigate('/LeadGeneration')}
+  className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg flex items-center gap-2"
+>
+  <Zap className="w-5 h-5" />
+  Generer avec IA
+</button>
             </div>
           </div>
         </div>
@@ -252,7 +252,7 @@ export default function LeadDatabases() {
               <Database className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg mb-4">Aucune base trouvee</p>
               <button
-                onClick={() => navigate('/import-leads')}
+                onClick={() => navigate('/ImportLeads')}
                 className="bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700"
               >
                 Importer votre premiere base

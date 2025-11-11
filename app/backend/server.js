@@ -19,7 +19,7 @@ if (!process.env.POSTGRES_URL) {
 const app = express();
 app.set('trust proxy', 1);
 
-// ========= ? CORS FIX COMPLET =========
+// ========= ?? CORS FIX COMPLET =========
 const allowedOrigins = [
   'https://app.leadsynch.com',
   'https://leadsynch.vercel.app',
@@ -27,11 +27,10 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
-console.log('? CORS configuré pour:', allowedOrigins.join(', '));
+console.log('?? CORS configuré pour:', allowedOrigins.join(', '));
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Autoriser les requêtes sans origin (Postman, curl, etc.)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
@@ -50,14 +49,13 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
-// Log toutes les requêtes avec timing
 app.use((req, res, next) => {
   const start = Date.now();
   console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
   
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
+    console.log(`? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
   });
   
   next();
@@ -84,7 +82,7 @@ app.all('/api/auth/change-password', changePasswordRoute);
 app.all('/api/auth/reset-password', resetPassword);
 if (authLogout) app.all('/api/auth/logout', authLogout);
 
-// ========== ? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
+// ========== ?? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
 import leadsRoute from './api/leads.js';
 import usersRoute from './api/users.js';
 import teamsRoute from './api/teams.js';
@@ -108,17 +106,23 @@ import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 
-// ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
+// ========== ?? NOUVELLES ROUTES LEAD MANAGEMENT ==========
+import leadContactsRoute from './api/lead-contacts.js';
+import leadPhonesRoute from './api/lead-phones.js';
+import leadOfficesRoute from './api/lead-offices.js';
+import leadNotesRoute from './api/lead-notes.js';
+
+// ?? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
 app.use('/api/leads-count-multi', leadsCountMultiRoute);
 app.use('/api/sectors', sectorsRoute);
 
-// ? USERS : Monter la route AVANT les autres pour éviter les conflits
+// ?? USERS : Monter la route AVANT les autres pour éviter les conflits
 app.use('/api/users', usersRoute);
 
 app.use('/api/teams', teamsRoute);
 
-// ? CAMPAIGNS : Routes spécifiques AVANT la route générique
+// ?? CAMPAIGNS : Routes spécifiques AVANT la route générique
 app.use('/api/campaigns', campaignsRoute);
 
 app.use('/api/stats', statsRoute);
@@ -126,7 +130,10 @@ app.use('/api/templates', templatesRoute);
 app.use('/api/generate-leads', generateLeadsRoute);
 app.use('/api/quotas', quotasRoute);
 app.use('/api/follow-ups', followUpsRoute);
-app.all('/api/import-csv', importCsvRoute);
+
+// ? FIX CRITIQUE : Utiliser app.use au lieu de app.all pour les routes Express
+app.use('/api/import-csv', importCsvRoute);
+
 app.use('/api/asefi', asefiGenerateRoute);
 app.use('/api/email-templates', emailTemplatesRoute);
 app.use('/api/chatbot', chatbotRoute);
@@ -137,6 +144,12 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
+
+// ========== ?? ROUTES LEAD MANAGEMENT AVANCÉ ==========
+app.use('/api/leads', leadContactsRoute);
+app.use('/api/leads', leadPhonesRoute);
+app.use('/api/leads', leadOfficesRoute);
+app.use('/api/leads', leadNotesRoute);
 
 // ========== ROUTES TRACKING ==========
 import * as unsubscribeController from './controllers/unsubscribeController.js';
@@ -179,7 +192,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('========================================');
-  console.log('? Backend LeadSynch démarré');
+  console.log('?? Backend LeadSynch démarré');
   console.log('========================================');
   console.log('?? Port:', PORT);
   console.log('?? CORS:', allowedOrigins.join(', '));
@@ -187,7 +200,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('========================================');
   console.log('');
 
-  // Démarrage email worker
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
@@ -196,7 +208,6 @@ app.listen(PORT, '0.0.0.0', () => {
     })
     .catch(err => console.error('? Erreur email worker:', err));
 
-  // Démarrage polling Elastic Email
   import('./lib/elasticEmailPolling.js')
     .then(({ pollingService }) => {
       console.log('?? [POLLING] Premier run');
@@ -209,7 +220,7 @@ app.listen(PORT, '0.0.0.0', () => {
         } catch (e) {
           console.error('? Erreur polling auto:', e);
         }
-      }, 10 * 60 * 1000); // 10 minutes
+      }, 10 * 60 * 1000);
     })
     .catch(err => console.error('? Erreur polling:', err));
 });

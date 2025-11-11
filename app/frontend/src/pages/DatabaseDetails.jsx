@@ -1,7 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Users, TrendingUp, Building, Mail, Phone, MapPin, Globe, Filter, Search, Download, Send, Trash2, RefreshCw, BarChart3, Target } from 'lucide-react';
+import { ArrowLeft, Users, TrendingUp, Building, Mail, Phone, MapPin, Globe, Filter, Search, Download, Send, Trash2, RefreshCw, BarChart3, Target, Plus } from 'lucide-react';
 import api from '../api/axios';
+import CreateLeadModal from '../components/CreateLeadModal';
+import LeadDetailsModal from '../components/LeadDetailsModal';
 
 const SECTEURS_MAPPING = {
   juridique: { label: "Juridique / Legal", icon: "⚖️", color: "from-blue-500 to-cyan-500" },
@@ -35,6 +37,8 @@ export default function DatabaseDetails() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [stats, setStats] = useState({});
+  const [showCreateLeadModal, setShowCreateLeadModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
 
   useEffect(() => {
     if (databaseId) {
@@ -104,7 +108,9 @@ export default function DatabaseDetails() {
       );
     }
 
-    setFilteredLeads(filtered);
+    // 🚀 OPTIMISATION : Limiter à 100 leads pour performance
+    const limitedFiltered = filtered.slice(0, 100);
+    setFilteredLeads(limitedFiltered);
   };
 
   const handleSelectAll = () => {
@@ -280,10 +286,19 @@ export default function DatabaseDetails() {
 
         {/* Secteurs */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-purple-600" />
-            Repartition par secteur
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-purple-600" />
+              Repartition par secteur
+            </h2>
+            <button
+              onClick={() => setShowCreateLeadModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Nouveau Lead
+            </button>
+          </div>
 
           <div className="flex flex-wrap gap-2 mb-4">
             <button
@@ -399,7 +414,12 @@ export default function DatabaseDetails() {
                     return (
                       <tr
                         key={lead.id}
-                        className={`border-b border-gray-200 hover:bg-purple-50 transition-all ${
+                        onClick={(e) => {
+                          if (e.target.type !== 'checkbox' && !e.target.closest('input[type="checkbox"]')) {
+                            setSelectedLead(lead);
+                          }
+                        }}
+                        className={`border-b border-gray-200 hover:bg-purple-50 transition-all cursor-pointer ${
                           index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
                         }`}
                       >
@@ -466,11 +486,38 @@ export default function DatabaseDetails() {
           {filteredLeads.length > 0 && (
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
               <p className="text-sm text-gray-600 text-center">
-                Affichage de <span className="font-bold text-gray-900">{filteredLeads.length}</span> lead(s) sur <span className="font-bold text-gray-900">{stats.total}</span>
+                Affichage de <span className="font-bold text-gray-900">{filteredLeads.length}</span> lead(s) 
+                {filteredLeads.length === 100 && <span className="text-orange-600"> (limité à 100 pour performance - utilisez la recherche pour affiner)</span>}
+                {' '}sur <span className="font-bold text-gray-900">{stats.total}</span>
               </p>
             </div>
           )}
         </div>
+
+        {/* Modal création lead */}
+        {showCreateLeadModal && (
+          <CreateLeadModal
+            databaseId={databaseId}
+            preselectedSector={selectedSector !== 'all' ? selectedSector : null}
+            onClose={() => setShowCreateLeadModal(false)}
+            onSuccess={() => {
+              setShowCreateLeadModal(false);
+              loadDatabaseDetails();
+            }}
+          />
+        )}
+
+        {/* Modal détails du lead */}
+        {selectedLead && (
+          <LeadDetailsModal
+            lead={selectedLead}
+            onClose={() => setSelectedLead(null)}
+            onUpdate={() => {
+              setSelectedLead(null);
+              loadDatabaseDetails();
+            }}
+          />
+        )}
       </div>
     </div>
   );

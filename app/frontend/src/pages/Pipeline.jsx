@@ -4,7 +4,7 @@ import { TrendingUp, Users, DollarSign, Clock, Mail, Phone, MapPin, Star, PhoneC
 import api from '../api/axios';
 import QualificationModal from '../components/QualificationModal';
 import CallNotesPanel from '../components/CallNotesPanel';
-import ProspectionMode from './ProspectionMode';
+import ProspectingMode from './ProspectingMode';
 import LeadModal from '../components/LeadModal';
 
 const STAGES = [
@@ -34,7 +34,7 @@ export default function Pipeline() {
   const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [currentLead, setCurrentLead] = useState(null);
   const [callNotes, setCallNotes] = useState('');
-  const [prospectionMode, setProspectionMode] = useState(false);
+  const [prospectionMode, setProspectingMode] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [creatingLeadStage, setCreatingLeadStage] = useState(null);
@@ -231,9 +231,9 @@ export default function Pipeline() {
 
   if (prospectionMode) {
     return (
-      <ProspectionMode
+      <ProspectingMode
         leads={filteredLeads}
-        onExit={() => setProspectionMode(false)}
+        onExit={() => setProspectingMode(false)}
         onLeadUpdated={loadData}
       />
     );
@@ -302,7 +302,7 @@ export default function Pipeline() {
           </div>
           
           <button
-            onClick={() => setProspectionMode(true)}
+            onClick={() => setProspectingMode(true)}
             className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg flex items-center gap-2"
           >
             <Target className="w-5 h-5" />

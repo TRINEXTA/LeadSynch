@@ -33,34 +33,39 @@ export default function ProspectionMode({ leads, onExit, onLeadUpdated }) {
     try {
       if (!currentLead) return;
 
-      // Mettre à jour le stage du lead
-      await api.patch(`/pipeline-leads/${currentLead.id}/stage`, { stage: qualification.stage });
+      // ✅ CORRECTION : Utiliser la route /qualify qui déplace automatiquement le lead
+      await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
+        qualification: qualification.id,
+        notes: notes.trim() || '',
+        call_duration: leadDuration,
+        next_action: '',
+        scheduled_date: null
+      });
 
-      // Sauvegarder les notes si présentes
-      if (notes.trim()) {
-        await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
-          stage: qualification.stage,
-          qualification: qualification.id,
-          notes: notes,
-          call_duration: leadDuration,
-          next_action: '',
-          scheduled_date: null
-        });
+      // Notifier le parent que le lead a été mis à jour
+      if (onLeadUpdated) {
+        onLeadUpdated();
       }
 
-      console.log(`✅ Lead ${qualification.label}:`, currentLead.company_name);
-
-      // Incrémenter les stats
+      // Stats
       setProcessed(prev => prev + 1);
-      if (['qualifie', 'tres_qualifie'].includes(qualification.id)) {
+      if (qualification.stage === 'qualifie' || qualification.stage === 'tres_qualifie') {
         setQualified(prev => prev + 1);
       }
 
-      // Passer au suivant
-      nextLead();
+      // Reset et passer au suivant
+      setNotes('');
+      setLeadStartTime(Date.now());
+      
+      if (currentIndex < leads.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        alert('✅ Tous les leads traités !');
+        onExit();
+      }
     } catch (error) {
-      console.error('❌ Erreur action:', error);
-      alert('Erreur lors de la sauvegarde');
+      console.error('Erreur qualification:', error);
+      alert('Erreur lors de la qualification');
     }
   };
 

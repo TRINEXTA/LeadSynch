@@ -3,15 +3,9 @@ import db from '../config/db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import leadPoolManager from '../services/leadPoolManager.js';
 
-console.log('🔥🔥🔥 FICHIER lead-databases.js CHARGÉ !');
+console.log('🔥 FICHIER lead-databases.js CHARGÉ');
 
 const router = express.Router();
-
-// 🧪 ROUTE DE TEST
-router.get('/test', (req, res) => {
-  console.log('✅ Route test appelée !');
-  res.json({ success: true, message: 'Test OK' });
-});
 
 // GET /api/lead-databases - Liste toutes les bases
 router.get('/', authMiddleware, async (req, res) => {
@@ -36,7 +30,7 @@ router.get('/', authMiddleware, async (req, res) => {
       databases: result.rows
     });
   } catch (error) {
-    console.error('Erreur GET /lead-databases:', error);
+    console.error('❌ Erreur GET /lead-databases:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur serveur'
@@ -65,7 +59,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       database: { ...database, leads }
     });
   } catch (error) {
-    console.error('Erreur GET /:id:', error);
+    console.error('❌ Erreur GET /:id:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -78,8 +72,21 @@ router.post('/', authMiddleware, async (req, res) => {
 
     console.log('📊 Création base:', name);
 
-    if (!name) {
+    if (!name || name.trim().length === 0) {
       return res.status(400).json({ success: false, error: 'Nom requis' });
+    }
+
+    // ✅ Vérifier que le nom n'existe pas déjà pour ce tenant
+    const existingDB = await db.query(
+      'SELECT id FROM lead_databases WHERE tenant_id = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2))',
+      [tenant_id, name]
+    );
+
+    if (existingDB.rows.length > 0) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'Une base avec ce nom existe déjà' 
+      });
     }
 
     const query = `
@@ -90,7 +97,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const result = await db.query(query, [
       tenant_id,
-      name,
+      name.trim(),
       description || null,
       source || 'import_csv',
       JSON.stringify(segmentation || {}),
@@ -118,10 +125,30 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { tenant_id } = req.user;
 
+    console.log(`🗑️ Suppression base ${id} pour tenant ${tenant_id}`);
+
+    // Vérifier que la base appartient au tenant
+    const dbCheck = await db.query(
+      'SELECT id FROM lead_databases WHERE id = $1 AND tenant_id = $2',
+      [id, tenant_id]
+    );
+
+    if (dbCheck.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Base introuvable' 
+      });
+    }
+
+    // Supprimer les relations
     await db.query('DELETE FROM lead_database_relations WHERE database_id = $1', [id]);
+    
+    // Supprimer la base
     await db.query('DELETE FROM lead_databases WHERE id = $1 AND tenant_id = $2', [id, tenant_id]);
 
-    res.json({ success: true });
+    console.log(`✅ Base ${id} supprimée`);
+
+    res.json({ success: true, message: 'Base supprimée avec succès' });
   } catch (error) {
     console.error('❌ Erreur DELETE:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -145,5 +172,5 @@ router.patch('/:id/archive', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-export default router;
 
+export default router;

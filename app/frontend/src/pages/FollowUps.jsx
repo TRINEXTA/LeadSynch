@@ -5,6 +5,7 @@ import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
 
 const PRIORITY_COLORS = {
   high: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', badge: 'bg-red-100' },
@@ -23,7 +24,7 @@ const FOLLOWUP_TYPES = [
 
 export default function FollowUps() {
   const { user } = useAuth();
-  const isManager = user?.role === 'admin';
+  const isManager = user?.role === 'admin' || user?.role === 'manager';
   
   const [followups, setFollowups] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -55,9 +56,7 @@ export default function FollowUps() {
   useEffect(() => {
     fetchFollowups();
     fetchLeads();
-    if (isManager) {
-      fetchTeamMembers();
-    }
+    fetchTeamMembers(); // ✅ TOUJOURS charger les utilisateurs
   }, [selectedUser]);
 
   useEffect(() => {
@@ -74,12 +73,8 @@ export default function FollowUps() {
         url += `?user_id=${selectedUser}`;
       }
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
+      const response = await api.get(url);
+      const data = response.data;
       
       if (data.success) {
         setFollowups(data.followups || []);
@@ -93,18 +88,14 @@ export default function FollowUps() {
 
   const fetchLeads = async () => {
     try {
-      const response = await fetch('/leads', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
+      const response = await api.get('/leads');
+      const data = response.data;
       
       if (data.success) {
         // Filtrer les leads assignés au commercial ou tous pour le manager
         const filteredLeads = isManager 
           ? data.leads 
-          : data.leads.filter(lead => lead.assigned_to === user.id);
+          : data.leads.filter(lead => user && lead.assigned_to === user.id);
         setLeads(filteredLeads);
       }
     } catch (error) {
@@ -114,15 +105,11 @@ export default function FollowUps() {
 
   const fetchTeamMembers = async () => {
     try {
-      const response = await fetch('/users', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
+      const response = await api.get('/users');
+      const data = response.data;
       
       if (data.success) {
-        setTeamMembers(data.users.filter(u => u.role === 'commercial'));
+        setTeamMembers(data.users); // Tous les utilisateurs
       }
     } catch (error) {
       console.error('Erreur chargement équipe:', error);
@@ -171,23 +158,16 @@ export default function FollowUps() {
     try {
       const scheduledDateTime = `${newFollowup.scheduled_date}T${newFollowup.scheduled_time || '09:00'}:00`;
       
-      const response = await fetch('/follow-ups', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      const response = await api.post('/follow-ups', {
           lead_id: parseInt(newFollowup.lead_id),
           type: newFollowup.type,
           priority: newFollowup.priority,
           scheduled_date: scheduledDateTime,
           notes: newFollowup.notes,
           title: newFollowup.title
-        })
-      });
+        });
 
-      if (response.ok) {
+      if (response.status === 200 || response.data.success) {
         setShowModal(false);
         setNewFollowup({
           lead_id: '',
@@ -208,14 +188,9 @@ export default function FollowUps() {
 
   const handleComplete = async (id) => {
     try {
-      const response = await fetch(`/follow-ups/${id}/complete`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await api.put(`/follow-ups/${id}/complete`);
 
-      if (response.ok) {
+      if (response.status === 200 || response.data.success) {
         fetchFollowups();
       }
     } catch (error) {
@@ -227,14 +202,14 @@ export default function FollowUps() {
     if (!confirm('Supprimer ce rappel ?')) return;
 
     try {
-      const response = await fetch(`/follow-ups/${id}`, {
+      const response = await api.put(`/follow-ups/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 
-      if (response.ok) {
+      if (response.status === 200 || response.data.success) {
         fetchFollowups();
       }
     } catch (error) {
@@ -247,16 +222,9 @@ export default function FollowUps() {
     if (!newDate) return;
 
     try {
-      const response = await fetch(`/follow-ups/${id}/reschedule`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ scheduled_date: newDate })
-      });
+      const response = await fetch(`/follow-ups/${id}/reschedule`, { scheduled_date: newDate });
 
-      if (response.ok) {
+      if (response.status === 200 || response.data.success) {
         fetchFollowups();
       }
     } catch (error) {
@@ -343,11 +311,11 @@ export default function FollowUps() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <Calendar className="w-8 h-8 text-blue-600" />
-              {isManager ? 'Rappels de l\'équipe' : 'Mes Rappels'}
+              'Mes Rappels'
             </h1>
             <p className="text-gray-600 mt-1">
               {isManager 
-                ? 'Suivez les rappels de vos commerciaux' 
+                ? 'Suivez les rappels de votre équipe' 
                 : 'Gérez vos tâches et rendez-vous à venir'
               }
             </p>
@@ -404,7 +372,7 @@ export default function FollowUps() {
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
                 >
-                  <option value="all"> Tous les commerciaux</option>
+                  <option value="all">📊 Tous les utilisateurs</option>
                   {teamMembers.map(member => (
                     <option key={member.id} value={member.id}>
                       {member.first_name} {member.last_name}
