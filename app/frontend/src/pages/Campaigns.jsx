@@ -216,6 +216,13 @@ export default function Campaigns() {
 
   const getProgressPercentage = (campaign) => {
     if (!campaign.total_leads || campaign.total_leads === 0) return 0;
+    
+    // Pour campagnes phoning: utiliser leads_contacted
+    if (campaign.type === 'phoning' || campaign.campaign_type === 'phone') {
+      return Math.round((campaign.leads_contacted || 0) / campaign.total_leads * 100);
+    }
+    
+    // Pour campagnes email: utiliser sent_count
     return Math.round((campaign.sent_count || 0) / campaign.total_leads * 100);
   };
 
@@ -500,9 +507,13 @@ export default function Campaigns() {
                                 {/* Voir détails */}
                                 <button
                                   onClick={() => {
-                                    setSelectedCampaign(campaign);
-                                    setShowStatsModal(true);
                                     setShowActionMenu(null);
+                                    // Rediriger selon le type de campagne
+                                    if (campaign.type === 'phoning' || campaign.campaign_type === 'phone') {
+                                      navigate(`/CampaignDetailsPhoning?id=${campaign.id}`);
+                                    } else {
+                                      navigate(`/CampaignDetails?id=${campaign.id}`);
+                                    }
                                   }}
                                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700"
                                 >

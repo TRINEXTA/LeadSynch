@@ -9,47 +9,61 @@ router.post('/count-multi', async (req, res) => {
   try {
     const { filters } = req.body; // [{ database_id, sectors: [...] }, ...]
     const tenantId = req.user.tenant_id;
-    
+
     if (!filters || filters.length === 0) {
       return res.json({ success: true, count: 0 });
     }
 
-    let conditions = [];
-    let params = [tenantId];
+    // On construit un OR de blocs (par base), avec jointure sur lead_databases
+    // pour garantir que la base appartient bien au tenant
+    const conditions = [];
+    const params = [tenantId];
     let paramIndex = 2;
 
     for (const filter of filters) {
-      if (!filter.database_id) continue;
-      
-      let condition = `(database_id = $${paramIndex}`;
+      if (!filter?.database_id) continue;
+
+      let condition = `(l.database_id = $${paramIndex}`;
       params.push(filter.database_id);
       paramIndex++;
-      
-      if (filter.sectors && filter.sectors.length > 0) {
-        condition += ` AND sector IN (${filter.sectors.map((s, i) => {
-          params.push(s);
-          return `$${paramIndex++}`;
-        }).join(',')})`;
+
+      if (Array.isArray(filter.sectors) && filter.sectors.length > 0) {
+        const placeholders = filter.sectors.map(() => `$${paramIndex++}`).join(',');
+        condition += ` AND l.sector IN (${placeholders})`;
+        params.push(...filter.sectors);
       }
       
       condition += ')';
       conditions.push(condition);
     }
 
-    const whereClause = conditions.length > 0 
-      ? `tenant_id = $1 AND (${conditions.join(' OR ')})`
-      : `tenant_id = $1`;
+    if (conditions.length === 0) {
+      return res.json({ success: true, count: 0 });
+    }
 
-    const sql = `SELECT COUNT(*) as count FROM leads WHERE ${whereClause}`;
+    const whereOr = conditions.join(' OR ');
+
+    const sql = `
+      SELECT COUNT(*)::int AS count
+      FROM leads l
+      JOIN lead_databases d ON d.id = l.database_id
+      WHERE d.tenant_id = $1
+        AND (${whereOr})
+    `;
+
+    console.log('🔍 SQL:', sql);
+    console.log('🔍 PARAMS:', params);
+
     const { rows } = await query(sql, params);
     
+    console.log('🔍 RÉSULTAT:', rows[0]);
+
     return res.json({ 
       success: true, 
-      count: parseInt(rows[0].count) || 0 
+      count: rows[0]?.count ?? 0 
     });
-    
   } catch (err) {
-    console.error('Erreur count multi:', err);
+    console.error('❌ Erreur count multi:', err);
     return res.status(500).json({ error: err.message });
   }
 });

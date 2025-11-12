@@ -18,6 +18,7 @@ import Users from './pages/Users';
 import Campaigns from './pages/Campaigns';
 import CampaignsManager from './pages/CampaignsManager';
 import CampaignDetails from './pages/CampaignDetails';
+import CampaignDetailsPhoning from './pages/CampaignDetailsPhoning';
 import CampaignAnalytics from './pages/CampaignAnalytics';
 import Pipeline from './pages/Pipeline';
 
@@ -96,6 +97,7 @@ function App() {
             <Route path="/CampaignsManager" element={<CampaignsManager />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/CampaignDetails" element={<CampaignDetails />} />
+            <Route path="/CampaignDetailsPhoning" element={<CampaignDetailsPhoning />} />
             <Route path="/CampaignAnalytics" element={<CampaignAnalytics />} />
             
             <Route path="/EmailTemplates" element={<EmailTemplates />} />

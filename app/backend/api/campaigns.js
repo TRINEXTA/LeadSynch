@@ -712,4 +712,132 @@ router.post('/:id/force-sync', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== GET PHONING STATS ====================
+router.get('/:id/phoning-stats', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+
+    // Vérifier que la campagne existe et appartient au tenant
+    const campaign = await queryOne(
+      'SELECT id, type, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    // Compter le nombre total de leads dans la campagne (via database_id)
+    const totalLeadsResult = await queryOne(
+      `SELECT COUNT(DISTINCT l.id) as total
+       FROM leads l
+       WHERE l.database_id = $1 AND l.tenant_id = $2`,
+      [campaign.database_id, tenantId]
+    );
+
+    // Compter les leads contactés (qui ne sont plus dans cold_call)
+    const contactedLeadsResult = await queryOne(
+      `SELECT COUNT(DISTINCT pl.lead_id) as contacted
+       FROM pipeline_leads pl
+       WHERE pl.campaign_id = $1
+         AND pl.tenant_id = $2
+         AND pl.stage != 'cold_call'`,
+      [campaignId, tenantId]
+    );
+
+    // Compter les meetings obtenus (tres_qualifie, proposition, gagne)
+    const meetingsResult = await queryOne(
+      `SELECT COUNT(DISTINCT pl.lead_id) as meetings
+       FROM pipeline_leads pl
+       WHERE pl.campaign_id = $1
+         AND pl.tenant_id = $2
+         AND pl.stage IN ('tres_qualifie', 'proposition', 'gagne')`,
+      [campaignId, tenantId]
+    );
+
+    const stats = {
+      total_leads: parseInt(totalLeadsResult?.total || 0),
+      leads_contacted: parseInt(contactedLeadsResult?.contacted || 0),
+      meetings_scheduled: parseInt(meetingsResult?.meetings || 0)
+    };
+
+    return res.json({ success: true, stats });
+
+  } catch (error) {
+    console.error('❌ Erreur phoning-stats:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GET COMMERCIALS ====================
+router.get('/:id/commercials', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+
+    // Récupérer les commerciaux avec leurs stats
+    const commercials = await queryAll(
+      `SELECT 
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        ca.leads_assigned,
+        ca.leads_contacted,
+        ca.calls_made,
+        ca.meetings_scheduled,
+        ca.qualified_since_last_refill
+      FROM campaign_assignments ca
+      JOIN users u ON u.id = ca.user_id
+      WHERE ca.campaign_id = $1 AND ca.tenant_id = $2
+      ORDER BY u.first_name, u.last_name`,
+      [campaignId, tenantId]
+    );
+
+    return res.json({ success: true, commercials });
+
+  } catch (error) {
+    console.error('❌ Erreur commercials:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GET PIPELINE STATS ====================
+router.get('/:id/pipeline-stats', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+
+    // Récupérer la répartition par stage
+    const pipeline = await queryAll(
+      `SELECT 
+        pl.stage,
+        COUNT(*) as count
+      FROM pipeline_leads pl
+      WHERE pl.campaign_id = $1 AND pl.tenant_id = $2
+      GROUP BY pl.stage
+      ORDER BY 
+        CASE pl.stage
+          WHEN 'cold_call' THEN 1
+          WHEN 'nrp' THEN 2
+          WHEN 'qualifie' THEN 3
+          WHEN 'relancer' THEN 4
+          WHEN 'tres_qualifie' THEN 5
+          WHEN 'proposition' THEN 6
+          WHEN 'gagne' THEN 7
+          WHEN 'hors_scope' THEN 8
+          ELSE 9
+        END`,
+      [campaignId, tenantId]
+    );
+
+    return res.json({ success: true, pipeline });
+
+  } catch (error) {
+    console.error('❌ Erreur pipeline-stats:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

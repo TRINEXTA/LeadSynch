@@ -200,28 +200,42 @@ export default function CampaignsManager() {
     setSelectedSectors({ ...selectedSectors, [dbId]: newSectors });
   };
 
-  const calculateLeadsCount = async () => {
-    if (selectedDatabases.length === 0) {
-      setLeadsCount(0);
-      return;
-    }
+const calculateLeadsCount = async () => {
+  if (selectedDatabases.length === 0) {
+    setLeadsCount(0);
+    return;
+  }
 
-    setLoadingLeads(true);
-    try {
-      const filters = selectedDatabases.map(dbId => ({
+  setLoadingLeads(true);
+  
+  try {
+    const filters = selectedDatabases.map(dbId => {
+      const sectors = selectedSectors[dbId] || [];
+      
+      return {
         database_id: dbId,
-        sectors: selectedSectors[dbId] || []
-      }));
+        sectors: sectors.length > 0 ? sectors : undefined
+      };
+    });
 
-      const response = await api.post('/leads-count-multi/count-multi', { filters });
-      setLeadsCount(response.data.count || 0);
-    } catch (error) {
-      console.error('Erreur count:', error);
-      setLeadsCount(0);
-    } finally {
-      setLoadingLeads(false);
-    }
-  };
+    console.log('📊 Comptage leads avec filtres:', filters);
+
+    const response = await api.post('/leads-count-multi/count-multi', { filters });
+    
+    console.log('✅ Réponse count:', response.data);
+    
+    const totalCount = response.data.count || 0;  // ✅ Utilise "count" comme le backend envoie
+    setLeadsCount(totalCount);
+    
+    console.log('🎯 Total leads:', totalCount);
+    
+  } catch (error) {
+    console.error('❌ Erreur comptage leads:', error);
+    setLeadsCount(0);
+  } finally {
+    setLoadingLeads(false);
+  }
+};
 
   const calculateEstimatedDuration = () => {
     if (leadsCount === 0 || formData.emails_per_cycle === 0) {

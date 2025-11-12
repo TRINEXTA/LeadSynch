@@ -57,6 +57,275 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // =============================
+// 🆕 FONCTION INTERNE : Auto-refill intelligent
+// Maintient le pipeline à ~50 leads par commercial
+// =============================
+async function smartRefill(campaign_id, user_id, tenant_id) {
+  try {
+    const TARGET_SIZE = 50;
+    
+    console.log(`🔄 [SMART-REFILL] Vérification pour user ${user_id} campagne ${campaign_id}`);
+
+    // 1. Récupérer le compteur de qualifications
+    const { rows: assignmentRows } = await q(
+      `SELECT qualified_since_last_refill, leads_assigned 
+       FROM campaign_assignments 
+       WHERE campaign_id = $1 AND user_id = $2`,
+      [campaign_id, user_id]
+    );
+
+    if (!assignmentRows.length) {
+      console.log(`⚠️ Aucun assignment trouvé pour user ${user_id}`);
+      return { success: false, message: 'Assignment non trouvé' };
+    }
+
+    const qualifiedCount = assignmentRows[0].qualified_since_last_refill || 0;
+    
+    // 2. Compter les leads actifs dans le pipeline (cold_call uniquement)
+    const { rows: activeRows } = await q(
+      `SELECT COUNT(*) as count
+       FROM pipeline_leads
+       WHERE campaign_id = $1 
+         AND assigned_user_id = $2
+         AND stage = 'cold_call'`,
+      [campaign_id, user_id]
+    );
+
+    const activeColdCallCount = parseInt(activeRows[0]?.count || 0);
+    
+    console.log(`📊 User ${user_id}: ${qualifiedCount} qualifiés, ${activeColdCallCount} leads en Cold Call`);
+
+    // 3. Si moins de 10 qualifications, ne rien faire
+    if (qualifiedCount < 10) {
+      console.log(`⏳ Pas assez de qualifications (${qualifiedCount}/10)`);
+      return { success: true, message: 'Pas encore 10 qualifications', deployed: 0 };
+    }
+
+    // 4. Calculer combien de leads envoyer
+    // Formule: (qualifiedCount - activeColdCallCount) mais max 50
+    const needed = Math.min(TARGET_SIZE, Math.max(0, qualifiedCount - activeColdCallCount));
+
+    if (needed === 0) {
+      console.log(`✅ Pipeline déjà plein (${activeColdCallCount} leads)`);
+      // Reset le compteur même si on n'envoie rien
+      await q(
+        `UPDATE campaign_assignments 
+         SET qualified_since_last_refill = 0
+         WHERE campaign_id = $1 AND user_id = $2`,
+        [campaign_id, user_id]
+      );
+      return { success: true, message: 'Pipeline plein', deployed: 0 };
+    }
+
+    console.log(`🎯 Besoin d'envoyer ${needed} nouveaux leads`);
+
+    // 5. Récupérer la campagne
+    const { rows: campRows } = await q(
+      `SELECT id, database_id FROM campaigns WHERE id = $1`,
+      [campaign_id]
+    );
+
+    if (!campRows.length) {
+      return { success: false, message: 'Campagne introuvable' };
+    }
+
+    const campaign = campRows[0];
+
+    // 6. Trouver des leads en attente pour ce commercial
+    const { rows: candidates } = await q(
+      `SELECT l.id AS lead_id
+       FROM leads l
+       WHERE l.tenant_id = $1
+         AND l.database_id = $2
+         AND l.assigned_to = $3
+         AND NOT EXISTS (
+           SELECT 1 FROM pipeline_leads pl
+           WHERE pl.lead_id = l.id AND pl.campaign_id = $4
+         )
+       ORDER BY COALESCE(l.updated_at, l.created_at) ASC
+       LIMIT $5`,
+      [tenant_id, campaign.database_id, user_id, campaign_id, needed]
+    );
+
+    if (!candidates.length) {
+      console.log(`⚠️ Plus de leads disponibles pour user ${user_id}`);
+      // Reset le compteur même si plus de leads
+      await q(
+        `UPDATE campaign_assignments 
+         SET qualified_since_last_refill = 0
+         WHERE campaign_id = $1 AND user_id = $2`,
+        [campaign_id, user_id]
+      );
+      return { success: true, message: 'Plus de leads disponibles', deployed: 0 };
+    }
+
+    // 7. Insérer dans le pipeline
+    let deployed = 0;
+    for (const row of candidates) {
+      try {
+        await q(
+          `INSERT INTO pipeline_leads 
+           (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+           ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+          [tenant_id, row.lead_id, campaign_id, user_id]
+        );
+        deployed++;
+      } catch (err) {
+        console.error('Erreur insertion lead:', err);
+      }
+    }
+
+    // 8. Reset le compteur de qualifications
+    await q(
+      `UPDATE campaign_assignments 
+       SET qualified_since_last_refill = 0,
+           leads_assigned = leads_assigned + $1
+       WHERE campaign_id = $2 AND user_id = $3`,
+      [deployed, campaign_id, user_id]
+    );
+
+    console.log(`✅ [SMART-REFILL] ${deployed} leads ajoutés au pipeline de user ${user_id}`);
+
+    return { 
+      success: true, 
+      deployed,
+      message: `${deployed} nouveaux leads ajoutés`
+    };
+
+  } catch (error) {
+    console.error('❌ [SMART-REFILL] Erreur:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// =============================
+// POST /pipeline-leads/auto-refill
+// Vérifie et réapprovisionne automatiquement chaque commercial à 50 leads
+// =============================
+router.post('/auto-refill', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { campaign_id } = req.body;
+    const TARGET_SIZE = 50;
+    const MIN_THRESHOLD = 10;
+
+    if (!campaign_id) {
+      return res.status(400).json({ error: 'campaign_id requis' });
+    }
+
+    // 1) Récupérer la campagne
+    const { rows: campRows } = await q(
+      `SELECT id, tenant_id, type, database_id, assigned_users
+       FROM campaigns
+       WHERE id = $1 AND tenant_id = $2`,
+      [campaign_id, tenantId]
+    );
+    const campaign = campRows[0];
+    if (!campaign || campaign.type === 'email') {
+      return res.json({ success: true, message: 'Campagne non éligible', refilled: 0 });
+    }
+
+    // 2) Liste des commerciaux
+    const { rows: userRows } = await q(
+      `SELECT DISTINCT l.assigned_to as user_id
+       FROM leads l
+       WHERE l.tenant_id = $1
+         AND l.database_id = $2
+         AND l.assigned_to IS NOT NULL`,
+      [tenantId, campaign.database_id]
+    );
+    
+    const assignedUsers = userRows.map(r => r.user_id).filter(Boolean);
+
+    if (!assignedUsers.length) {
+      return res.json({ success: true, message: 'Aucun commercial affecté', refilled: 0 });
+    }
+    
+    console.log(`👥 Commerciaux trouvés: ${assignedUsers.length}`, assignedUsers);
+
+    // 3) Pour chaque commercial, vérifier combien de leads actifs il a
+    const refillResults = {};
+    let totalRefilled = 0;
+
+    for (const userId of assignedUsers) {
+      // Compter les leads actuellement actifs dans le pipeline (cold_call uniquement)
+      const { rows: activeRows } = await q(
+        `SELECT COUNT(*) as count
+         FROM pipeline_leads pl
+         WHERE pl.campaign_id = $1
+           AND pl.assigned_user_id = $2
+           AND pl.stage = 'cold_call'`,
+        [campaign_id, userId]
+      );
+      
+      const activeCount = parseInt(activeRows[0]?.count || 0);
+      
+      // Si moins de MIN_THRESHOLD, réapprovisionner jusqu'à TARGET_SIZE
+      if (activeCount < MIN_THRESHOLD) {
+        const needed = TARGET_SIZE - activeCount;
+        
+        // Trouver des leads en attente pour ce commercial
+        const { rows: candidates } = await q(
+          `SELECT l.id AS lead_id
+           FROM leads l
+           WHERE l.tenant_id = $1
+             AND l.database_id = $2
+             AND l.assigned_to = $3
+             AND NOT EXISTS (
+               SELECT 1 FROM pipeline_leads pl
+               WHERE pl.lead_id = l.id AND pl.campaign_id = $4
+             )
+           ORDER BY COALESCE(l.updated_at, l.created_at) ASC
+           LIMIT $5`,
+          [tenantId, campaign.database_id, userId, campaign_id, needed]
+        );
+
+        // Insérer dans le pipeline
+        let deployed = 0;
+        for (const row of candidates) {
+          try {
+            await q(
+              `INSERT INTO pipeline_leads 
+               (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+              [tenantId, row.lead_id, campaign_id, userId]
+            );
+            deployed++;
+          } catch (err) {
+            console.error('Erreur insertion lead:', err);
+          }
+        }
+
+        refillResults[userId] = {
+          before: activeCount,
+          added: deployed,
+          after: activeCount + deployed
+        };
+        totalRefilled += deployed;
+      } else {
+        refillResults[userId] = {
+          before: activeCount,
+          added: 0,
+          after: activeCount
+        };
+      }
+    }
+
+    console.log(`🔄 Auto-refill campagne ${campaign_id}: ${totalRefilled} leads ajoutés`);
+    return res.json({
+      success: true,
+      refilled: totalRefilled,
+      per_user: refillResults
+    });
+  } catch (err) {
+    console.error('❌ auto-refill:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================
 // POST /pipeline-leads/deploy-batch
 // body: { campaign_id: uuid, size?: number }
 // Déploie "size" leads par commercial dans la colonne cold_call
@@ -65,7 +334,7 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const { campaign_id, size } = req.body;
-    const SIZE = Number(size || 20);
+    const SIZE = Number(size || 50); // Par défaut 50 leads
 
     if (!campaign_id) {
       return res.status(400).json({ error: 'campaign_id requis' });
@@ -95,7 +364,7 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
     } catch { assignedUsers = []; }
 
     if (!assignedUsers.length) {
-      // Fallback: commerciaux trouvés via leads déjà assignés sur la base de la campagne
+      // Fallback: commerciaux trouvés via leads déjà assignés
       const { rows: userRows } = await q(
         `SELECT DISTINCT l.assigned_to AS uid
            FROM leads l
@@ -112,93 +381,65 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Aucun commercial affecté à cette campagne' });
     }
 
-    // 2) Candidats "en attente" (non encore dans pipeline pour cette campagne), par commercial
-    //    -> on prend jusqu'à SIZE par commercial, de façon équitable
-    const { rows: candidates } = await q(
-      `
-      WITH waiting AS (
-        SELECT
-          l.id AS lead_id,
-          l.assigned_to,
-          ROW_NUMBER() OVER (
-            PARTITION BY l.assigned_to
-            ORDER BY COALESCE(l.updated_at, l.created_at) ASC, l.id
-          ) AS rn
-        FROM leads l
-        JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-        WHERE l.tenant_id = $1
-          AND ldr.database_id = $2
-          AND l.assigned_to = ANY($3::uuid[])
-          AND NOT EXISTS (
-            SELECT 1
-            FROM pipeline_leads pl
-            WHERE pl.lead_id = l.id
-              AND pl.campaign_id = $4
-          )
-      )
-      SELECT lead_id, assigned_to
-      FROM waiting
-      WHERE rn <= $5
-      ORDER BY assigned_to, rn
-      `,
-      [tenantId, campaign.database_id, assignedUsers, campaign_id, SIZE]
-    );
+    console.log(`📦 Déploiement de ${SIZE} leads pour ${assignedUsers.length} commerciaux`);
 
-    if (!candidates.length) {
-      return res.json({
-        success: true,
-        message: 'Aucun lead à déployer (tous les leads affectés sont déjà dans le pipeline)',
-        deployed: 0,
-        per_user: {}
-      });
-    }
+    // 2) Pour chaque commercial, déployer SIZE leads
+    let totalDeployed = 0;
+    const perUser = {};
 
-    // 3) Transaction d'insertion / upsert
-    await q('BEGIN');
+    for (const userId of assignedUsers) {
+      // Trouver des leads en attente
+      const { rows: candidates } = await q(
+        `SELECT l.id AS lead_id
+         FROM leads l
+         WHERE l.tenant_id = $1
+           AND l.database_id = $2
+           AND l.assigned_to = $3
+           AND NOT EXISTS (
+             SELECT 1 FROM pipeline_leads pl
+             WHERE pl.lead_id = l.id AND pl.campaign_id = $4
+           )
+         ORDER BY COALESCE(l.updated_at, l.created_at) ASC
+         LIMIT $5`,
+        [tenantId, campaign.database_id, userId, campaign_id, SIZE]
+      );
 
-    // résumé par commercial
-    const perUser = new Map(assignedUsers.map(u => [u, 0]));
-    let deployed = 0;
-
-    try {
+      // Insérer dans le pipeline
+      let deployed = 0;
       for (const row of candidates) {
-        const userId = row.assigned_to;
-        // upsert : remet le stage à cold_call et inscrit le commercial
-        const resIns = await q(
-          `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-           ON CONFLICT (lead_id, campaign_id)
-           DO UPDATE SET
-             stage = EXCLUDED.stage,
-             assigned_user_id = EXCLUDED.assigned_user_id,
-             updated_at = NOW()`,
-          [tenantId, row.lead_id, campaign_id, userId]
-        );
-
-        if (resIns.rowCount > 0) {
-          perUser.set(userId, (perUser.get(userId) || 0) + 1);
+        try {
+          await q(
+            `INSERT INTO pipeline_leads 
+             (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+             ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+            [tenantId, row.lead_id, campaign_id, userId]
+          );
           deployed++;
+        } catch (err) {
+          console.error('Erreur insertion lead:', err);
         }
       }
 
-      await q('COMMIT');
-    } catch (err) {
-      await q('ROLLBACK');
-      throw err;
+      perUser[userId] = deployed;
+      totalDeployed += deployed;
+
+      // Mettre à jour leads_assigned dans campaign_assignments
+      await q(
+        `UPDATE campaign_assignments 
+         SET leads_assigned = leads_assigned + $1
+         WHERE campaign_id = $2 AND user_id = $3`,
+        [deployed, campaign_id, userId]
+      );
     }
 
-    // 4) Réponse
-    const per_user = {};
-    for (const [k, v] of perUser.entries()) per_user[k] = v;
-
-    console.log(`🧩 Déploiement campagne ${campaign_id}: ${deployed} leads injectés (cold_call)`);
+    console.log(`🧩 Déploiement campagne ${campaign_id}: ${totalDeployed} leads injectés (cold_call)`);
     return res.json({
       success: true,
-      deployed,
-      per_user
+      deployed: totalDeployed,
+      per_user: perUser
     });
   } catch (err) {
-    try { await q('ROLLBACK'); } catch {}
     console.error('❌ deploy-batch:', err);
     return res.status(500).json({ error: err.message });
   }
@@ -207,6 +448,7 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
 // =============================
 // POST /pipeline-leads/:id/qualify
 // Qualifier un lead et mettre à jour son stage
+// 🆕 AVEC AUTO-REFILL AUTOMATIQUE
 // =============================
 router.post('/:id/qualify', authenticateToken, async (req, res) => {
   try {
@@ -245,7 +487,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 
     const newStage = stageMapping[qualification] || 'cold_call';
 
-    // 1. Récupérer le lead pipeline actuel pour avoir l'ancien stage
+    // 1. Récupérer le lead pipeline actuel
     const { rows: currentRows } = await q(
       `SELECT * FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
@@ -257,8 +499,34 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 
     const pipelineLead = currentRows[0];
     const oldStage = pipelineLead.stage;
+    const campaignId = pipelineLead.campaign_id;
+    const assignedUserId = pipelineLead.assigned_user_id;
 
-    // 2. Mettre à jour le stage dans pipeline_leads
+    // 🆕 2. Incrémenter le compteur si le lead sort de "cold_call"
+    let shouldTriggerRefill = false;
+    if (oldStage === 'cold_call' && newStage !== 'cold_call') {
+      console.log(`📊 Lead qualifié: ${oldStage} → ${newStage}`);
+      
+      // Incrémenter qualified_since_last_refill
+      const { rows: updateRows } = await q(
+        `UPDATE campaign_assignments 
+         SET qualified_since_last_refill = qualified_since_last_refill + 1,
+             leads_contacted = leads_contacted + 1
+         WHERE campaign_id = $1 AND user_id = $2
+         RETURNING qualified_since_last_refill`,
+        [campaignId, assignedUserId]
+      );
+
+      const qualifiedCount = updateRows[0]?.qualified_since_last_refill || 0;
+      console.log(`🔢 Compteur qualification: ${qualifiedCount}/10`);
+
+      // Si on atteint 10, déclencher le refill
+      if (qualifiedCount >= 10) {
+        shouldTriggerRefill = true;
+      }
+    }
+
+    // 3. Mettre à jour le stage dans pipeline_leads
     const { rows } = await q(
       `UPDATE pipeline_leads 
        SET stage = $1, updated_at = NOW()
@@ -267,7 +535,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       [newStage, id, tenantId]
     );
 
-    // 3. Mettre à jour aussi le lead dans la table leads
+    // 4. Mettre à jour aussi le lead dans la table leads
     if (pipelineLead.lead_id) {
       await q(
         `UPDATE leads 
@@ -281,7 +549,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       );
     }
 
-    // 4. 🆕 SAUVEGARDER L'HISTORIQUE dans lead_call_history
+    // 5. Sauvegarder l'historique
     if (notes && notes.trim()) {
       await q(
         `INSERT INTO lead_call_history 
@@ -293,7 +561,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
           tenantId,
           pipelineLead.lead_id,
           pipelineLead.id,
-          pipelineLead.campaign_id,
+          campaignId,
           oldStage,
           newStage,
           qualification,
@@ -307,14 +575,13 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       );
     }
 
-    // 5. 🆕 CRÉER UN FOLLOW-UP si date de rappel renseignée
+    // 6. Créer un follow-up si date de rappel renseignée
     if (scheduled_date || follow_up_date) {
       const followUpDate = scheduled_date || follow_up_date;
       const followUpType = qualification === 'callback' || qualification === 'a_relancer' ? 'call' : 'meeting';
       const followUpTitle = `Rappel: ${qualification}`;
       
       try {
-        // ✅ Récupérer le VRAI lead UUID depuis la table leads
         const { rows: leadRows } = await q(
           'SELECT id FROM leads WHERE id = $1 AND tenant_id = $2',
           [pipelineLead.lead_id, tenantId]
@@ -330,7 +597,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
              ON CONFLICT DO NOTHING`,
             [
               tenantId,
-              realLeadId, // ✅ Utiliser le vrai UUID
+              realLeadId,
               userId,
               followUpType,
               newStage === 'tres_qualifie' ? 'high' : newStage === 'qualifie' ? 'medium' : 'low',
@@ -339,18 +606,29 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
               followUpDate
             ]
           );
-          console.log(`📅 Follow-up créé automatiquement pour lead ${realLeadId}`);
-        } else {
-          console.warn(`⚠️ Lead introuvable: ${pipelineLead.lead_id}`);
+          console.log(`📅 Follow-up créé pour lead ${realLeadId}`);
         }
       } catch (followUpError) {
         console.warn('⚠️ Erreur création follow-up:', followUpError.message);
       }
     }
 
-    console.log(`✅ Lead ${id} qualifié: ${qualification} → stage: ${oldStage} → ${newStage}`);
+    // 🆕 7. DÉCLENCHER LE REFILL AUTOMATIQUE SI NÉCESSAIRE
+    let refillResult = null;
+    if (shouldTriggerRefill && campaignId && assignedUserId) {
+      console.log(`🚀 Déclenchement auto-refill pour user ${assignedUserId}`);
+      refillResult = await smartRefill(campaignId, assignedUserId, tenantId);
+    }
 
-    return res.json({ success: true, lead: rows[0], oldStage, newStage });
+    console.log(`✅ Lead ${id} qualifié: ${qualification} → ${oldStage} → ${newStage}`);
+
+    return res.json({ 
+      success: true, 
+      lead: rows[0], 
+      oldStage, 
+      newStage,
+      refill: refillResult // Info sur le refill si déclenché
+    });
 
   } catch (error) {
     console.error('❌ Erreur qualification:', error);
@@ -361,6 +639,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 // =============================
 // PATCH /pipeline-leads/:id
 // Met à jour le stage d'un lead dans le pipeline
+// 🆕 AVEC AUTO-REFILL AUTOMATIQUE pour maintenir 50 leads
 // =============================
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
@@ -372,6 +651,22 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'stage requis' });
     }
 
+    // 1. Récupérer l'ancien stage avant modification
+    const { rows: beforeRows } = await q(
+      `SELECT stage, campaign_id, assigned_user_id FROM pipeline_leads 
+       WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+
+    if (!beforeRows.length) {
+      return res.status(404).json({ error: 'Lead pipeline non trouvé' });
+    }
+
+    const oldStage = beforeRows[0].stage;
+    const campaignId = beforeRows[0].campaign_id;
+    const assignedUserId = beforeRows[0].assigned_user_id;
+
+    // 2. Mettre à jour le stage
     const { rows } = await q(
       `UPDATE pipeline_leads 
        SET stage = $1, updated_at = NOW()
@@ -380,11 +675,99 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       [stage, id, tenantId]
     );
 
-    if (!rows.length) {
-      return res.status(404).json({ error: 'Lead pipeline non trouvé' });
+    console.log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
+
+    // 🆕 3. Si le lead sort de "cold_call", vérifier et remplir automatiquement
+    let refillResult = null;
+    if (oldStage === 'cold_call' && stage !== 'cold_call' && campaignId && assignedUserId) {
+      console.log(`🔍 Lead sorti de Cold Call, vérification du pipeline...`);
+      
+      // Compter les leads restants dans Cold Call pour cet utilisateur
+      const { rows: countRows } = await q(
+        `SELECT COUNT(*) as count
+         FROM pipeline_leads
+         WHERE campaign_id = $1 
+           AND assigned_user_id = $2
+           AND stage = 'cold_call'`,
+        [campaignId, assignedUserId]
+      );
+
+      const coldCallCount = parseInt(countRows[0]?.count || 0);
+      console.log(`📊 Leads restants dans Cold Call: ${coldCallCount}/50`);
+
+      // Si moins de 50, déclencher le refill
+      if (coldCallCount < 50) {
+        const needed = 50 - coldCallCount;
+        console.log(`🚀 Auto-refill déclenché: besoin de ${needed} leads`);
+        
+        // Récupérer la campagne pour le database_id
+        const { rows: campRows } = await q(
+          `SELECT database_id FROM campaigns WHERE id = $1`,
+          [campaignId]
+        );
+
+        if (campRows.length > 0) {
+          const databaseId = campRows[0].database_id;
+
+          // Trouver des leads en attente
+          const { rows: candidates } = await q(
+            `SELECT l.id AS lead_id
+             FROM leads l
+             WHERE l.tenant_id = $1
+               AND l.database_id = $2
+               AND l.assigned_to = $3
+               AND NOT EXISTS (
+                 SELECT 1 FROM pipeline_leads pl
+                 WHERE pl.lead_id = l.id AND pl.campaign_id = $4
+               )
+             ORDER BY COALESCE(l.updated_at, l.created_at) ASC
+             LIMIT $5`,
+            [tenantId, databaseId, assignedUserId, campaignId, needed]
+          );
+
+          // Insérer dans le pipeline
+          let deployed = 0;
+          for (const row of candidates) {
+            try {
+              await q(
+                `INSERT INTO pipeline_leads 
+                 (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+                 ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+                [tenantId, row.lead_id, campaignId, assignedUserId]
+              );
+              deployed++;
+            } catch (err) {
+              console.error('Erreur insertion lead:', err);
+            }
+          }
+
+          // Mettre à jour leads_assigned
+          if (deployed > 0) {
+            await q(
+              `UPDATE campaign_assignments 
+               SET leads_assigned = leads_assigned + $1
+               WHERE campaign_id = $2 AND user_id = $3`,
+              [deployed, campaignId, assignedUserId]
+            );
+          }
+
+          refillResult = {
+            success: true,
+            deployed,
+            message: `${deployed} nouveaux leads ajoutés automatiquement`
+          };
+
+          console.log(`✅ [AUTO-REFILL] ${deployed} leads ajoutés au pipeline`);
+        }
+      }
     }
 
-    return res.json({ success: true, lead: rows[0] });
+    return res.json({ 
+      success: true, 
+      lead: rows[0],
+      refill: refillResult
+    });
 
   } catch (error) {
     console.error('❌ Erreur PATCH pipeline-lead:', error);
