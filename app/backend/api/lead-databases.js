@@ -1,175 +1,175 @@
 ﻿import express from 'express';
+import authenticateToken from '../middleware/auth.js';
 import db from '../config/db.js';
-import { authMiddleware } from '../middleware/auth.js';
-import leadPoolManager from '../services/leadPoolManager.js';
+
+const router = express.Router();
+const q = (text, params=[]) => db.query(text, params);
 
 console.log('🔥 FICHIER lead-databases.js CHARGÉ');
 
-const router = express.Router();
-
-// GET /api/lead-databases - Liste toutes les bases
-router.get('/', authMiddleware, async (req, res) => {
+// GET /lead-databases - Liste toutes les bases
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { tenant_id } = req.user;
+    const tenantId = req.user?.tenant_id;
 
-    const query = `
-      SELECT 
+    const { rows } = await q(
+      `SELECT 
         ld.*,
-        COUNT(DISTINCT ldr.lead_id) as total_leads
-      FROM lead_databases ld
-      LEFT JOIN lead_database_relations ldr ON ld.id = ldr.database_id
-      WHERE ld.tenant_id = $1
-      GROUP BY ld.id
-      ORDER BY ld.created_at DESC
-    `;
-
-    const result = await db.query(query, [tenant_id]);
-
-    res.json({
-      success: true,
-      databases: result.rows
-    });
-  } catch (error) {
-    console.error('❌ Erreur GET /lead-databases:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur serveur'
-    });
-  }
-});
-
-// GET /api/lead-databases/:id - Détails d'une base
-router.get('/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { tenant_id } = req.user;
-
-    const dbQuery = `SELECT * FROM lead_databases WHERE id = $1 AND tenant_id = $2`;
-    const dbResult = await db.query(dbQuery, [id, tenant_id]);
-
-    if (dbResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Base introuvable' });
-    }
-
-    const database = dbResult.rows[0];
-    const leads = await leadPoolManager.getDatabaseLeads(id, tenant_id);
-
-    res.json({
-      success: true,
-      database: { ...database, leads }
-    });
-  } catch (error) {
-    console.error('❌ Erreur GET /:id:', error);
-    res.status(500).json({ success: false, error: 'Erreur serveur' });
-  }
-});
-
-// POST /api/lead-databases - Créer une nouvelle base
-router.post('/', authMiddleware, async (req, res) => {
-  try {
-    const { tenant_id, id: user_id } = req.user;
-    const { name, description, source, segmentation } = req.body;
-
-    console.log('📊 Création base:', name);
-
-    if (!name || name.trim().length === 0) {
-      return res.status(400).json({ success: false, error: 'Nom requis' });
-    }
-
-    // ✅ Vérifier que le nom n'existe pas déjà pour ce tenant
-    const existingDB = await db.query(
-      'SELECT id FROM lead_databases WHERE tenant_id = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2))',
-      [tenant_id, name]
+        (SELECT COUNT(*) FROM lead_database_relations ldr WHERE ldr.database_id = ld.id) as lead_count
+       FROM lead_databases ld
+       WHERE ld.tenant_id = $1
+       ORDER BY ld.created_at DESC`,
+      [tenantId]
     );
 
-    if (existingDB.rows.length > 0) {
-      return res.status(409).json({ 
-        success: false, 
-        error: 'Une base avec ce nom existe déjà' 
-      });
-    }
-
-    const query = `
-      INSERT INTO lead_databases (tenant_id, name, description, source, segmentation, created_by, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-      RETURNING *
-    `;
-
-    const result = await db.query(query, [
-      tenant_id,
-      name.trim(),
-      description || null,
-      source || 'import_csv',
-      JSON.stringify(segmentation || {}),
-      user_id
-    ]);
-
-    console.log('✅ Base créée:', result.rows[0].id);
-
-    res.json({
-      success: true,
-      database: result.rows[0]
-    });
+    return res.json({ success: true, databases: rows });
   } catch (error) {
-    console.error('❌ Erreur POST /lead-databases:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    console.error('❌ Erreur GET lead-databases:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
-// DELETE /api/lead-databases/:id - Supprimer une base
-router.delete('/:id', authMiddleware, async (req, res) => {
+// GET /lead-databases/:id - Détails d'une base
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    const tenantId = req.user?.tenant_id;
     const { id } = req.params;
-    const { tenant_id } = req.user;
 
-    console.log(`🗑️ Suppression base ${id} pour tenant ${tenant_id}`);
-
-    // Vérifier que la base appartient au tenant
-    const dbCheck = await db.query(
-      'SELECT id FROM lead_databases WHERE id = $1 AND tenant_id = $2',
-      [id, tenant_id]
+    const { rows } = await q(
+      `SELECT 
+        ld.*,
+        (SELECT COUNT(*) FROM lead_database_relations ldr WHERE ldr.database_id = ld.id) as lead_count
+       FROM lead_databases ld
+       WHERE ld.id = $1 AND ld.tenant_id = $2`,
+      [id, tenantId]
     );
 
-    if (dbCheck.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Base introuvable' 
-      });
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    // Supprimer les relations
-    await db.query('DELETE FROM lead_database_relations WHERE database_id = $1', [id]);
-    
-    // Supprimer la base
-    await db.query('DELETE FROM lead_databases WHERE id = $1 AND tenant_id = $2', [id, tenant_id]);
-
-    console.log(`✅ Base ${id} supprimée`);
-
-    res.json({ success: true, message: 'Base supprimée avec succès' });
+    return res.json({ success: true, database: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur DELETE:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Erreur GET lead-database:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
-// PATCH /api/lead-databases/:id/archive - Archiver une base
-router.patch('/:id/archive', authMiddleware, async (req, res) => {
+// 🆕 GET /lead-databases/:id/sectors - Liste des secteurs avec comptage
+router.get('/:id/sectors', authenticateToken, async (req, res) => {
   try {
+    const tenantId = req.user?.tenant_id;
     const { id } = req.params;
-    const { tenant_id } = req.user;
 
-    await db.query(
-      'UPDATE lead_databases SET archived = true, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
-      [id, tenant_id]
+    console.log(`📊 Récupération secteurs pour base ${id}`);
+
+    const { rows } = await q(
+      `SELECT 
+        l.sector,
+        COUNT(*) as lead_count
+       FROM leads l
+       JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+       WHERE ldr.database_id = $1 
+         AND l.tenant_id = $2
+         AND l.sector IS NOT NULL
+         AND l.sector != ''
+       GROUP BY l.sector
+       ORDER BY lead_count DESC`,
+      [id, tenantId]
     );
 
-    res.json({ success: true });
+    console.log(`✅ ${rows.length} secteurs trouvés`);
+
+    return res.json({ 
+      success: true, 
+      sectors: rows,
+      total: rows.reduce((sum, s) => sum + parseInt(s.lead_count), 0)
+    });
   } catch (error) {
-    console.error('❌ Erreur ARCHIVE:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Erreur GET sectors:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /lead-databases - Créer une nouvelle base
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const { name, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Nom requis' });
+    }
+
+    const { rows } = await q(
+      `INSERT INTO lead_databases (tenant_id, name, description, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       RETURNING *`,
+      [tenantId, name, description || null, userId]
+    );
+
+    console.log('✅ Base créée:', rows[0].id);
+    return res.status(201).json({ success: true, database: rows[0] });
+  } catch (error) {
+    console.error('❌ Erreur POST lead-database:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /lead-databases/:id - Modifier une base
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { id } = req.params;
+    const { name, description } = req.body;
+
+    const { rows } = await q(
+      `UPDATE lead_databases 
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           updated_at = NOW()
+       WHERE id = $3 AND tenant_id = $4
+       RETURNING *`,
+      [name, description, id, tenantId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
+    }
+
+    console.log('✅ Base mise à jour:', id);
+    return res.json({ success: true, database: rows[0] });
+  } catch (error) {
+    console.error('❌ Erreur PUT lead-database:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /lead-databases/:id - Supprimer une base
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { id } = req.params;
+
+    // Supprimer d'abord les relations
+    await q('DELETE FROM lead_database_relations WHERE database_id = $1', [id]);
+
+    // Puis la base
+    const { rows } = await q(
+      'DELETE FROM lead_databases WHERE id = $1 AND tenant_id = $2 RETURNING id',
+      [id, tenantId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
+    }
+
+    console.log('✅ Base supprimée:', id);
+    return res.json({ success: true, message: 'Base supprimée' });
+  } catch (error) {
+    console.error('❌ Erreur DELETE lead-database:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 

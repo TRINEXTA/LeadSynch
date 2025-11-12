@@ -665,19 +665,19 @@ export default function CampaignsManager() {
 
                     {selectedDatabases.includes(db.id) && databaseSectors[db.id] && databaseSectors[db.id].length > 0 && (
                       <div className="ml-8 mt-3 flex flex-wrap gap-2">
-                        {databaseSectors[db.id].map(sector => (
-                          <button
-                            key={sector}
-                            onClick={() => handleSectorToggle(db.id, sector)}
-                            className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
-                              (selectedSectors[db.id] || []).includes(sector)
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {sector}
-                          </button>
-                        ))}
+                        {databaseSectors[db.id].map((sectorObj, index) => (
+  <button
+    key={index}
+    onClick={() => handleSectorToggle(db.id, sectorObj.sector)}
+    className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
+      (selectedSectors[db.id] || []).includes(sectorObj.sector)
+        ? 'bg-purple-600 text-white'
+        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }`}
+  >
+    {sectorObj.sector} ({sectorObj.lead_count})  {/* ✅ CORRECTION ICI */}
+  </button>
+))}
                       </div>
                     )}
                   </div>
