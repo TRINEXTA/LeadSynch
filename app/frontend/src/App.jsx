@@ -72,6 +72,7 @@ import SignContract from './pages/SignContract';
 import Billing from './pages/Billing';
 import LeadCredits from './pages/LeadCredits';
 import Duplicates from './pages/Duplicates';
+import Services from './pages/Services';
 
 function App() {
   return (
@@ -142,6 +143,7 @@ function App() {
             <Route path="/billing" element={<Billing />} />
             <Route path="/lead-credits" element={<LeadCredits />} />
             <Route path="/duplicates" element={<Duplicates />} />
+            <Route path="/services" element={<Services />} />
           </Route>
           
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

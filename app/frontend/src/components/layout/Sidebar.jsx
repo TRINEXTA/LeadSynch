@@ -113,7 +113,8 @@ export default function Sidebar() {
       roles: ['admin'],
       items: [
         { name: 'Crédits Leads', href: '/lead-credits', icon: Zap },
-        { name: 'Abonnements', href: '/billing', icon: DollarSign }
+        { name: 'Services & Abonnements', href: '/services', icon: CreditCard },
+        { name: 'Plans & Tarifs', href: '/billing', icon: DollarSign }
       ]
     },
 
