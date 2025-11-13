@@ -33,9 +33,9 @@ async function handler(req, res) {
     );
     
     if (leads.length === 0) {
-      return res.json({ 
-        success: true, 
-        message: 'Aucun lead ‡ envoyer', 
+      return res.json({
+        success: true,
+        message: 'Aucun lead √† envoyer',
         results: { sent: 0, failed: 0, total: 0 }
       });
     }
@@ -58,14 +58,12 @@ async function handler(req, res) {
         });
       }
     }
-    
-    const elasticEmail = getElasticEmailService();
-    
-    // ?? FIX: DÈfinir l'email expÈditeur
+
+    // Configuration email exp√©diteur
     const fromEmail = process.env.EMAIL_FROM || 'contact@leadsynch.com';
     const replyToEmail = process.env.EMAIL_REPLY_TO || fromEmail;
     
-    console.log('?? Email expÈditeur:', fromEmail);
+    console.log('üìß Email exp√©diteur:', fromEmail);
     
     let sent = 0;
     let failed = 0;
@@ -86,8 +84,8 @@ async function handler(req, res) {
           .replace(/\{contact_name\}/g, lead.contact_name || 'Bonjour')
           .replace(/\{email\}/g, lead.email);
         
-        // ?? FIX: Appel correct avec tous les paramËtres
-        const emailResult = await elasticEmail.sendEmail({
+        // Envoi de l'email via Elastic Email
+        const emailResult = await sendEmail({
           from: fromEmail,
           to: lead.email,
           subject: personalizedSubject,
@@ -97,9 +95,9 @@ async function handler(req, res) {
           campaignId: campaign_id
         });
         
-        // ?? FIX: VÈrifier si l'envoi a rÈussi
+        // V√©rifier si l'envoi a r√©ussi
         if (!emailResult.success) {
-          console.error('? Elastic Email a rejetÈ:', lead.email, '-', emailResult.error);
+          console.error('‚ùå Elastic Email a rejet√©:', lead.email, '-', emailResult.error);
           await execute(
             'UPDATE campaign_leads SET status = $1 WHERE id = $2',   
             ['failed', lead.id]
@@ -123,10 +121,10 @@ async function handler(req, res) {
         }
         
         sent++;
-        console.log(`? Email envoyÈ ‡ ${lead.email} - MessageID: ${emailResult.messageId}`);
-        
+        console.log(`‚úÖ Email envoy√© √† ${lead.email} - MessageID: ${emailResult.messageId}`);
+
       } catch (error) {
-        console.error('? Erreur envoi email ‡', lead.email, ':', error.message);
+        console.error('‚ùå Erreur envoi email √†', lead.email, ':', error.message);
         await execute(
           'UPDATE campaign_leads SET status = $1 WHERE id = $2',   
           ['failed', lead.id]
@@ -140,8 +138,8 @@ async function handler(req, res) {
       ['active', sent, campaign_id]
     );
     
-    console.log(`?? RÈsultat: ${sent} envoyÈs, ${failed} ÈchouÈs sur ${leads.length} total`);
-    
+    console.log(`üìä R√©sultat: ${sent} envoy√©s, ${failed} √©chou√©s sur ${leads.length} total`);
+
     return res.json({
       success: true,
       results: {
@@ -149,11 +147,11 @@ async function handler(req, res) {
         failed,
         total: leads.length
       },
-      message: `${sent} emails envoyÈs${isSuperAdmin ? ' (Super Admin)' : ''}${failed > 0 ? `, ${failed} ÈchouÈs` : ''}`
+      message: `${sent} emails envoy√©s${isSuperAdmin ? ' (Super Admin)' : ''}${failed > 0 ? `, ${failed} √©chou√©s` : ''}`
     });
     
   } catch (error) {
-    console.error('? Erreur envoi emails:', error);
+    console.error('‚ùå Erreur envoi emails:', error);
     return res.status(500).json({ error: error.message });
   }
 }

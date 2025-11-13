@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 const googleMapsClient = new Client({});
-const GOOGLE_API_KEY = 'AIzaSyCbNyMZXznzh-tHNxI3akt6RcrERH3pYFg';
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
 // Configuration Hunter.io (optionnel)
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY || null;
@@ -204,6 +204,13 @@ async function handler(req, res) {
 
       if (!sector || !city) {
         return res.status(400).json({ error: 'Secteur et ville requis' });
+      }
+
+      if (!GOOGLE_API_KEY) {
+        return res.status(500).json({
+          error: 'Configuration manquante',
+          message: 'La clé API Google Maps n\'est pas configurée. Contactez l\'administrateur.'
+        });
       }
 
       console.log(`🔍 Recherche: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);

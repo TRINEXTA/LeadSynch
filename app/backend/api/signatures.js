@@ -1,6 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
-import authenticateToken from '../middleware/auth.js';
+import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { sendEmailViaGraph } from '../services/emailService.js';
 
