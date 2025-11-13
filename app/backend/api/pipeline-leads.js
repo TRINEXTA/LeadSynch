@@ -57,6 +57,76 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // =============================
+// 🆕 POST /pipeline-leads/:id/action
+// Enregistrer une action sur un lead (email, appel, etc.)
+// =============================
+router.post('/:id/action', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action_type, notes } = req.body;
+    const user_id = req.user.id;
+    const tenant_id = req.user.tenant_id;
+
+    console.log(`📝 Enregistrement action ${action_type} pour lead ${id}`);
+
+    // Vérifier que le lead appartient au tenant
+    const { rows: leadCheck } = await q(
+      `SELECT id, stage, lead_id, campaign_id FROM pipeline_leads 
+       WHERE id = $1 AND tenant_id = $2`,
+      [id, tenant_id]
+    );
+
+    if (leadCheck.length === 0) {
+      return res.status(404).json({ success: false, message: 'Lead non trouvé' });
+    }
+
+    const pipelineLead = leadCheck[0];
+    const currentStage = pipelineLead.stage;
+
+    // Insérer dans l'historique
+    await q(
+      `INSERT INTO lead_call_history 
+       (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type, 
+        stage_before, stage_after, notes, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+      [
+        tenant_id,
+        pipelineLead.lead_id,
+        pipelineLead.id,
+        pipelineLead.campaign_id,
+        action_type,
+        currentStage,
+        currentStage,
+        notes || '',
+        user_id
+      ]
+    );
+
+    // Mettre à jour last_activity_at
+    await q(
+      `UPDATE pipeline_leads 
+       SET updated_at = NOW() 
+       WHERE id = $1`,
+      [id]
+    );
+
+    console.log(`✅ Action ${action_type} enregistrée pour lead ${id}`);
+
+    res.json({ 
+      success: true, 
+      message: 'Action enregistrée avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur enregistrement action:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de l\'enregistrement de l\'action'
+    });
+  }
+});
+
+// =============================
 // 🆕 FONCTION INTERNE : Auto-refill intelligent
 // Maintient le pipeline à ~50 leads par commercial
 // =============================
@@ -102,12 +172,10 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
     }
 
     // 4. Calculer combien de leads envoyer
-    // Formule: (qualifiedCount - activeColdCallCount) mais max 50
     const needed = Math.min(TARGET_SIZE, Math.max(0, qualifiedCount - activeColdCallCount));
 
     if (needed === 0) {
       console.log(`✅ Pipeline déjà plein (${activeColdCallCount} leads)`);
-      // Reset le compteur même si on n'envoie rien
       await q(
         `UPDATE campaign_assignments 
          SET qualified_since_last_refill = 0
@@ -131,7 +199,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
 
     const campaign = campRows[0];
 
-    // 6. Trouver des leads en attente pour ce commercial
+    // 6. Trouver des leads en attente
     const { rows: candidates } = await q(
       `SELECT l.id AS lead_id
        FROM leads l
@@ -149,7 +217,6 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
 
     if (!candidates.length) {
       console.log(`⚠️ Plus de leads disponibles pour user ${user_id}`);
-      // Reset le compteur même si plus de leads
       await q(
         `UPDATE campaign_assignments 
          SET qualified_since_last_refill = 0
@@ -176,7 +243,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
       }
     }
 
-    // 8. Reset le compteur de qualifications
+    // 8. Reset le compteur
     await q(
       `UPDATE campaign_assignments 
        SET qualified_since_last_refill = 0,
@@ -244,12 +311,11 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
     
     console.log(`👥 Commerciaux trouvés: ${assignedUsers.length}`, assignedUsers);
 
-    // 3) Pour chaque commercial, vérifier combien de leads actifs il a
+    // 3) Pour chaque commercial, vérifier et refill
     const refillResults = {};
     let totalRefilled = 0;
 
     for (const userId of assignedUsers) {
-      // Compter les leads actuellement actifs dans le pipeline (cold_call uniquement)
       const { rows: activeRows } = await q(
         `SELECT COUNT(*) as count
          FROM pipeline_leads pl
@@ -261,11 +327,9 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
       
       const activeCount = parseInt(activeRows[0]?.count || 0);
       
-      // Si moins de MIN_THRESHOLD, réapprovisionner jusqu'à TARGET_SIZE
       if (activeCount < MIN_THRESHOLD) {
         const needed = TARGET_SIZE - activeCount;
         
-        // Trouver des leads en attente pour ce commercial
         const { rows: candidates } = await q(
           `SELECT l.id AS lead_id
            FROM leads l
@@ -281,7 +345,6 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
           [tenantId, campaign.database_id, userId, campaign_id, needed]
         );
 
-        // Insérer dans le pipeline
         let deployed = 0;
         for (const row of candidates) {
           try {
@@ -327,20 +390,18 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
 
 // =============================
 // POST /pipeline-leads/deploy-batch
-// body: { campaign_id: uuid, size?: number }
 // Déploie "size" leads par commercial dans la colonne cold_call
 // =============================
 router.post('/deploy-batch', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const { campaign_id, size } = req.body;
-    const SIZE = Number(size || 50); // Par défaut 50 leads
+    const SIZE = Number(size || 50);
 
     if (!campaign_id) {
       return res.status(400).json({ error: 'campaign_id requis' });
     }
 
-    // 0) Campagne
     const { rows: campRows } = await q(
       `SELECT id, tenant_id, type, database_id, assigned_users
        FROM campaigns
@@ -355,7 +416,6 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Cette route est réservée aux campagnes phoning/sms/whatsapp' });
     }
 
-    // 1) Liste des commerciaux
     let assignedUsers = [];
     try {
       assignedUsers = Array.isArray(campaign.assigned_users)
@@ -364,7 +424,6 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
     } catch { assignedUsers = []; }
 
     if (!assignedUsers.length) {
-      // Fallback: commerciaux trouvés via leads déjà assignés
       const { rows: userRows } = await q(
         `SELECT DISTINCT l.assigned_to AS uid
            FROM leads l
@@ -383,12 +442,10 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
 
     console.log(`📦 Déploiement de ${SIZE} leads pour ${assignedUsers.length} commerciaux`);
 
-    // 2) Pour chaque commercial, déployer SIZE leads
     let totalDeployed = 0;
     const perUser = {};
 
     for (const userId of assignedUsers) {
-      // Trouver des leads en attente
       const { rows: candidates } = await q(
         `SELECT l.id AS lead_id
          FROM leads l
@@ -404,7 +461,6 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
         [tenantId, campaign.database_id, userId, campaign_id, SIZE]
       );
 
-      // Insérer dans le pipeline
       let deployed = 0;
       for (const row of candidates) {
         try {
@@ -424,7 +480,6 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
       perUser[userId] = deployed;
       totalDeployed += deployed;
 
-      // Mettre à jour leads_assigned dans campaign_assignments
       await q(
         `UPDATE campaign_assignments 
          SET leads_assigned = leads_assigned + $1
@@ -461,7 +516,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'qualification requise' });
     }
 
-    // Mapper la qualification vers le bon stage
     const stageMapping = {
       'interested': 'qualifie',
       'qualified': 'qualifie',
@@ -487,7 +541,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 
     const newStage = stageMapping[qualification] || 'cold_call';
 
-    // 1. Récupérer le lead pipeline actuel
     const { rows: currentRows } = await q(
       `SELECT * FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
@@ -502,12 +555,10 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
     const campaignId = pipelineLead.campaign_id;
     const assignedUserId = pipelineLead.assigned_user_id;
 
-    // 🆕 2. Incrémenter le compteur si le lead sort de "cold_call"
     let shouldTriggerRefill = false;
     if (oldStage === 'cold_call' && newStage !== 'cold_call') {
       console.log(`📊 Lead qualifié: ${oldStage} → ${newStage}`);
       
-      // Incrémenter qualified_since_last_refill
       const { rows: updateRows } = await q(
         `UPDATE campaign_assignments 
          SET qualified_since_last_refill = qualified_since_last_refill + 1,
@@ -520,13 +571,11 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       const qualifiedCount = updateRows[0]?.qualified_since_last_refill || 0;
       console.log(`🔢 Compteur qualification: ${qualifiedCount}/10`);
 
-      // Si on atteint 10, déclencher le refill
       if (qualifiedCount >= 10) {
         shouldTriggerRefill = true;
       }
     }
 
-    // 3. Mettre à jour le stage dans pipeline_leads
     const { rows } = await q(
       `UPDATE pipeline_leads 
        SET stage = $1, updated_at = NOW()
@@ -535,7 +584,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       [newStage, id, tenantId]
     );
 
-    // 4. Mettre à jour aussi le lead dans la table leads
     if (pipelineLead.lead_id) {
       await q(
         `UPDATE leads 
@@ -549,7 +597,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       );
     }
 
-    // 5. Sauvegarder l'historique
     if (notes && notes.trim()) {
       await q(
         `INSERT INTO lead_call_history 
@@ -575,7 +622,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       );
     }
 
-    // 6. Créer un follow-up si date de rappel renseignée
     if (scheduled_date || follow_up_date) {
       const followUpDate = scheduled_date || follow_up_date;
       const followUpType = qualification === 'callback' || qualification === 'a_relancer' ? 'call' : 'meeting';
@@ -613,7 +659,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       }
     }
 
-    // 🆕 7. DÉCLENCHER LE REFILL AUTOMATIQUE SI NÉCESSAIRE
     let refillResult = null;
     if (shouldTriggerRefill && campaignId && assignedUserId) {
       console.log(`🚀 Déclenchement auto-refill pour user ${assignedUserId}`);
@@ -627,7 +672,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       lead: rows[0], 
       oldStage, 
       newStage,
-      refill: refillResult // Info sur le refill si déclenché
+      refill: refillResult
     });
 
   } catch (error) {
@@ -639,7 +684,6 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 // =============================
 // PATCH /pipeline-leads/:id
 // Met à jour le stage d'un lead dans le pipeline
-// 🆕 AVEC AUTO-REFILL AUTOMATIQUE pour maintenir 50 leads
 // =============================
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
@@ -651,7 +695,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'stage requis' });
     }
 
-    // 1. Récupérer l'ancien stage avant modification
     const { rows: beforeRows } = await q(
       `SELECT stage, campaign_id, assigned_user_id FROM pipeline_leads 
        WHERE id = $1 AND tenant_id = $2`,
@@ -666,7 +709,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     const campaignId = beforeRows[0].campaign_id;
     const assignedUserId = beforeRows[0].assigned_user_id;
 
-    // 2. Mettre à jour le stage
     const { rows } = await q(
       `UPDATE pipeline_leads 
        SET stage = $1, updated_at = NOW()
@@ -677,12 +719,10 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
     console.log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
 
-    // 🆕 3. Si le lead sort de "cold_call", vérifier et remplir automatiquement
     let refillResult = null;
     if (oldStage === 'cold_call' && stage !== 'cold_call' && campaignId && assignedUserId) {
       console.log(`🔍 Lead sorti de Cold Call, vérification du pipeline...`);
       
-      // Compter les leads restants dans Cold Call pour cet utilisateur
       const { rows: countRows } = await q(
         `SELECT COUNT(*) as count
          FROM pipeline_leads
@@ -695,12 +735,10 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       const coldCallCount = parseInt(countRows[0]?.count || 0);
       console.log(`📊 Leads restants dans Cold Call: ${coldCallCount}/50`);
 
-      // Si moins de 50, déclencher le refill
       if (coldCallCount < 50) {
         const needed = 50 - coldCallCount;
         console.log(`🚀 Auto-refill déclenché: besoin de ${needed} leads`);
         
-        // Récupérer la campagne pour le database_id
         const { rows: campRows } = await q(
           `SELECT database_id FROM campaigns WHERE id = $1`,
           [campaignId]
@@ -709,7 +747,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         if (campRows.length > 0) {
           const databaseId = campRows[0].database_id;
 
-          // Trouver des leads en attente
           const { rows: candidates } = await q(
             `SELECT l.id AS lead_id
              FROM leads l
@@ -725,7 +762,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
             [tenantId, databaseId, assignedUserId, campaignId, needed]
           );
 
-          // Insérer dans le pipeline
           let deployed = 0;
           for (const row of candidates) {
             try {
@@ -742,7 +778,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
             }
           }
 
-          // Mettre à jour leads_assigned
           if (deployed > 0) {
             await q(
               `UPDATE campaign_assignments 
@@ -784,7 +819,6 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
 
-    // Vérifier que le pipeline lead existe
     const { rows: plRows } = await q(
       `SELECT lead_id FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
@@ -796,7 +830,6 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
 
     const leadId = plRows[0].lead_id;
 
-    // Récupérer tout l'historique
     const { rows } = await q(
       `SELECT 
         lch.*,

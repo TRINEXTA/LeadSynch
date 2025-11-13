@@ -65,13 +65,17 @@ import ManageSectorTaxonomy from './pages/ManageSectorTaxonomy';
 import TestTracking from './pages/TestTracking';
 import TestZone from './pages/TestZone';
 
+// Signature de contrats
+import SignContract from './pages/SignContract';
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Route PUBLIC - Unsubscribe (pas d'auth) */}
+          {/* Routes PUBLIQUES (pas d'auth) */}
           <Route path="/unsubscribe/:lead_id" element={<Unsubscribe />} />
+          <Route path="/sign/:token" element={<SignContract />} />
           
           {/* Login */}
           <Route path="/login" element={<Login />} />

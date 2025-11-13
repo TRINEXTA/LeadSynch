@@ -36,7 +36,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log('?? Origin refusé:', origin);
+      console.log('? Origin refusé:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -55,7 +55,7 @@ app.use((req, res, next) => {
   
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
+    console.log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
   });
   
   next();
@@ -105,6 +105,7 @@ import leadsCountMultiRoute from './api/leads-count-multi.js';
 import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
+import signaturesRoute from './api/signatures.js';
 
 // ========== ?? NOUVELLES ROUTES LEAD MANAGEMENT ==========
 import leadContactsRoute from './api/lead-contacts.js';
@@ -112,17 +113,17 @@ import leadPhonesRoute from './api/lead-phones.js';
 import leadOfficesRoute from './api/lead-offices.js';
 import leadNotesRoute from './api/lead-notes.js';
 
-// ?? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
+// ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
 app.use('/api/leads-count-multi', leadsCountMultiRoute);
 app.use('/api/sectors', sectorsRoute);
 
-// ?? USERS : Monter la route AVANT les autres pour éviter les conflits
+// ? USERS : Monter la route AVANT les autres pour éviter les conflits
 app.use('/api/users', usersRoute);
 
 app.use('/api/teams', teamsRoute);
 
-// ?? CAMPAIGNS : Routes spécifiques AVANT la route générique
+// ? CAMPAIGNS : Routes spécifiques AVANT la route générique
 app.use('/api/campaigns', campaignsRoute);
 
 app.use('/api/stats', statsRoute);
@@ -144,6 +145,9 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
+
+// ========== ?? ROUTES SIGNATURES CONTRATS ==========
+app.use('/api/sign', signaturesRoute);
 
 // ========== ?? ROUTES LEAD MANAGEMENT AVANCÉ ==========
 app.use('/api/leads', leadContactsRoute);
