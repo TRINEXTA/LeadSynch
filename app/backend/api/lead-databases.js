@@ -29,14 +29,15 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /lead-databases/:id - Détails d'une base
+// GET /lead-databases/:id - Détails d'une base AVEC ses leads
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
 
-    const { rows } = await q(
-      `SELECT 
+    // 1. Récupérer les infos de la base
+    const { rows: dbRows } = await q(
+      `SELECT
         ld.*,
         (SELECT COUNT(*) FROM lead_database_relations ldr WHERE ldr.database_id = ld.id) as lead_count
        FROM lead_databases ld
@@ -44,11 +45,30 @@ router.get('/:id', authenticateToken, async (req, res) => {
       [id, tenantId]
     );
 
-    if (!rows.length) {
+    if (!dbRows.length) {
       return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    return res.json({ success: true, database: rows[0] });
+    // 2. Récupérer les leads de cette base
+    const { rows: leadRows } = await q(
+      `SELECT DISTINCT l.*
+       FROM leads l
+       JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+       WHERE ldr.database_id = $1
+         AND l.tenant_id = $2
+       ORDER BY l.created_at DESC`,
+      [id, tenantId]
+    );
+
+    console.log(`✅ Base ${id}: ${leadRows.length} leads trouvés`);
+
+    // 3. Retourner la base avec ses leads
+    const database = {
+      ...dbRows[0],
+      leads: leadRows
+    };
+
+    return res.json({ success: true, database });
   } catch (error) {
     console.error('❌ Erreur GET lead-database:', error);
     return res.status(500).json({ error: error.message });
