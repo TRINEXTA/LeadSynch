@@ -7,7 +7,8 @@ import {
   Eye, MousePointer, Send, CheckCircle, Award, Zap
 } from "lucide-react";
 import QuotasWidget from "../components/QuotasWidget";
-import HealthStatusWidget from "../components/HealthStatusWidget";
+// import HealthStatusWidget from "../components/HealthStatusWidget";
+import HealthStatusWidget from "../components/HealthStatusWidget-TEST"; // VERSION TEST ULTRA-VISIBLE
 import api from "../api/axios";
 
 export default function Dashboard() {
