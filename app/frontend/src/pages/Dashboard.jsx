@@ -7,6 +7,7 @@ import {
   Eye, MousePointer, Send, CheckCircle, Award, Zap
 } from "lucide-react";
 import QuotasWidget from "../components/QuotasWidget";
+import HealthStatusWidget from "../components/HealthStatusWidget";
 import api from "../api/axios";
 
 export default function Dashboard() {
@@ -439,6 +440,7 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
+          <HealthStatusWidget />
           <QuotasWidget />
           
           <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
@@ -460,6 +462,25 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Footer TRINEXTA */}
+      <div className="mt-12 pb-6 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-gray-500 text-sm">
+          <span>Propulsé par</span>
+          <a
+            href="https://trinexta.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:opacity-80 transition-opacity"
+          >
+            <img
+              src="https://trinexta.com/wp-content/uploads/2025/07/Logosignaturetrinexta-e1752825280915.png"
+              alt="TRINEXTA - TrusTech IT Support"
+              className="h-8"
+            />
+          </a>
         </div>
       </div>
     </div>
