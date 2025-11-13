@@ -441,6 +441,47 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
+
+          {/* WIDGET TEST INLINE - IMPOSSIBLE À RATER */}
+          <div style={{
+            border: '5px solid red',
+            padding: '30px',
+            backgroundColor: 'yellow',
+            marginBottom: '20px',
+            borderRadius: '10px'
+          }}>
+            <h2 style={{
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: 'red',
+              marginBottom: '15px'
+            }}>
+              🔥🔥🔥 WIDGET TEST 🔥🔥🔥
+            </h2>
+            <p style={{ fontSize: '18px', color: 'black', marginBottom: '10px' }}>
+              ✅ Si vous voyez CE TEXTE avec<br/>
+              bordure ROUGE et fond JAUNE,<br/>
+              le widget fonctionne !
+            </p>
+            <div style={{
+              marginTop: '15px',
+              padding: '15px',
+              backgroundColor: 'white',
+              border: '3px solid green',
+              borderRadius: '5px'
+            }}>
+              <p style={{ fontSize: '16px', marginBottom: '5px' }}>
+                ⚠️ Email configuré : NON
+              </p>
+              <p style={{ fontSize: '16px', marginBottom: '5px' }}>
+                ⚠️ Première campagne : OUI (vous avez 2 campagnes)
+              </p>
+              <p style={{ fontSize: '16px' }}>
+                📊 Quotas : super_admin (illimité)
+              </p>
+            </div>
+          </div>
+
           <HealthStatusWidget />
           <QuotasWidget />
           
