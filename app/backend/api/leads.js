@@ -21,10 +21,10 @@ router.get("/count", async (req, res, next) => {
 
     const params = [tenantId, database_id];
     let where = 'tenant_id = $1 AND database_id = $2';
-    
+
     if (industry) {
       params.push(industry);
-      where += ' AND industry = $' + params.length;
+      where += ' AND industry = $3';
     }
 
     const sql = 'SELECT COUNT(*) as count FROM leads WHERE ' + where;
@@ -76,15 +76,18 @@ router.get("/today", async (req, res, next) => {
 
     const params = [tenantId];
     let where = 'tenant_id = $1 AND DATE(created_at) = CURRENT_DATE';
+    let limitParam = '$2';
 
     if (scope === "mine" && userId) {
       params.push(userId);
-      where += ' AND assigned_to = $' + params.length;
+      where += ' AND assigned_to = $2';
+      limitParam = '$3';
+      params.push(limit);
+    } else {
+      params.push(limit);
     }
 
-    params.push(limit);
-
-    const sql = 'SELECT id, company_name, contact_name, email, phone, status, assigned_to, created_at, updated_at FROM leads WHERE ' + where + ' ORDER BY created_at DESC LIMIT $' + params.length;
+    const sql = 'SELECT id, company_name, contact_name, email, phone, status, assigned_to, created_at, updated_at FROM leads WHERE ' + where + ' ORDER BY created_at DESC LIMIT ' + limitParam;
 
     const { rows } = await query(sql, params);
     return res.json({ success: true, count: rows.length, leads: rows });

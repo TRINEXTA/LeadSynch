@@ -11,8 +11,14 @@ import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
 
+// Validation des variables d'environnement critiques
 if (!process.env.POSTGRES_URL) {
-  console.error('? ERREUR: POSTGRES_URL manquant');
+  console.error('âŒ ERREUR: POSTGRES_URL manquant');
+  process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  console.error('âŒ ERREUR: JWT_SECRET manquant - La sÃ©curitÃ© de l\'authentification nÃ©cessite cette variable');
   process.exit(1);
 }
 
@@ -27,7 +33,7 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
-console.log('?? CORS configuré pour:', allowedOrigins.join(', '));
+console.log('?? CORS configurï¿½ pour:', allowedOrigins.join(', '));
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -36,7 +42,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log('? Origin refusé:', origin);
+      console.log('? Origin refusï¿½:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -118,12 +124,12 @@ app.use('/api/leads', leadsRoute);
 app.use('/api/leads-count-multi', leadsCountMultiRoute);
 app.use('/api/sectors', sectorsRoute);
 
-// ? USERS : Monter la route AVANT les autres pour éviter les conflits
+// ? USERS : Monter la route AVANT les autres pour ï¿½viter les conflits
 app.use('/api/users', usersRoute);
 
 app.use('/api/teams', teamsRoute);
 
-// ? CAMPAIGNS : Routes spécifiques AVANT la route générique
+// ? CAMPAIGNS : Routes spï¿½cifiques AVANT la route gï¿½nï¿½rique
 app.use('/api/campaigns', campaignsRoute);
 
 app.use('/api/stats', statsRoute);
@@ -149,7 +155,7 @@ app.use('/api/pipeline-leads', pipelineLeadsRoute);
 // ========== ?? ROUTES SIGNATURES CONTRATS ==========
 app.use('/api/sign', signaturesRoute);
 
-// ========== ?? ROUTES LEAD MANAGEMENT AVANCÉ ==========
+// ========== ?? ROUTES LEAD MANAGEMENT AVANCï¿½ ==========
 app.use('/api/leads', leadContactsRoute);
 app.use('/api/leads', leadPhonesRoute);
 app.use('/api/leads', leadOfficesRoute);
@@ -178,14 +184,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ========== ERROR HANDLER (DOIT ÊTRE EN DERNIER) ==========
+// ========== ERROR HANDLER (DOIT ï¿½TRE EN DERNIER) ==========
 app.use(errorHandler);
 
 // ========== ROUTE 404 ==========
 app.use((req, res) => {
   console.log('? 404 Not Found:', req.method, req.url);
   res.status(404).json({ 
-    error: 'Route non trouvée',
+    error: 'Route non trouvï¿½e',
     method: req.method,
     url: req.url
   });
@@ -196,7 +202,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('========================================');
-  console.log('?? Backend LeadSynch démarré');
+  console.log('?? Backend LeadSynch dï¿½marrï¿½');
   console.log('========================================');
   console.log('?? Port:', PORT);
   console.log('?? CORS:', allowedOrigins.join(', '));
@@ -207,7 +213,7 @@ app.listen(PORT, '0.0.0.0', () => {
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
-      console.log('?? [EMAIL WORKER] Démarrage');
+      console.log('?? [EMAIL WORKER] Dï¿½marrage');
       startEmailWorker();
     })
     .catch(err => console.error('? Erreur email worker:', err));

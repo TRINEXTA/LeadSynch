@@ -11,11 +11,7 @@ export function authMiddleware(handlerOrReq, res, next) {
     const handler = handlerOrReq;
     
     return async (req, res) => {
-      // CORS pour Vercel
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      // Note: CORS est géré par server.js avec liste blanche d'origines
       if (req.method === 'OPTIONS') {
         return res.status(200).end();
       }

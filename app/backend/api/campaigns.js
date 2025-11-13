@@ -149,20 +149,26 @@ router.post('/', authenticateToken, async (req, res) => {
     let leads = [];
     
     if (sectors && Object.keys(sectors).length > 0) {
-      const sectorFilter = Object.entries(sectors)
+      // Construction sécurisée avec paramètres
+      const sectorConditions = [];
+      const params = [tenantId, database_id];
+      let paramIndex = 3;
+
+      Object.entries(sectors)
         .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
-        .map(([dbId, sectorList]) => 
-          `(ldr.database_id = '${dbId}' AND l.sector = ANY(ARRAY[${sectorList.map(s => `'${s}'`).join(',')}]))`
-        )
-        .join(' OR ');
-      
-      if (sectorFilter) {
+        .forEach(([dbId, sectorList]) => {
+          sectorConditions.push(`(ldr.database_id = $${paramIndex} AND l.sector = ANY($${paramIndex + 1}))`);
+          params.push(dbId, sectorList);
+          paramIndex += 2;
+        });
+
+      if (sectorConditions.length > 0) {
         leads = await queryAll(
-          `SELECT DISTINCT l.* 
+          `SELECT DISTINCT l.*
            FROM leads l
            JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorFilter})`,
-          [tenantId, database_id]
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')})`,
+          params
         );
       }
     } else {

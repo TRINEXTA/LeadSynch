@@ -3,27 +3,27 @@ import { queryOne, execute } from './db.js';
 const QUOTA_LIMITS = {
   FREE: {
     email: 100,
-    leads: 500,
-    campaigns: 3,
+    leads: 60, // 10 IA générés + 50 importés
+    campaigns: 1,
     attachments: 3 // MB
   },
-  STARTER: {
-    email: 1000,
-    leads: 5000,
-    campaigns: 10,
-    attachments: 5
+  BASIC: {
+    email: 5000,
+    leads: 1000,
+    campaigns: 5,
+    attachments: 5 // MB
   },
   PRO: {
-    email: 10000,
-    leads: 50000,
-    campaigns: -1,
-    attachments: 10
+    email: 50000,
+    leads: 10000,
+    campaigns: -1, // illimité
+    attachments: 10 // MB
   },
   ENTERPRISE: {
-    email: -1,
-    leads: -1,
-    campaigns: -1,
-    attachments: 20
+    email: -1, // illimité
+    leads: -1, // illimité
+    campaigns: -1, // illimité
+    attachments: 20 // MB
   }
 };
 

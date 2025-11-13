@@ -16,8 +16,8 @@ export function Button({ children, className = '', variant = 'default', size = '
   }
   
   return (
-    <button 
-      className={`   `}
+    <button
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled}
       {...props}
     >
