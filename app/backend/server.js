@@ -112,6 +112,10 @@ import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 import signaturesRoute from './api/signatures.js';
+import { getMailingSettings, updateMailingSettings, testMailingSettings } from './api/mailing-settings.js';
+import billingRoutes from './api/billing.js';
+import duplicatesRoutes from './api/duplicates.js';
+import exportRoutes from './api/export.js';
 
 // ========== ?? NOUVELLES ROUTES LEAD MANAGEMENT ==========
 import leadContactsRoute from './api/lead-contacts.js';
@@ -154,6 +158,20 @@ app.use('/api/pipeline-leads', pipelineLeadsRoute);
 
 // ========== ?? ROUTES SIGNATURES CONTRATS ==========
 app.use('/api/sign', signaturesRoute);
+
+// ========== ?? ROUTES MAILING SETTINGS ==========
+app.get('/api/mailing-settings', authMiddleware, getMailingSettings);
+app.post('/api/mailing-settings', authMiddleware, updateMailingSettings);
+app.post('/api/mailing-settings/test', authMiddleware, testMailingSettings);
+
+// ========== ?? ROUTES BILLING & STRIPE ==========
+app.use('/api/billing', billingRoutes);
+
+// ========== ?? ROUTES DUPLICATES MANAGEMENT ==========
+app.use('/api/duplicates', duplicatesRoutes);
+
+// ========== ?? ROUTES EXPORT CSV ==========
+app.use('/api/export', exportRoutes);
 
 // ========== ?? ROUTES LEAD MANAGEMENT AVANC� ==========
 app.use('/api/leads', leadContactsRoute);
