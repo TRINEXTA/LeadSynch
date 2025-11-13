@@ -440,6 +440,27 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
+
+          {/* TEST WIDGET - À SUPPRIMER APRÈS */}
+          <Card className="border-4 border-red-600 bg-yellow-100">
+            <CardHeader className="bg-red-600">
+              <CardTitle className="text-white text-2xl">
+                🚨 TEST WIDGET 🚨
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <p className="text-2xl font-bold text-red-600 mb-4">
+                SI VOUS VOYEZ CECI = ÇA FONCTIONNE !
+              </p>
+              <div className="bg-white p-4 rounded border-2 border-green-600">
+                <p className="text-lg font-semibold mb-2">✅ Widget chargé avec succès</p>
+                <p className="text-sm text-gray-600">
+                  Ce widget test prouve que le système fonctionne.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           <HealthStatusWidget />
           <QuotasWidget />
           
