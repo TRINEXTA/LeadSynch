@@ -72,11 +72,13 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 to-white min-h-screen">
+    <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen">
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-600 mt-1">Vue d'ensemble de votre activité commerciale</p>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            Tableau de bord
+          </h1>
+          <p className="text-gray-700 mt-2 font-medium">Vue d'ensemble de votre activité commerciale</p>
         </div>
         <div className="flex items-center gap-2">
           {refreshing && (
@@ -104,8 +106,8 @@ export default function Dashboard() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              <Card 
-                className="cursor-pointer hover:shadow-xl transition-all duration-300 border-t-4 border-t-blue-500 group"
+              <Card
+                className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-t-4 border-t-blue-500 group bg-white hover:scale-105"
                 onClick={() => navigate('/lead-databases')}
               >
                 <CardContent className="pt-6">
@@ -141,8 +143,8 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card 
-                className="cursor-pointer hover:shadow-xl transition-all duration-300 border-t-4 border-t-green-500 group"
+              <Card
+                className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-t-4 border-t-green-500 group bg-white hover:scale-105"
                 onClick={() => navigate('/pipeline')}
               >
                 <CardContent className="pt-6">
@@ -174,8 +176,8 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card 
-                className="cursor-pointer hover:shadow-xl transition-all duration-300 border-t-4 border-t-purple-500 group"
+              <Card
+                className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-t-4 border-t-purple-500 group bg-white hover:scale-105"
                 onClick={() => navigate('/campaigns')}
               >
                 <CardContent className="pt-6">
@@ -216,7 +218,7 @@ export default function Dashboard() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               
-              <Card className="hover:shadow-xl transition-all duration-300">
+              <Card className="bg-white hover:shadow-2xl transition-all duration-300 hover:scale-105 border-l-4 border-l-orange-400">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -242,7 +244,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-xl transition-all duration-300">
+              <Card className="bg-white hover:shadow-2xl transition-all duration-300 hover:scale-105 border-l-4 border-l-pink-400">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -261,7 +263,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-xl transition-all duration-300">
+              <Card className="bg-white hover:shadow-2xl transition-all duration-300 hover:scale-105 border-l-4 border-l-green-400">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div className="w-full">
@@ -283,7 +285,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-xl transition-all duration-300">
+              <Card className="bg-white hover:shadow-2xl transition-all duration-300 hover:scale-105 border-l-4 border-l-yellow-400">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
@@ -316,9 +318,9 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            <Card>
-              <CardHeader className="pb-3">
+
+            <Card className="bg-white shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="pb-3 bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <Zap className="w-5 h-5 text-indigo-600" />
@@ -375,8 +377,8 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
+            <Card className="bg-white shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-blue-600" />
                   Activités Récentes
@@ -412,8 +414,8 @@ export default function Dashboard() {
           </div>
 
           {dashboardData?.users?.count > 0 && (
-            <Card 
-              className="cursor-pointer hover:shadow-xl transition-all duration-300 border-l-4 border-l-indigo-500"
+            <Card
+              className="cursor-pointer bg-white hover:shadow-2xl transition-all duration-300 border-l-4 border-l-indigo-500 hover:scale-105"
               onClick={() => navigate('/users')}
             >
               <CardContent className="pt-6">
@@ -440,31 +442,10 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
-
-          {/* TEST WIDGET - À SUPPRIMER APRÈS */}
-          <Card className="border-4 border-red-600 bg-yellow-100">
-            <CardHeader className="bg-red-600">
-              <CardTitle className="text-white text-2xl">
-                🚨 TEST WIDGET 🚨
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <p className="text-2xl font-bold text-red-600 mb-4">
-                SI VOUS VOYEZ CECI = ÇA FONCTIONNE !
-              </p>
-              <div className="bg-white p-4 rounded border-2 border-green-600">
-                <p className="text-lg font-semibold mb-2">✅ Widget chargé avec succès</p>
-                <p className="text-sm text-gray-600">
-                  Ce widget test prouve que le système fonctionne.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
           <HealthStatusWidget />
           <QuotasWidget />
           
-          <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+          <Card className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 text-white shadow-xl hover:shadow-2xl transition-all duration-300">
             <CardContent className="pt-6">
               <h3 className="text-sm font-medium text-indigo-100 mb-4">Performance Globale</h3>
               <div className="space-y-3">
@@ -488,13 +469,13 @@ export default function Dashboard() {
 
       {/* Footer TRINEXTA */}
       <div className="mt-12 pb-6 flex items-center justify-center">
-        <div className="flex items-center gap-3 text-gray-500 text-sm">
-          <span>Propulsé par</span>
+        <div className="flex items-center gap-3 text-gray-600 text-sm bg-white px-6 py-3 rounded-full shadow-md">
+          <span className="font-medium">Propulsé par</span>
           <a
             href="https://trinexta.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:opacity-80 transition-opacity"
+            className="hover:opacity-80 transition-all hover:scale-110"
           >
             <img
               src="https://trinexta.com/wp-content/uploads/2025/07/Logosignaturetrinexta-e1752825280915.png"
