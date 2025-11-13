@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import {
   CheckCircle, AlertCircle, XCircle, Zap, Mail,
-  CreditCard, Users, TrendingUp, ArrowRight
+  CreditCard, Users, TrendingUp, ArrowRight, Activity
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
