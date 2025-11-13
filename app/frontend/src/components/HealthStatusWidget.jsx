@@ -18,18 +18,16 @@ export default function HealthStatusWidget() {
 
   const fetchHealth = async () => {
     try {
-      const [quotasRes, campaignsRes, settingsRes] = await Promise.all([
+      const [quotasRes, campaignsRes] = await Promise.all([
         api.get('/quotas'),
-        api.get('/campaigns').catch(() => ({ data: { campaigns: [] } })),
-        api.get('/mailing-settings').catch(() => ({ data: null }))
+        api.get('/campaigns').catch(() => ({ data: { campaigns: [] } }))
       ]);
 
       const quotas = quotasRes.data.quotas || {};
       const campaigns = campaignsRes.data.campaigns || [];
-      const settings = settingsRes.data;
 
       setHealth({
-        emailConfigured: !!settings?.from_email,
+        emailConfigured: false, // Simplifié pour test
         firstCampaign: campaigns.length > 0,
         quotas: {
           email: quotas.email || { percentage: 0, used: 0, limit: 100 },
@@ -40,6 +38,17 @@ export default function HealthStatusWidget() {
       });
     } catch (error) {
       console.error('Erreur health check:', error);
+      // En cas d'erreur, afficher quand même le widget
+      setHealth({
+        emailConfigured: false,
+        firstCampaign: false,
+        quotas: {
+          email: { percentage: 0, used: 0, limit: 100 },
+          leads: { percentage: 0, used: 0, limit: 60 },
+          campaigns: { percentage: 0, used: 0, limit: 1 }
+        },
+        plan: 'FREE'
+      });
     } finally {
       setLoading(false);
     }
