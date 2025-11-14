@@ -30,8 +30,8 @@ export async function getMailingSettings(req, res) {
     const settings = rows[0];
 
     // Ne pas exposer la clé API complète pour des raisons de sécurité
-    const maskedApiKey = settings.api_key
-      ? `${settings.api_key.substring(0, 8)}...${settings.api_key.substring(settings.api_key.length - 4)}`
+    const maskedApiKey = settings.elastic_email_api_key
+      ? `${settings.elastic_email_api_key.substring(0, 8)}...${settings.elastic_email_api_key.substring(settings.elastic_email_api_key.length - 4)}`
       : '';
 
     res.json({
@@ -40,7 +40,7 @@ export async function getMailingSettings(req, res) {
         from_name: settings.from_name,
         reply_to_email: settings.reply_to_email,
         provider: settings.provider,
-        api_key: maskedApiKey,
+        elastic_email_api_key: maskedApiKey,
         configured: settings.is_active || false, // Utiliser is_active au lieu de configured
         created_at: settings.created_at,
         updated_at: settings.updated_at
@@ -212,7 +212,7 @@ export async function testMailingSettings(req, res) {
       `,
       from: settings.from_email,
       fromName: settings.from_name,
-      replyTo: settings.reply_to || settings.from_email,
+      replyTo: settings.reply_to_email || settings.from_email,
       tenantId
     });
 
