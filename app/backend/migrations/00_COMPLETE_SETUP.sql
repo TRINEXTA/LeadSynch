@@ -327,32 +327,9 @@ END$$;
 
 -- ========== 8. VÉRIFICATION FINALE ==========
 
--- Afficher un résumé des tables créées
+-- Afficher un résumé simple
 DO $$
-DECLARE
-  table_count INTEGER;
 BEGIN
-  SELECT COUNT(*) INTO table_count
-  FROM information_schema.tables
-  WHERE table_schema = 'public'
-  AND table_name IN (
-    'lead_credits', 'credit_purchases', 'credit_usage',
-    'services', 'subscriptions', 'subscription_invoices', 'subscription_history',
-    'invoices', 'billing_info'
-  );
-
-  RAISE NOTICE '✅ Migration terminée ! % tables créées/vérifiées', table_count;
+  RAISE NOTICE '✅ Migration terminée avec succès !';
+  RAISE NOTICE '📋 Tables créées : lead_credits, credit_purchases, credit_usage, services, subscriptions, subscription_invoices, subscription_history, invoices, billing_info';
 END$$;
-
--- Afficher les statistiques
-SELECT
-  'lead_credits' as table_name,
-  COUNT(*) as rows
-FROM lead_credits
-UNION ALL
-SELECT 'services', COUNT(*) FROM services
-UNION ALL
-SELECT 'subscriptions', COUNT(*) FROM subscriptions
-UNION ALL
-SELECT 'credit_purchases', COUNT(*) FROM credit_purchases
-ORDER BY table_name;
