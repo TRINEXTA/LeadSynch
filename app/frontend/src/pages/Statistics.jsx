@@ -150,8 +150,8 @@ export default function Statistics() {
         {/* KPI Cards - Plus compactes avec animations */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           {/* Total Leads */}
-          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-blue-600 to-blue-700 hover:scale-105 hover:shadow-blue-500/50 transition-all duration-300 group cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+          <Card className="relative overflow-hidden shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'}}>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000"></div>
             <CardContent className="pt-4 pb-4 relative z-10">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -176,8 +176,8 @@ export default function Statistics() {
           </Card>
 
           {/* Taux de conversion avec graphique circulaire */}
-          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-green-600 to-emerald-700 hover:scale-105 hover:shadow-green-500/50 transition-all duration-300 group cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+          <Card className="relative overflow-hidden shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #059669 0%, #047857 100%)'}}>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000"></div>
             <CardContent className="pt-4 pb-4 relative z-10">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -216,8 +216,8 @@ export default function Statistics() {
           </Card>
 
           {/* Leads qualifiés */}
-          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-purple-600 to-violet-700 hover:scale-105 hover:shadow-purple-500/50 transition-all duration-300 group cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+          <Card className="relative overflow-hidden shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #9333ea 0%, #7e22ce 100%)'}}>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000"></div>
             <CardContent className="pt-4 pb-4 relative z-10">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -255,8 +255,8 @@ export default function Statistics() {
           </Card>
 
           {/* Campagnes actives */}
-          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-orange-600 to-red-600 hover:scale-105 hover:shadow-orange-500/50 transition-all duration-300 group cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+          <Card className="relative overflow-hidden shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)'}}>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000"></div>
             <CardContent className="pt-4 pb-4 relative z-10">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -397,7 +397,7 @@ export default function Statistics() {
         {stats.email_stats && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Emails envoyés */}
-            <Card className="shadow-2xl border-0 bg-gradient-to-br from-blue-600/90 to-cyan-600/90 backdrop-blur-lg hover:scale-105 transition-all">
+            <Card className="shadow-2xl border-0 hover:scale-105 transition-all" style={{background: 'linear-gradient(135deg, #2563eb 0%, #0891b2 100%)'}}>
               <CardHeader className="bg-white/10 border-b border-white/20 py-3">
                 <CardTitle className="flex items-center gap-2 text-white text-base">
                   <Mail className="w-5 h-5" />
@@ -428,7 +428,7 @@ export default function Statistics() {
             </Card>
 
             {/* Appels */}
-            <Card className="shadow-2xl border-0 bg-gradient-to-br from-green-600/90 to-emerald-600/90 backdrop-blur-lg hover:scale-105 transition-all">
+            <Card className="shadow-2xl border-0 hover:scale-105 transition-all" style={{background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)'}}>
               <CardHeader className="bg-white/10 border-b border-white/20 py-3">
                 <CardTitle className="flex items-center gap-2 text-white text-base">
                   <Phone className="w-5 h-5" />
@@ -459,7 +459,7 @@ export default function Statistics() {
             </Card>
 
             {/* Activité */}
-            <Card className="shadow-2xl border-0 bg-gradient-to-br from-orange-600/90 to-red-600/90 backdrop-blur-lg hover:scale-105 transition-all">
+            <Card className="shadow-2xl border-0 hover:scale-105 transition-all" style={{background: 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)'}}>
               <CardHeader className="bg-white/10 border-b border-white/20 py-3">
                 <CardTitle className="flex items-center gap-2 text-white text-base">
                   <Activity className="w-5 h-5" />
