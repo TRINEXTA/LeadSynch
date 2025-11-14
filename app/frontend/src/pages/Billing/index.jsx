@@ -143,23 +143,23 @@ export default function Billing() {
     <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
+        <div className="mb-12 text-center">
+          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
             Choisissez votre plan
           </h1>
-          <p className="text-gray-700 text-lg font-medium">
+          <p className="text-gray-700 text-xl font-medium mb-6">
             Déverrouillez tout le potentiel de LeadSynch
           </p>
-          <div className="mt-4 inline-flex items-center gap-2 bg-white px-6 py-3 rounded-full shadow-md">
-            <CreditCard className="w-5 h-5 text-indigo-600" />
-            <span className="font-semibold text-gray-700">
-              Votre plan actuel : <span className="text-indigo-600">{PLANS[currentPlan]?.name}</span>
+          <div className="inline-flex items-center gap-3 bg-white px-8 py-4 rounded-full shadow-lg border-2 border-indigo-100">
+            <CreditCard className="w-6 h-6 text-indigo-600" />
+            <span className="font-semibold text-gray-700 text-lg">
+              Votre plan actuel : <span className="text-indigo-600 font-bold">{PLANS[currentPlan]?.name}</span>
             </span>
           </div>
         </div>
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
           {Object.entries(PLANS).map(([key, plan]) => {
             const PlanIcon = plan.icon;
             const isCurrentPlan = key === currentPlan;
@@ -167,43 +167,45 @@ export default function Billing() {
             return (
               <Card
                 key={key}
-                className={`relative overflow-hidden transition-all duration-300 ${
+                className={`relative overflow-hidden transition-all duration-300 flex flex-col h-full ${
                   plan.popular
-                    ? 'ring-4 ring-purple-400 shadow-2xl scale-105'
-                    : 'shadow-xl hover:shadow-2xl hover:scale-105'
+                    ? 'ring-4 ring-purple-400 shadow-2xl transform hover:scale-105'
+                    : 'shadow-xl hover:shadow-2xl transform hover:scale-105'
                 } ${isCurrentPlan ? 'border-4 border-green-500' : 'border-2 border-gray-200'}`}
               >
                 {plan.popular && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-1 text-xs font-bold rounded-bl-lg">
+                  <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 text-xs font-bold rounded-bl-lg shadow-lg z-10">
                     ⭐ POPULAIRE
                   </div>
                 )}
 
                 {isCurrentPlan && (
-                  <div className="absolute top-0 left-0 bg-gradient-to-r from-green-600 to-teal-600 text-white px-4 py-1 text-xs font-bold rounded-br-lg">
+                  <div className="absolute top-0 left-0 bg-gradient-to-r from-green-600 to-teal-600 text-white px-4 py-2 text-xs font-bold rounded-br-lg shadow-lg z-10">
                     ✓ ACTUEL
                   </div>
                 )}
 
-                <CardHeader className={`bg-gradient-to-r ${plan.color} text-white pb-8 pt-8`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <PlanIcon className="w-10 h-10" />
+                <CardHeader className={`bg-gradient-to-br ${plan.color} text-white pb-8 pt-10`}>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+                      <PlanIcon className="w-8 h-8" />
+                    </div>
                     <div className="text-right">
                       {typeof plan.price === 'number' ? (
                         <>
-                          <div className="text-4xl font-bold">{plan.price}€</div>
-                          <div className="text-sm opacity-90">/ mois</div>
+                          <div className="text-5xl font-black tracking-tight">{plan.price}€</div>
+                          <div className="text-sm opacity-90 font-medium">par mois</div>
                         </>
                       ) : (
                         <div className="text-2xl font-bold">{plan.price}</div>
                       )}
                     </div>
                   </div>
-                  <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                  <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
                 </CardHeader>
 
-                <CardContent className="pt-6">
-                  <ul className="space-y-3 mb-6">
+                <CardContent className="pt-6 flex-1 flex flex-col">
+                  <ul className="space-y-3 mb-6 flex-1">
                     {plan.features.map((feature, idx) => (
                       <li key={idx} className="flex items-start gap-2">
                         {feature.included ? (
@@ -222,24 +224,27 @@ export default function Billing() {
                     ))}
                   </ul>
 
+                  <div className="mt-auto">
+
                   {isCurrentPlan ? (
                     <button
                       disabled
-                      className="w-full bg-gray-200 text-gray-500 py-3 px-4 rounded-lg font-semibold cursor-not-allowed"
+                      className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white py-4 px-6 rounded-xl font-bold cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
                     >
+                      <Check className="w-5 h-5" />
                       Plan actuel
                     </button>
                   ) : key === 'FREE' ? (
                     <button
                       disabled
-                      className="w-full bg-gray-100 text-gray-400 py-3 px-4 rounded-lg font-semibold cursor-not-allowed"
+                      className="w-full bg-gray-100 text-gray-400 py-4 px-6 rounded-xl font-bold cursor-not-allowed"
                     >
                       Plan gratuit
                     </button>
                   ) : key === 'ENTERPRISE' ? (
                     <button
                       onClick={() => handleUpgrade(key)}
-                      className={`w-full bg-gradient-to-r ${plan.color} text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
+                      className={`w-full bg-gradient-to-r ${plan.color} text-white py-4 px-6 rounded-xl font-bold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
                     >
                       <Rocket className="w-5 h-5" />
                       Nous contacter
@@ -247,7 +252,7 @@ export default function Billing() {
                   ) : currentPlan === 'FREE' || (typeof PLANS[key].price === 'number' && typeof PLANS[currentPlan]?.price === 'number' && PLANS[key].price > PLANS[currentPlan]?.price) ? (
                     <button
                       onClick={() => handleUpgrade(key)}
-                      className={`w-full bg-gradient-to-r ${plan.color} text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
+                      className={`w-full bg-gradient-to-r ${plan.color} text-white py-4 px-6 rounded-xl font-bold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
                     >
                       <Rocket className="w-5 h-5" />
                       Upgrader
@@ -255,11 +260,12 @@ export default function Billing() {
                   ) : (
                     <button
                       disabled
-                      className="w-full bg-gray-200 text-gray-500 py-3 px-4 rounded-lg font-semibold cursor-not-allowed"
+                      className="w-full bg-gray-200 text-gray-500 py-4 px-6 rounded-xl font-bold cursor-not-allowed"
                     >
                       Plan inférieur
                     </button>
                   )}
+                  </div>
                 </CardContent>
               </Card>
             );
