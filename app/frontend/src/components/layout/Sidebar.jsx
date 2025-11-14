@@ -100,7 +100,6 @@ export default function Sidebar() {
       roles: ['admin'],
       items: [
         { name: 'Génération de Leads', href: '/LeadGeneration', icon: Search },
-        { name: 'Config Google API', href: '/GoogleApiSetup', icon: Settings },
         { name: 'Recatégoriser (IA)', href: '/RecategorizeLeads', icon: Sparkles },
         { name: 'Détecter Doublons', href: '/DuplicateDetection', icon: Database },
         { name: 'Gérer Doublons', href: '/duplicates', icon: Copy }
