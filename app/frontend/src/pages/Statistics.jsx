@@ -102,10 +102,10 @@ export default function Statistics() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-purple-400 mx-auto mb-4" />
-          <p className="text-white text-lg font-semibold">Chargement des statistiques...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
+          <p className="text-gray-800 text-lg font-semibold">Chargement des statistiques...</p>
         </div>
       </div>
     );
@@ -113,24 +113,24 @@ export default function Statistics() {
 
   if (!stats) {
     return (
-      <div className="p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+      <div className="p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 min-h-screen">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold text-white">Erreur de chargement</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Erreur de chargement</h1>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+    <div className="p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         {/* Header - Plus compact */}
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent mb-1 animate-pulse">
+            <h1 className="text-4xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-1">
               📊 Analytics Dashboard
             </h1>
-            <p className="text-gray-300 text-sm font-medium">
+            <p className="text-gray-700 text-sm font-medium">
               Vue temps réel de votre performance commerciale
             </p>
           </div>
@@ -138,7 +138,7 @@ export default function Statistics() {
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            className="px-4 py-2 border-2 border-purple-500 rounded-xl focus:ring-2 focus:ring-purple-400 bg-slate-800 text-white font-semibold text-sm hover:bg-slate-700 transition-all cursor-pointer"
+            className="px-4 py-2 border-2 border-indigo-300 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white text-gray-800 font-semibold text-sm hover:border-indigo-400 transition-all cursor-pointer shadow-sm"
           >
             <option value="7">7 jours</option>
             <option value="30">30 jours</option>
@@ -282,10 +282,10 @@ export default function Statistics() {
         {/* Statistiques détaillées - Plus compactes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
           {/* Répartition par statut */}
-          <Card className="shadow-2xl border-0 bg-slate-800/90 backdrop-blur-lg hover:shadow-purple-500/30 transition-all">
-            <CardHeader className="bg-gradient-to-r from-purple-600/50 to-blue-600/50 border-b border-slate-700 py-3">
-              <CardTitle className="flex items-center gap-2 text-white text-base">
-                <BarChart3 className="w-5 h-5" />
+          <Card className="shadow-xl border-2 border-gray-200 bg-white hover:shadow-2xl transition-all">
+            <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b py-3">
+              <CardTitle className="flex items-center gap-2 text-gray-800 text-base">
+                <BarChart3 className="w-5 h-5 text-indigo-600" />
                 Répartition par Statut
               </CardTitle>
             </CardHeader>
@@ -321,20 +321,20 @@ export default function Statistics() {
 
                     return (
                       <div key={status} className="flex items-center gap-3 group">
-                        <div className="w-28 text-xs font-bold text-gray-300">
+                        <div className="w-28 text-xs font-bold text-gray-700">
                           {statusLabels[status] || status}
                         </div>
                         <div className="flex-1">
-                          <div className="h-5 bg-slate-700 rounded-full overflow-hidden relative">
+                          <div className="h-5 bg-gray-100 rounded-full overflow-hidden relative">
                             <div
-                              className={`h-full bg-gradient-to-r ${statusColors[status] || 'from-gray-400 to-gray-500'} flex items-center justify-end px-2 text-white text-xs font-bold transition-all duration-500 group-hover:brightness-125`}
+                              className={`h-full bg-gradient-to-r ${statusColors[status] || 'from-gray-400 to-gray-500'} flex items-center justify-end px-2 text-white text-xs font-bold transition-all duration-500 group-hover:brightness-110`}
                               style={{ width: `${percentage}%` }}
                             >
                               {percentage > 5 && `${percentage}%`}
                             </div>
                           </div>
                         </div>
-                        <div className="w-14 text-right text-sm font-black text-white">
+                        <div className="w-14 text-right text-sm font-black text-gray-900">
                           {count}
                         </div>
                       </div>
@@ -345,10 +345,10 @@ export default function Statistics() {
           </Card>
 
           {/* Top Secteurs */}
-          <Card className="shadow-2xl border-0 bg-slate-800/90 backdrop-blur-lg hover:shadow-pink-500/30 transition-all">
-            <CardHeader className="bg-gradient-to-r from-pink-600/50 to-purple-600/50 border-b border-slate-700 py-3">
-              <CardTitle className="flex items-center gap-2 text-white text-base">
-                <Award className="w-5 h-5" />
+          <Card className="shadow-xl border-2 border-gray-200 bg-white hover:shadow-2xl transition-all">
+            <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50 border-b py-3">
+              <CardTitle className="flex items-center gap-2 text-gray-800 text-base">
+                <Award className="w-5 h-5 text-purple-600" />
                 Top 5 Secteurs d'Activité
               </CardTitle>
             </CardHeader>
@@ -371,16 +371,16 @@ export default function Statistics() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-bold text-white capitalize">
+                          <span className="text-sm font-bold text-gray-800 capitalize">
                             {sector}
                           </span>
-                          <span className="text-xs font-black text-gray-300">
+                          <span className="text-xs font-black text-gray-600">
                             {count} • {percentage}%
                           </span>
                         </div>
-                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className={`h-full bg-gradient-to-r ${gradients[index]} transition-all duration-500 group-hover:brightness-125`}
+                            className={`h-full bg-gradient-to-r ${gradients[index]} transition-all duration-500 group-hover:brightness-110`}
                             style={{ width: `${percentage}%` }}
                           />
                         </div>

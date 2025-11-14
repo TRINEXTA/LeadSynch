@@ -46,7 +46,7 @@ export default function TestMailing() {
         message: response.data.message || 'Email de test envoyé avec succès !'
       });
 
-      // Réinitialiser le champ email après 3 secondes
+      // Réinitialiser le champ email après 5 secondes
       setTimeout(() => {
         setFormData({
           ...formData,
@@ -68,31 +68,31 @@ export default function TestMailing() {
 
   if (loadingConfig) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-purple-400 mx-auto mb-4" />
-          <p className="text-white text-lg font-semibold">Chargement de la configuration...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-cyan-600 mx-auto mb-4" />
+          <p className="text-gray-800 text-lg font-semibold">Chargement de la configuration...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+    <div className="p-4 bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 min-h-screen">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-black bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent mb-1 animate-pulse">
+            <h1 className="text-4xl font-black bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent mb-1">
               📧 Test d'Envoi Email
             </h1>
-            <p className="text-gray-300 text-sm font-medium">
+            <p className="text-gray-700 text-sm font-medium">
               Vérifiez votre configuration email en temps réel
             </p>
           </div>
-          <div className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border-2 border-gray-200 shadow-sm">
             <div className={`w-3 h-3 rounded-full ${mailingConfig?.configured ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-            <span className="text-sm font-semibold text-white">
+            <span className="text-sm font-semibold text-gray-800">
               {mailingConfig?.configured ? 'Configuré' : 'Non configuré'}
             </span>
           </div>
@@ -100,7 +100,7 @@ export default function TestMailing() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
           {/* Config Status Card */}
-          <Card className="shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'}}>
+          <Card className="shadow-xl border-0 hover:scale-105 transition-all" style={{background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'}}>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -123,7 +123,7 @@ export default function TestMailing() {
           </Card>
 
           {/* From Email Card */}
-          <Card className="shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)'}}>
+          <Card className="shadow-xl border-0 hover:scale-105 transition-all" style={{background: 'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)'}}>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -146,7 +146,7 @@ export default function TestMailing() {
           </Card>
 
           {/* API Key Status Card */}
-          <Card className="shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}}>
+          <Card className="shadow-xl border-0 hover:scale-105 transition-all" style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}}>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-start justify-between text-white">
                 <div className="flex-1">
@@ -171,7 +171,7 @@ export default function TestMailing() {
 
         {/* Alert si non configuré */}
         {!mailingConfig?.configured && (
-          <Card className="shadow-2xl border-0 bg-gradient-to-r from-orange-500 to-red-500 mb-4">
+          <Card className="shadow-xl border-0 mb-4" style={{background: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)'}}>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-start gap-3 text-white">
                 <AlertCircle className="w-6 h-6 flex-shrink-0 mt-1" />
@@ -188,10 +188,10 @@ export default function TestMailing() {
         )}
 
         {/* Form Card */}
-        <Card className="shadow-2xl border-0 bg-slate-800/90 backdrop-blur-lg mb-4">
-          <CardHeader className="bg-gradient-to-r from-blue-600/50 to-cyan-600/50 border-b border-slate-700 py-3">
-            <CardTitle className="flex items-center gap-2 text-white text-lg">
-              <Send className="w-6 h-6" />
+        <Card className="shadow-xl border-2 border-gray-200 bg-white mb-4">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b py-3">
+            <CardTitle className="flex items-center gap-2 text-gray-800 text-lg">
+              <Send className="w-6 h-6 text-blue-600" />
               Formulaire de Test
             </CardTitle>
           </CardHeader>
@@ -199,7 +199,7 @@ export default function TestMailing() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email destinataire */}
               <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   📬 Adresse Email Destinataire *
                 </label>
                 <input
@@ -208,17 +208,17 @@ export default function TestMailing() {
                   value={formData.to_email}
                   onChange={(e) => setFormData({ ...formData, to_email: e.target.value })}
                   placeholder="exemple@domaine.com"
-                  className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-gray-400 font-semibold transition-all"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                   disabled={!mailingConfig?.configured}
                 />
-                <p className="text-xs text-gray-400 mt-1 font-medium">
+                <p className="text-xs text-gray-500 mt-1 font-medium">
                   L'email de test sera envoyé à cette adresse
                 </p>
               </div>
 
               {/* Sujet */}
               <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   📝 Sujet de l'Email
                 </label>
                 <input
@@ -226,14 +226,14 @@ export default function TestMailing() {
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                   placeholder="Sujet de votre email de test"
-                  className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-gray-400 font-semibold transition-all"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                   disabled={!mailingConfig?.configured}
                 />
               </div>
 
               {/* Message */}
               <div>
-                <label className="block text-sm font-bold text-gray-300 mb-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   💬 Message
                 </label>
                 <textarea
@@ -241,32 +241,32 @@ export default function TestMailing() {
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   rows={8}
                   placeholder="Contenu de votre email de test"
-                  className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-white placeholder-gray-400 font-semibold transition-all resize-none"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-gray-900 placeholder-gray-400 font-semibold transition-all resize-none"
                   disabled={!mailingConfig?.configured}
                 />
               </div>
 
               {/* Result Message */}
               {result && (
-                <div className={`p-4 rounded-xl border-2 relative overflow-hidden ${
+                <div className={`p-4 rounded-xl border-2 ${
                   result.success
-                    ? 'bg-green-500/20 border-green-500'
-                    : 'bg-red-500/20 border-red-500'
+                    ? 'bg-green-50 border-green-400'
+                    : 'bg-red-50 border-red-400'
                 }`}>
                   <div className="flex items-start gap-3">
                     {result.success ? (
-                      <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 animate-bounce" />
+                      <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 animate-bounce" />
                     ) : (
-                      <XCircle className="w-6 h-6 text-red-400 flex-shrink-0 animate-pulse" />
+                      <XCircle className="w-6 h-6 text-red-600 flex-shrink-0 animate-pulse" />
                     )}
                     <div>
                       <h4 className={`font-black mb-1 text-lg ${
-                        result.success ? 'text-green-300' : 'text-red-300'
+                        result.success ? 'text-green-800' : 'text-red-800'
                       }`}>
                         {result.success ? '✅ Succès !' : '❌ Erreur'}
                       </h4>
                       <p className={`text-sm font-semibold ${
-                        result.success ? 'text-green-200' : 'text-red-200'
+                        result.success ? 'text-green-700' : 'text-red-700'
                       }`}>
                         {result.message}
                       </p>
@@ -279,12 +279,12 @@ export default function TestMailing() {
               <button
                 type="submit"
                 disabled={sending || !mailingConfig?.configured}
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-4 px-6 rounded-xl font-black text-lg hover:from-blue-700 hover:to-cyan-700 transition-all shadow-2xl hover:shadow-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 hover:scale-105 active:scale-95"
+                className="w-full text-white py-4 px-6 rounded-xl font-black text-lg transition-all shadow-xl hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 hover:scale-105 active:scale-95"
                 style={{
                   background: sending
                     ? 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)'
                     : !mailingConfig?.configured
-                      ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                      ? 'linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)'
                       : 'linear-gradient(135deg, #2563eb 0%, #0891b2 100%)'
                 }}
               >
@@ -310,21 +310,21 @@ export default function TestMailing() {
         </Card>
 
         {/* Help Card */}
-        <Card className="shadow-2xl border-0 bg-slate-800/90 backdrop-blur-lg">
-          <CardHeader className="bg-gradient-to-r from-purple-600/50 to-pink-600/50 border-b border-slate-700 py-3">
-            <CardTitle className="text-lg text-white flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
+        <Card className="shadow-xl border-2 border-gray-200 bg-white">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b py-3">
+            <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-purple-600" />
               Guide de Dépannage
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-5 pb-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
-                <h4 className="font-black text-white mb-2 flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-blue-400" />
+              <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                <h4 className="font-black text-blue-900 mb-2 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-blue-600" />
                   L'email n'arrive pas ?
                 </h4>
-                <ul className="list-disc list-inside text-gray-300 space-y-1 font-medium">
+                <ul className="list-disc list-inside text-blue-800 space-y-1 font-medium">
                   <li>Vérifiez vos spams et courriers indésirables</li>
                   <li>Assurez-vous que la config email est correcte</li>
                   <li>Vérifiez l'adresse email destinataire</li>
@@ -332,12 +332,12 @@ export default function TestMailing() {
                 </ul>
               </div>
 
-              <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
-                <h4 className="font-black text-white mb-2 flex items-center gap-2">
-                  <XCircle className="w-4 h-4 text-red-400" />
+              <div className="bg-red-50 p-4 rounded-xl border-2 border-red-200">
+                <h4 className="font-black text-red-900 mb-2 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-600" />
                   Erreur lors de l'envoi ?
                 </h4>
-                <ul className="list-disc list-inside text-gray-300 space-y-1 font-medium">
+                <ul className="list-disc list-inside text-red-800 space-y-1 font-medium">
                   <li>Vérifiez vos identifiants SMTP/API</li>
                   <li>Assurez-vous que le provider autorise l'envoi</li>
                   <li>Vérifiez votre quota d'emails</li>
