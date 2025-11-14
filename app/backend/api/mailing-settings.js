@@ -19,9 +19,9 @@ export async function getMailingSettings(req, res) {
         settings: {
           from_email: '',
           from_name: '',
-          reply_to: '',
+          reply_to_email: '',
           provider: 'elasticemail', // Par défaut
-          api_key: '',
+          elastic_email_api_key: '',
           configured: false
         }
       });
