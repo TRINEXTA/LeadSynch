@@ -165,11 +165,15 @@ export async function updateMailingSettings(req, res) {
 export async function testMailingSettings(req, res) {
   try {
     const { tenant_id: tenantId } = req.user;
-    const { test_email } = req.body;
+    const { to, subject, body } = req.body;
 
-    if (!test_email) {
+    // Accepter aussi test_email pour compatibilité
+    const toEmail = to || req.body.test_email;
+
+    if (!toEmail) {
       return res.status(400).json({
-        error: 'Email de test requis'
+        error: 'Adresse email destinataire requise',
+        message: 'Veuillez fournir une adresse email pour l\'envoi du test'
       });
     }
 
@@ -181,25 +185,62 @@ export async function testMailingSettings(req, res) {
 
     if (rows.length === 0 || !rows[0].configured) {
       return res.status(400).json({
-        error: 'Configuration email non définie'
+        error: 'Configuration email non définie',
+        message: 'Veuillez d\'abord configurer vos paramètres d\'envoi email'
       });
     }
 
     const settings = rows[0];
 
-    // TODO: Implémenter l'envoi réel via ElasticEmail
-    // Pour l'instant, simuler le succès
-    console.log(`📧 Email de test envoyé à ${test_email} depuis ${settings.from_email}`);
+    // Importer la fonction d'envoi d'email
+    const { sendEmail } = await import('../lib/email.js');
+
+    // Préparer le contenu de l'email
+    const emailSubject = subject || '✉️ Test Email - LeadSynch CRM';
+    const emailBody = body || 'Ceci est un email de test envoyé depuis LeadSynch CRM.\n\nSi vous recevez ce message, votre configuration email fonctionne correctement !';
+
+    // Envoyer l'email de test
+    await sendEmail({
+      to: toEmail,
+      subject: emailSubject,
+      text: emailBody,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 10px;">
+          <div style="background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">📧 Email de Test</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">LeadSynch CRM</p>
+          </div>
+          <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <p style="color: #374151; line-height: 1.6; white-space: pre-wrap; margin: 0;">${emailBody.replace(/\n/g, '<br>')}</p>
+          </div>
+          <div style="text-align: center; margin-top: 20px; color: #6b7280; font-size: 12px;">
+            <p>Email envoyé depuis ${settings.from_email}</p>
+            <p>Provider: ${settings.provider}</p>
+          </div>
+        </div>
+      `,
+      from: settings.from_email,
+      fromName: settings.from_name,
+      replyTo: settings.reply_to || settings.from_email,
+      tenantId
+    });
+
+    console.log(`✅ Email de test envoyé à ${toEmail} depuis ${settings.from_email}`);
 
     res.json({
-      message: 'Email de test envoyé avec succès',
-      test_email
+      message: `Email de test envoyé avec succès à ${toEmail} !`,
+      details: {
+        to: toEmail,
+        from: settings.from_email,
+        subject: emailSubject,
+        provider: settings.provider
+      }
     });
   } catch (error) {
-    console.error('Erreur envoi email test:', error);
+    console.error('❌ Erreur envoi email test:', error);
     res.status(500).json({
-      error: 'Erreur serveur',
-      message: error.message
+      error: 'Erreur lors de l\'envoi de l\'email de test',
+      message: error.message || 'Une erreur est survenue lors de l\'envoi'
     });
   }
 }
