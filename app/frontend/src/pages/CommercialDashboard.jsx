@@ -44,7 +44,7 @@ export default function CommercialDashboard() {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Mon Dashboard Commercial</h1>
-        <p className="text-gray-600 mt-1">Vue d'ensemble de mon activitÈ</p>
+        <p className="text-gray-600 mt-1">Vue d'ensemble de mon activit√©</p>
       </div>
 
       {/* Stats Cards */}
@@ -64,7 +64,7 @@ export default function CommercialDashboard() {
         <div className="bg-white border rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Appels rÈalisÈs</p>
+              <p className="text-sm text-gray-600">Appels r√©alis√©s</p>
               <p className="text-3xl font-bold text-gray-800 mt-2">{stats?.calls_today || 0}</p>
             </div>
             <div className="bg-green-100 p-3 rounded-lg">
@@ -76,7 +76,7 @@ export default function CommercialDashboard() {
         <div className="bg-white border rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Emails envoyÈs</p>
+              <p className="text-sm text-gray-600">Emails envoy√©s</p>
               <p className="text-3xl font-bold text-gray-800 mt-2">{stats?.emails_today || 0}</p>
             </div>
             <div className="bg-purple-100 p-3 rounded-lg">
@@ -101,10 +101,10 @@ export default function CommercialDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Mes Campagnes */}
         <div className="bg-white border rounded-lg p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">?? Mes Campagnes Actives</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">üéØ Mes Campagnes Actives</h2>
 
           {campaigns.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">Aucune campagne assignÈe</p>
+            <p className="text-gray-500 text-center py-8">Aucune campagne assign√©e</p>
           ) : (
             <div className="space-y-3">
               {campaigns.map((campaign) => (
@@ -121,8 +121,8 @@ export default function CommercialDashboard() {
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600">
                     <span>{campaign.my_leads_count || 0} leads</span>
-                    <span>ï</span>
-                    <span>{campaign.emails_sent || 0} envoyÈs</span>
+                    <span>‚Ä¢</span>
+                    <span>{campaign.emails_sent || 0} envoy√©s</span>
                   </div>
                 </div>
               ))}
@@ -132,12 +132,12 @@ export default function CommercialDashboard() {
 
         {/* Leads du jour */}
         <div className="bg-white border rounded-lg p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">?? Leads ‡ contacter aujourd'hui</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">üìÖ Leads √† contacter aujourd'hui</h2>
 
           {todayLeads.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
-              <p className="text-gray-500">Tous les leads du jour ont ÈtÈ contactÈs ! ??</p>
+              <p className="text-gray-500">Tous les leads du jour ont √©t√© contact√©s ! üëç</p>
             </div>
           ) : (
             <div className="space-y-3">
