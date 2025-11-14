@@ -43,11 +43,28 @@ CREATE TABLE IF NOT EXISTS credit_usage (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Supprimer les index existants sur credit_usage qui pourraient causer des problèmes
+DROP INDEX IF EXISTS idx_credit_usage_tenant;
+DROP INDEX IF EXISTS idx_credit_usage_source;
+DROP INDEX IF EXISTS idx_credit_usage_lead;
+
 -- Ajouter les colonnes manquantes si la table existait déjà
-ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS lead_id UUID REFERENCES leads(id) ON DELETE SET NULL;
+ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS lead_id UUID;
 ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS credits_used INTEGER DEFAULT 1;
 ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS source VARCHAR(50);
 ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS cost_euros DECIMAL(10, 3);
+
+-- Ajouter la contrainte de clé étrangère après coup (si la colonne vient d'être ajoutée)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'credit_usage_lead_id_fkey'
+  ) THEN
+    ALTER TABLE credit_usage ADD CONSTRAINT credit_usage_lead_id_fkey
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
+  END IF;
+END$$;
 
 -- ========== 2. SERVICES ET ABONNEMENTS ==========
 
@@ -68,6 +85,11 @@ CREATE TABLE IF NOT EXISTS services (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Supprimer les index existants sur services qui pourraient causer des problèmes
+DROP INDEX IF EXISTS idx_services_tenant;
+DROP INDEX IF EXISTS idx_services_active;
+DROP INDEX IF EXISTS idx_services_category;
 
 -- Ajouter les colonnes manquantes si la table existait déjà
 ALTER TABLE services ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50);
