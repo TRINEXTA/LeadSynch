@@ -321,11 +321,21 @@ router.post('/merge', async (req, res) => {
       );
 
       // Transférer les relations de base de données
+      // Supprimer d'abord les conflits potentiels (même database_id pour le lead principal)
+      await q(
+        `DELETE FROM lead_database_relations
+         WHERE lead_id = $1
+         AND database_id IN (
+           SELECT database_id FROM lead_database_relations WHERE lead_id = $2
+         )`,
+        [primary_lead_id, duplicateId]
+      );
+
+      // Puis transférer toutes les relations du doublon
       await q(
         `UPDATE lead_database_relations
          SET lead_id = $1
-         WHERE lead_id = $2
-         ON CONFLICT (lead_id, database_id) DO NOTHING`,
+         WHERE lead_id = $2`,
         [primary_lead_id, duplicateId]
       );
     }

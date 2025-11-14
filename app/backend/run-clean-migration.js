@@ -33,7 +33,7 @@ async function runCleanMigration() {
     console.log('\n========================================');
     console.log('✅ MIGRATION RÉUSSIE !');
     console.log('========================================\n');
-    console.log('📋 Tables créées :');
+    console.log('📋 Tables créées (10) :');
     console.log('   ✓ lead_credits');
     console.log('   ✓ credit_purchases');
     console.log('   ✓ credit_usage');
@@ -42,7 +42,8 @@ async function runCleanMigration() {
     console.log('   ✓ subscription_invoices');
     console.log('   ✓ subscription_history');
     console.log('   ✓ invoices');
-    console.log('   ✓ billing_info\n');
+    console.log('   ✓ billing_info');
+    console.log('   ✓ mailing_settings\n');
     console.log('🔄 Prochaines étapes :');
     console.log('   1. Redémarrez le backend : npm start');
     console.log('   2. Testez les pages Statistics, Billing, Users');

@@ -13,7 +13,7 @@ Cela cause les erreurs suivantes :
 
 ## 📋 Tables qui seront créées
 
-Le script `00_COMPLETE_SETUP.sql` va créer les tables suivantes :
+Le script `00_CLEAN_SETUP.sql` va créer les tables suivantes :
 
 ### Système de crédits leads
 - `lead_credits` - Crédits disponibles par tenant
@@ -29,71 +29,40 @@ Le script `00_COMPLETE_SETUP.sql` va créer les tables suivantes :
 ### Facturation Stripe
 - `invoices` - Factures Stripe
 - `billing_info` - Informations de facturation des tenants
+- `mailing_settings` - Configuration email (SMTP/Elastic Email)
 
 ## 🚀 Comment exécuter les migrations
 
-### Option 1 : Via Neon Console (RECOMMANDÉ)
+### Option 1 : Via Node.js script (RECOMMANDÉ)
+
+```bash
+# Depuis le dossier backend
+cd app/backend
+
+# Exécuter la migration propre
+node run-clean-migration.js
+```
+
+**Important :** Cette migration va **supprimer et recréer** les tables. Vérifiez que vous voyez le message `✅ MIGRATION RÉUSSIE !` avec 10 tables créées.
+
+### Option 2 : Via Neon Console
 
 1. Connectez-vous à votre console Neon : https://console.neon.tech
 2. Sélectionnez votre projet LeadSynch
 3. Allez dans l'onglet **SQL Editor**
-4. Copiez le contenu complet du fichier `/app/backend/migrations/00_COMPLETE_SETUP.sql`
+4. Copiez le contenu complet du fichier `/app/backend/migrations/00_CLEAN_SETUP.sql`
 5. Collez-le dans l'éditeur SQL
 6. Cliquez sur **Run** pour exécuter le script
-7. Vérifiez que le message `✅ Migration terminée ! 9 tables créées/vérifiées` apparaît
+7. Vérifiez que le message `✅ Migration terminée ! 10 tables créées` apparaît
 
-### Option 2 : Via psql en ligne de commande
+### Option 3 : Via psql en ligne de commande
 
 ```bash
 # Depuis le dossier racine du projet
 cd app/backend
 
 # Exécuter le script (remplacez l'URL par votre POSTGRES_URL)
-psql "postgresql://your-user:your-password@your-host.neon.tech/neondb?sslmode=require" -f migrations/00_COMPLETE_SETUP.sql
-```
-
-### Option 3 : Via Node.js script
-
-```bash
-cd app/backend
-
-# Créer un script temporaire
-cat > run-migration.js << 'EOF'
-import { readFileSync } from 'fs';
-import pg from 'pg';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const client = new pg.Client({
-  connectionString: process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-async function runMigration() {
-  try {
-    await client.connect();
-    console.log('✅ Connecté à la base de données');
-
-    const sql = readFileSync('./migrations/00_COMPLETE_SETUP.sql', 'utf8');
-    await client.query(sql);
-
-    console.log('✅ Migration exécutée avec succès !');
-  } catch (error) {
-    console.error('❌ Erreur migration:', error);
-  } finally {
-    await client.end();
-  }
-}
-
-runMigration();
-EOF
-
-# Exécuter le script
-node run-migration.js
-
-# Nettoyer
-rm run-migration.js
+psql "postgresql://your-user:your-password@your-host.neon.tech/neondb?sslmode=require" -f migrations/00_CLEAN_SETUP.sql
 ```
 
 ## ✅ Vérification
@@ -128,7 +97,7 @@ WHERE table_schema = 'public'
 AND table_name IN (
   'lead_credits', 'credit_purchases', 'credit_usage',
   'services', 'subscriptions', 'subscription_invoices',
-  'subscription_history', 'invoices', 'billing_info'
+  'subscription_history', 'invoices', 'billing_info', 'mailing_settings'
 )
 ORDER BY table_name;
 
@@ -138,14 +107,15 @@ SELECT COUNT(*) as services_rows FROM services;
 ```
 
 Vous devriez voir :
-- 9 tables listées
+- **10 tables** listées
 - Au moins 1 ligne dans `lead_credits` (une par tenant)
 - Au moins 4 lignes dans `services` (4 services par tenant)
 
 ## 🆘 En cas de problème
 
 ### Erreur : "relation already exists"
-C'est normal ! Le script utilise `CREATE TABLE IF NOT EXISTS`, donc il ne recréera pas les tables existantes.
+Si vous utilisez `00_COMPLETE_SETUP.sql`, c'est normal car il utilise `CREATE TABLE IF NOT EXISTS`.
+Si vous utilisez `00_CLEAN_SETUP.sql` via `run-clean-migration.js`, cela ne devrait PAS arriver car les tables sont supprimées d'abord.
 
 ### Erreur : "permission denied"
 Vérifiez que votre utilisateur PostgreSQL a les droits nécessaires (CREATE TABLE, CREATE INDEX, etc.)

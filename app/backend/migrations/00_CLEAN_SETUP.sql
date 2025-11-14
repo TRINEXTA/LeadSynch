@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS credit_purchases CASCADE;
 DROP TABLE IF EXISTS lead_credits CASCADE;
 DROP TABLE IF EXISTS invoices CASCADE;
 DROP TABLE IF EXISTS billing_info CASCADE;
+DROP TABLE IF EXISTS mailing_settings CASCADE;
 
 -- ========== 1. SYSTÈME DE CRÉDITS LEADS ==========
 
@@ -176,6 +177,23 @@ CREATE TABLE billing_info (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE mailing_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE UNIQUE,
+  from_email VARCHAR(255) NOT NULL,
+  from_name VARCHAR(255),
+  reply_to_email VARCHAR(255),
+  elastic_email_api_key VARCHAR(500),
+  smtp_host VARCHAR(255),
+  smtp_port INTEGER,
+  smtp_user VARCHAR(255),
+  smtp_password VARCHAR(500),
+  provider VARCHAR(50) DEFAULT 'elastic_email',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- ========== 4. INDEXES ==========
 
 CREATE INDEX idx_lead_credits_tenant ON lead_credits(tenant_id);
@@ -208,6 +226,7 @@ CREATE INDEX idx_invoices_tenant ON invoices(tenant_id);
 CREATE INDEX idx_invoices_stripe ON invoices(stripe_invoice_id);
 CREATE INDEX idx_invoices_number ON invoices(invoice_number);
 CREATE INDEX idx_billing_info_tenant ON billing_info(tenant_id);
+CREATE INDEX idx_mailing_settings_tenant ON mailing_settings(tenant_id);
 
 -- ========== 5. TRIGGERS ==========
 
@@ -229,6 +248,10 @@ CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON subscriptions
 
 DROP TRIGGER IF EXISTS update_subscription_invoices_updated_at ON subscription_invoices;
 CREATE TRIGGER update_subscription_invoices_updated_at BEFORE UPDATE ON subscription_invoices
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_mailing_settings_updated_at ON mailing_settings;
+CREATE TRIGGER update_mailing_settings_updated_at BEFORE UPDATE ON mailing_settings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ========== 6. INITIALISATION DES DONNÉES ==========
@@ -292,9 +315,9 @@ BEGIN
   RAISE NOTICE '========================================';
   RAISE NOTICE '✅ Migration terminée avec succès !';
   RAISE NOTICE '========================================';
-  RAISE NOTICE '📋 Tables créées : 9';
-  RAISE NOTICE '🔧 Indexes créés : 24';
-  RAISE NOTICE '🎯 Triggers créés : 3';
+  RAISE NOTICE '📋 Tables créées : 10';
+  RAISE NOTICE '🔧 Indexes créés : 25';
+  RAISE NOTICE '🎯 Triggers créés : 4';
   RAISE NOTICE '📦 Données initialisées';
   RAISE NOTICE '========================================';
 END$$;
