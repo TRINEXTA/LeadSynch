@@ -106,7 +106,7 @@ export default function Register() {
 
   const verifySiret = async () => {
     const siret = formData.siret.replace(/\s/g, '');
-    
+
     if (siret.length !== 14) {
       setErrors(prev => ({ ...prev, siret: 'SIRET doit contenir 14 chiffres' }));
       return;
@@ -116,31 +116,36 @@ export default function Register() {
     setErrors(prev => ({ ...prev, siret: null }));
 
     try {
-      // Appel à l'API Sirene (gouvernement français)
-      const response = await fetch(`https://entreprise.data.gouv.fr/api/sirene/v3/etablissements/${siret}`);
-      
-      if (!response.ok) {
-        throw new Error('SIRET non trouvé');
-      }
+      // Appel à l'API backend qui utilise l'API gratuite du gouvernement
+      const response = await fetch('http://localhost:3000/api/verify-siret', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ siret })
+      });
 
       const data = await response.json();
-      const etablissement = data.etablissement;
+
+      if (!data.valid) {
+        throw new Error(data.error || 'SIRET non trouvé');
+      }
 
       // Auto-complétion des données
       setFormData(prev => ({
         ...prev,
-        companyName: etablissement.unite_legale.denomination || etablissement.unite_legale.nom_complet || prev.companyName,
-        sector: etablissement.unite_legale.activite_principale || prev.sector,
-        address: `${etablissement.geo_adresse || ''}`,
-        city: etablissement.libelle_commune || prev.city,
-        postalCode: etablissement.code_postal || prev.postalCode,
+        companyName: data.companyName || prev.companyName,
+        sector: data.sector || prev.sector,
+        address: data.address || prev.address,
+        city: data.city || prev.city,
+        postalCode: data.postalCode || prev.postalCode,
       }));
 
-      alert(' SIRET vérifié ! Les informations ont été complétées automatiquement.');
+      alert('✅ SIRET vérifié ! Les informations ont été complétées automatiquement.');
     } catch (error) {
-      setErrors(prev => ({ 
-        ...prev, 
-        siret: 'SIRET invalide ou introuvable. Vérifiez le numéro.' 
+      setErrors(prev => ({
+        ...prev,
+        siret: error.message || 'SIRET invalide ou introuvable. Vérifiez le numéro.'
       }));
     } finally {
       setSiretLoading(false);
