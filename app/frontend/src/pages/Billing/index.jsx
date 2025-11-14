@@ -316,20 +316,12 @@ export default function Billing() {
               <p className="mb-4 text-indigo-100">
                 Notre équipe est là pour vous aider à choisir le plan adapté à vos besoins.
               </p>
-              <div className="space-y-3">
-                <a
-                  href="mailto:contact@leadsynch.com"
-                  className="block bg-white text-indigo-600 py-3 px-4 rounded-lg font-semibold text-center hover:bg-indigo-50 transition-all"
-                >
-                  📧 contact@leadsynch.com
-                </a>
-                <a
-                  href="tel:+33123456789"
-                  className="block bg-white text-indigo-600 py-3 px-4 rounded-lg font-semibold text-center hover:bg-indigo-50 transition-all"
-                >
-                  📞 +33 1 23 45 67 89
-                </a>
-              </div>
+              <a
+                href="mailto:contact@leadsynch.com"
+                className="block bg-white text-indigo-600 py-3 px-4 rounded-lg font-semibold text-center hover:bg-indigo-50 transition-all shadow-md"
+              >
+                📧 contact@leadsynch.com
+              </a>
             </CardContent>
           </Card>
         </div>
