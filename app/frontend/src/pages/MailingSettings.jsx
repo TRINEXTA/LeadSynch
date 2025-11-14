@@ -1,31 +1,18 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Mail, User, Reply, Server, Send, Shield, TrendingUp, Save, Eye, EyeOff, Link, AlertCircle, Crown, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Save, Send, CheckCircle, AlertCircle, Loader2, Building2, Reply, User } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import api from '../api/axios';
 
 export default function MailingSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [message, setMessage] = useState(null);
   const [settings, setSettings] = useState({
     from_email: '',
     from_name: '',
-    reply_to_email: '',
-    smtp_host: '',
-    smtp_port: 587,
-    smtp_user: '',
-    smtp_password: '',
-    smtp_secure: true,
-    api_provider: 'smtp',
-    api_key: '',
-    plan_type: 'external', // external, lite, pro, enterprise
-    daily_limit: 500,
-    hourly_limit: 50,
-    warmup_enabled: false,
-    warmup_daily_increment: 10,
-    signature: '',
-    unsubscribe_url: 'https://leadsync.com/unsubscribe?id={{LEAD_ID}}',
+    reply_to: '',
     company_name: '',
-    company_address: ''
+    signature: ''
   });
 
   useEffect(() => {
@@ -36,153 +23,120 @@ export default function MailingSettings() {
     try {
       const response = await api.get('/mailing-settings');
       if (response.data.settings) {
-        setSettings(response.data.settings);
+        setSettings({
+          from_email: response.data.settings.from_email || '',
+          from_name: response.data.settings.from_name || '',
+          reply_to: response.data.settings.reply_to || response.data.settings.reply_to_email || '',
+          company_name: response.data.settings.company_name || '',
+          signature: response.data.settings.signature || ''
+        });
       }
-      setLoading(false);
     } catch (error) {
       console.error('Erreur chargement settings:', error);
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
-    // Validation
-    if (!settings.from_email || !settings.from_name) {
-      alert('❌ Adresse email et nom expéditeur obligatoires !');
-      return;
-    }
+  const handleSave = async (e) => {
+    e.preventDefault();
 
-    if (!settings.unsubscribe_url.includes('{{LEAD_ID}}')) {
-      alert('❌ Le lien de désabonnement doit contenir {{LEAD_ID}} !');
+    // Validation
+    if (!settings.from_email || !settings.from_name || !settings.company_name) {
+      setMessage({
+        type: 'error',
+        text: '⚠️ Veuillez remplir tous les champs obligatoires (marqués *)'
+      });
       return;
     }
 
     setSaving(true);
+    setMessage(null);
+
     try {
-      await api.post('/mailing-settings', settings);
-      alert('✅ Configuration enregistrée !');
+      await api.post('/mailing-settings', {
+        ...settings,
+        provider: 'elasticemail', // Provider par défaut
+        configured: true
+      });
+
+      setMessage({
+        type: 'success',
+        text: '✅ Configuration enregistrée avec succès !'
+      });
+
+      // Recharger pour voir le statut à jour
+      setTimeout(() => {
+        loadSettings();
+      }, 1000);
     } catch (error) {
       console.error('Erreur save:', error);
-      alert('❌ Erreur lors de la sauvegarde');
+      setMessage({
+        type: 'error',
+        text: '❌ Erreur lors de la sauvegarde : ' + (error.response?.data?.message || error.message)
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleTestEmail = async () => {
-    try {
-      await api.post('/mailing-settings/test', { email: settings.from_email });
-      alert('📧 Email de test envoyé ! Vérifiez votre boîte de réception.');
-    } catch (error) {
-      console.error('Erreur test:', error);
-      alert('❌ Erreur lors de l\'envoi du test');
-    }
-  };
-
-  const isExternalProvider = settings.api_provider === 'smtp' && settings.smtp_host !== '';
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
+          <p className="text-gray-800 text-lg font-semibold">Chargement de la configuration...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-6">
+    <div className="p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 min-h-screen">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-4">
           <div className="flex items-center gap-3 mb-2">
-            <Mail className="w-8 h-8 text-purple-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Configuration Email</h1>
+            <Mail className="w-8 h-8 text-indigo-600" />
+            <h1 className="text-4xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              ⚙️ Configuration Email
+            </h1>
           </div>
-          <p className="text-gray-600">Configurez vos paramètres d'envoi d'emails</p>
+          <p className="text-gray-700 text-sm font-medium">
+            Configurez vos paramètres d'envoi en quelques clics
+          </p>
         </div>
 
-        <div className="space-y-6">
-          {/* Plan d'envoi */}
-          <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-            <div className="flex items-center gap-3 mb-4">
-              <Crown className="w-6 h-6" />
-              <h2 className="text-xl font-bold">Plan d'Envoi Email</h2>
-            </div>
-
-            <div className="grid grid-cols-4 gap-4">
-              <button
-                onClick={() => setSettings({...settings, plan_type: 'external'})}
-                className={`p-4 rounded-xl font-semibold transition-all ${
-                  settings.plan_type === 'external'
-                    ? 'bg-white text-purple-700 shadow-lg'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                <Server className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm">SMTP Externe</div>
-                <div className="text-xs opacity-80 mt-1">Illimité</div>
-              </button>
-
-              <button
-                onClick={() => setSettings({...settings, plan_type: 'lite', daily_limit: 500})}
-                className={`p-4 rounded-xl font-semibold transition-all ${
-                  settings.plan_type === 'lite'
-                    ? 'bg-white text-purple-700 shadow-lg'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                <Zap className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm">Lite</div>
-                <div className="text-xs opacity-80 mt-1">500 emails/jour</div>
-              </button>
-
-              <button
-                onClick={() => setSettings({...settings, plan_type: 'pro', daily_limit: 5000})}
-                className={`p-4 rounded-xl font-semibold transition-all ${
-                  settings.plan_type === 'pro'
-                    ? 'bg-white text-purple-700 shadow-lg'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                <Crown className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm">Pro</div>
-                <div className="text-xs opacity-80 mt-1">5000 emails/jour</div>
-              </button>
-
-              <button
-                onClick={() => setSettings({...settings, plan_type: 'enterprise', daily_limit: 50000})}
-                className={`p-4 rounded-xl font-semibold transition-all ${
-                  settings.plan_type === 'enterprise'
-                    ? 'bg-white text-purple-700 shadow-lg'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                <TrendingUp className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm">Enterprise</div>
-                <div className="text-xs opacity-80 mt-1">50000 emails/jour</div>
-              </button>
-            </div>
-
-            {settings.plan_type === 'external' && (
-              <div className="mt-4 p-4 bg-white/20 rounded-xl">
-                <AlertCircle className="w-5 h-5 inline mr-2" />
-                <span className="text-sm">
-                  Avec votre propre serveur SMTP, aucune limite d'envoi n'est appliquée par LeadSync.
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Informations Expéditeur */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <User className="w-6 h-6 text-blue-600" />
-              <h2 className="text-xl font-bold text-gray-900">Informations Expéditeur</h2>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+        {/* Alert Info */}
+        <Card className="shadow-xl border-0 mb-4" style={{background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)'}}>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-3 text-white">
+              <AlertCircle className="w-6 h-6 flex-shrink-0 mt-1" />
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Adresse email d'envoi * <span className="text-red-500">●</span>
+                <h3 className="font-black text-lg mb-2">📋 Information</h3>
+                <p className="text-sm font-semibold opacity-90">
+                  Le lien de désabonnement est automatiquement géré et ajouté à tous vos emails pour respecter le RGPD.
+                  Vous n'avez rien à faire !
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Formulaire */}
+        <Card className="shadow-xl border-2 border-gray-200 bg-white mb-4">
+          <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b py-3">
+            <CardTitle className="flex items-center gap-2 text-gray-800 text-lg">
+              <User className="w-6 h-6 text-indigo-600" />
+              Informations d'Envoi
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6 pb-6">
+            <form onSubmit={handleSave} className="space-y-5">
+              {/* Email d'envoi */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  📧 Email d'Envoi * <span className="text-red-500">●</span>
                 </label>
                 <input
                   type="email"
@@ -190,356 +144,180 @@ export default function MailingSettings() {
                   value={settings.from_email}
                   onChange={(e) => setSettings({...settings, from_email: e.target.value})}
                   placeholder="contact@votre-entreprise.com"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                 />
+                <p className="text-xs text-gray-500 mt-1 font-medium">
+                  L'adresse email qui apparaîtra comme expéditeur
+                </p>
               </div>
 
+              {/* Nom de l'expéditeur */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Nom de l'expéditeur * <span className="text-red-500">●</span>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  👤 Nom de l'Expéditeur * <span className="text-red-500">●</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={settings.from_name}
                   onChange={(e) => setSettings({...settings, from_name: e.target.value})}
-                  placeholder="Votre Entreprise"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Jean Dupont"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                 />
+                <p className="text-xs text-gray-500 mt-1 font-medium">
+                  Le nom qui apparaîtra comme expéditeur
+                </p>
               </div>
 
-              <div className="col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  <Reply className="w-4 h-4 inline mr-1" />
-                  Adresse de réponse (Reply-To)
+              {/* Email de réponse */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  💬 Email de Réponse (Reply-To)
                 </label>
                 <input
                   type="email"
-                  value={settings.reply_to_email}
-                  onChange={(e) => setSettings({...settings, reply_to_email: e.target.value})}
-                  placeholder="support@votre-entreprise.com"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  value={settings.reply_to}
+                  onChange={(e) => setSettings({...settings, reply_to: e.target.value})}
+                  placeholder="support@votre-entreprise.com (optionnel)"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Les réponses seront envoyées à cette adresse
+                <p className="text-xs text-gray-500 mt-1 font-medium">
+                  Les réponses seront envoyées à cette adresse (si vide, utilise l'email d'envoi)
                 </p>
               </div>
 
+              {/* Nom de la société */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Nom de l'entreprise * <span className="text-red-500">●</span>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  🏢 Nom de la Société * <span className="text-red-500">●</span>
                 </label>
                 <input
                   type="text"
+                  required
                   value={settings.company_name}
                   onChange={(e) => setSettings({...settings, company_name: e.target.value})}
                   placeholder="Votre Entreprise SAS"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Adresse de l'entreprise * <span className="text-red-500">●</span>
-                </label>
-                <input
-                  type="text"
-                  value={settings.company_address}
-                  onChange={(e) => setSettings({...settings, company_address: e.target.value})}
-                  placeholder="123 Rue Example, 75001 Paris"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Configuration Serveur */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Server className="w-6 h-6 text-green-600" />
-              <h2 className="text-xl font-bold text-gray-900">Configuration Serveur</h2>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Fournisseur d'envoi
-              </label>
-              <div className="grid grid-cols-3 gap-4">
-                <button
-                  onClick={() => setSettings({...settings, api_provider: 'smtp'})}
-                  className={`p-4 rounded-xl border-2 font-semibold transition-all ${
-                    settings.api_provider === 'smtp'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-300 hover:border-purple-300'
-                  }`}
-                >
-                  SMTP Custom
-                </button>
-                <button
-                  onClick={() => setSettings({...settings, api_provider: 'elasticemail'})}
-                  className={`p-4 rounded-xl border-2 font-semibold transition-all ${
-                    settings.api_provider === 'elasticemail'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-300 hover:border-purple-300'
-                  }`}
-                >
-                  ElasticEmail
-                </button>
-                <button
-                  onClick={() => setSettings({...settings, api_provider: 'sendgrid'})}
-                  className={`p-4 rounded-xl border-2 font-semibold transition-all ${
-                    settings.api_provider === 'sendgrid'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-300 hover:border-purple-300'
-                  }`}
-                >
-                  SendGrid
-                </button>
-              </div>
-            </div>
-
-            {settings.api_provider === 'smtp' ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Serveur SMTP *
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.smtp_host}
-                    onChange={(e) => setSettings({...settings, smtp_host: e.target.value})}
-                    placeholder="smtp.gmail.com"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Port SMTP *
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.smtp_port}
-                    onChange={(e) => setSettings({...settings, smtp_port: parseInt(e.target.value)})}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Utilisateur SMTP *
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.smtp_user}
-                    onChange={(e) => setSettings({...settings, smtp_user: e.target.value})}
-                    placeholder="votre@email.com"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Mot de passe SMTP *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={settings.smtp_password}
-                      onChange={(e) => setSettings({...settings, smtp_password: e.target.value})}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="col-span-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.smtp_secure}
-                      onChange={(e) => setSettings({...settings, smtp_secure: e.target.checked})}
-                      className="w-5 h-5 text-purple-600 rounded"
-                    />
-                    <span className="text-sm font-semibold text-gray-700">
-                      <Shield className="w-4 h-4 inline mr-1" />
-                      Utiliser SSL/TLS (recommandé)
-                    </span>
-                  </label>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Clé API {settings.api_provider === 'elasticemail' ? 'ElasticEmail' : 'SendGrid'} *
-                </label>
-                <input
-                  type="text"
-                  value={settings.api_key}
-                  onChange={(e) => setSettings({...settings, api_key: e.target.value})}
-                  placeholder="Votre clé API"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Limites d'envoi (uniquement si plan payant) */}
-          {settings.plan_type !== 'external' && (
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Send className="w-6 h-6 text-orange-600" />
-                <h2 className="text-xl font-bold text-gray-900">Limites d'envoi</h2>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Limite quotidienne
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.daily_limit}
-                    disabled
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl bg-gray-100"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Défini par votre plan ({settings.plan_type})</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Limite horaire
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.hourly_limit}
-                    onChange={(e) => setSettings({...settings, hourly_limit: parseInt(e.target.value)})}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Nombre maximum d'emails par heure</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Warmup */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <TrendingUp className="w-6 h-6 text-yellow-600" />
-              <h2 className="text-xl font-bold text-gray-900">Warmup Email</h2>
-            </div>
-
-            <div className="mb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.warmup_enabled}
-                  onChange={(e) => setSettings({...settings, warmup_enabled: e.target.checked})}
-                  className="w-5 h-5 text-purple-600 rounded"
-                />
-                <span className="text-sm font-semibold text-gray-700">
-                  Activer le warmup (montée en puissance progressive)
-                </span>
-              </label>
-            </div>
-
-            {settings.warmup_enabled && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Incrément quotidien
-                </label>
-                <input
-                  type="number"
-                  value={settings.warmup_daily_increment}
-                  onChange={(e) => setSettings({...settings, warmup_daily_increment: parseInt(e.target.value)})}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Nombre d'emails supplémentaires envoyés chaque jour
+                <p className="text-xs text-gray-500 mt-1 font-medium">
+                  Le nom de votre entreprise (apparaîtra dans le pied de page)
                 </p>
               </div>
-            )}
-          </div>
 
-          {/* Désabonnement (OBLIGATOIRE) */}
-          <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Link className="w-6 h-6 text-red-600" />
-              <h2 className="text-xl font-bold text-gray-900">
-                Lien de Désabonnement <span className="text-red-500">● OBLIGATOIRE</span>
-              </h2>
+              {/* Signature */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  ✍️ Signature Email (Optionnel)
+                </label>
+                <textarea
+                  value={settings.signature}
+                  onChange={(e) => setSettings({...settings, signature: e.target.value})}
+                  rows={6}
+                  placeholder="Cordialement,&#10;&#10;Jean Dupont&#10;Responsable Commercial&#10;Votre Entreprise"
+                  className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 font-semibold transition-all resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1 font-medium">
+                  Signature ajoutée automatiquement à la fin de chaque email
+                </p>
+              </div>
+
+              {/* Message de résultat */}
+              {message && (
+                <div className={`p-4 rounded-xl border-2 ${
+                  message.type === 'success'
+                    ? 'bg-green-50 border-green-400'
+                    : 'bg-red-50 border-red-400'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {message.type === 'success' ? (
+                      <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 animate-bounce" />
+                    ) : (
+                      <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 animate-pulse" />
+                    )}
+                    <p className={`text-sm font-semibold ${
+                      message.type === 'success' ? 'text-green-700' : 'text-red-700'
+                    }`}>
+                      {message.text}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Bouton Enregistrer */}
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full text-white py-4 px-6 rounded-xl font-black text-lg transition-all shadow-xl hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 hover:scale-105 active:scale-95"
+                style={{
+                  background: saving
+                    ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                    : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)'
+                }}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    Enregistrement en cours...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-6 h-6" />
+                    Enregistrer la Configuration
+                  </>
+                )}
+              </button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Aide */}
+        <Card className="shadow-xl border-2 border-gray-200 bg-white">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b py-3">
+            <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Après la Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-5 pb-5">
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white font-black flex-shrink-0">
+                  1
+                </div>
+                <div>
+                  <h4 className="font-black text-gray-800 mb-1">Enregistrez votre configuration</h4>
+                  <p className="text-gray-600 font-medium">
+                    Cliquez sur "Enregistrer la Configuration" ci-dessus
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white font-black flex-shrink-0">
+                  2
+                </div>
+                <div>
+                  <h4 className="font-black text-gray-800 mb-1">Testez l'envoi d'email</h4>
+                  <p className="text-gray-600 font-medium">
+                    Allez dans "Test Email" pour envoyer un email de test et vérifier que tout fonctionne
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-teal-500 rounded-lg flex items-center justify-center text-white font-black flex-shrink-0">
+                  3
+                </div>
+                <div>
+                  <h4 className="font-black text-gray-800 mb-1">Lancez vos campagnes !</h4>
+                  <p className="text-gray-600 font-medium">
+                    Votre configuration est prête, vous pouvez maintenant envoyer des emails à vos leads
+                  </p>
+                </div>
+              </div>
             </div>
-
-            <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl">
-              <AlertCircle className="w-5 h-5 inline mr-2 text-yellow-700" />
-              <span className="text-sm font-semibold text-yellow-900">
-                Légalement obligatoire (RGPD/CAN-SPAM) : Chaque email doit contenir un lien de désabonnement.
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                URL de désabonnement * <span className="text-red-500">●</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={settings.unsubscribe_url}
-                onChange={(e) => setSettings({...settings, unsubscribe_url: e.target.value})}
-                placeholder="https://votre-site.com/unsubscribe?id={{LEAD_ID}}"
-                className="w-full px-4 py-3 border-2 border-red-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                <strong>Important :</strong> Utilisez <code className="bg-gray-200 px-2 py-1 rounded">{'{{LEAD_ID}}'}</code> pour identifier le lead qui se désabonne.
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Ce lien sera automatiquement ajouté en bas de chaque email.
-              </p>
-            </div>
-          </div>
-
-          {/* Signature */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Mail className="w-6 h-6 text-purple-600" />
-              <h2 className="text-xl font-bold text-gray-900">Signature Email</h2>
-            </div>
-
-            <textarea
-              value={settings.signature}
-              onChange={(e) => setSettings({...settings, signature: e.target.value})}
-              rows={6}
-              placeholder="Cordialement,&#10;&#10;[Votre Nom]&#10;[Poste]&#10;[Entreprise]&#10;&#10;HTML supporté"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-mono text-sm"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-4">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg disabled:opacity-50"
-            >
-              <Save className="w-5 h-5" />
-              {saving ? 'Enregistrement...' : 'Enregistrer la configuration'}
-            </button>
-
-            <button
-              onClick={handleTestEmail}
-              className="px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
-            >
-              <Send className="w-5 h-5 inline mr-2" />
-              Envoyer un test
-            </button>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
