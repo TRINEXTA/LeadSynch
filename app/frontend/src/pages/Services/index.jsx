@@ -121,59 +121,67 @@ export default function Services() {
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-green-500 to-green-600">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <Card
+              className="relative overflow-hidden shadow-xl border-0"
+              style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}}>
               <CardContent className="pt-6 pb-6">
-                <div className="flex items-center justify-between text-white">
-                  <div>
-                    <p className="text-sm font-medium opacity-90">MRR</p>
-                    <p className="text-3xl font-bold">{stats.mrr.toFixed(0)}€</p>
-                    <p className="text-xs opacity-75 mt-1">Revenu mensuel récurrent</p>
+                <div className="flex items-start justify-between text-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold opacity-90 mb-2">💰 MRR</p>
+                    <p className="text-4xl font-black mb-1">{stats.mrr.toFixed(0)}€</p>
+                    <p className="text-xs opacity-80 font-medium">Revenu mensuel récurrent</p>
                   </div>
-                  <DollarSign className="w-12 h-12 opacity-50" />
+                  <DollarSign className="w-14 h-14 opacity-20 absolute right-3 top-3" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-blue-500 to-blue-600">
+            <Card
+              className="relative overflow-hidden shadow-xl border-0"
+              style={{background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'}}>
               <CardContent className="pt-6 pb-6">
-                <div className="flex items-center justify-between text-white">
-                  <div>
-                    <p className="text-sm font-medium opacity-90">Services</p>
-                    <p className="text-3xl font-bold">{services.length}</p>
-                    <p className="text-xs opacity-75 mt-1">Services disponibles</p>
+                <div className="flex items-start justify-between text-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold opacity-90 mb-2">📦 Services</p>
+                    <p className="text-4xl font-black mb-1">{services.length}</p>
+                    <p className="text-xs opacity-80 font-medium">Services disponibles</p>
                   </div>
-                  <Package className="w-12 h-12 opacity-50" />
+                  <Package className="w-14 h-14 opacity-20 absolute right-3 top-3" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-purple-500 to-purple-600">
+            <Card
+              className="relative overflow-hidden shadow-xl border-0"
+              style={{background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)'}}>
               <CardContent className="pt-6 pb-6">
-                <div className="flex items-center justify-between text-white">
-                  <div>
-                    <p className="text-sm font-medium opacity-90">Abonnements</p>
-                    <p className="text-3xl font-bold">
+                <div className="flex items-start justify-between text-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold opacity-90 mb-2">✓ Abonnements</p>
+                    <p className="text-4xl font-black mb-1">
                       {stats.by_status.find(s => s.status === 'active')?.count || 0}
                     </p>
-                    <p className="text-xs opacity-75 mt-1">Abonnements actifs</p>
+                    <p className="text-xs opacity-80 font-medium">Abonnements actifs</p>
                   </div>
-                  <CheckCircle className="w-12 h-12 opacity-50" />
+                  <CheckCircle className="w-14 h-14 opacity-20 absolute right-3 top-3" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-orange-500 to-orange-600">
+            <Card
+              className="relative overflow-hidden shadow-xl border-0"
+              style={{background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)'}}>
               <CardContent className="pt-6 pb-6">
-                <div className="flex items-center justify-between text-white">
-                  <div>
-                    <p className="text-sm font-medium opacity-90">Clients</p>
-                    <p className="text-3xl font-bold">
+                <div className="flex items-start justify-between text-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold opacity-90 mb-2">👥 Clients</p>
+                    <p className="text-4xl font-black mb-1">
                       {new Set(subscriptions.filter(s => s.status === 'active').map(s => s.lead_id)).size}
                     </p>
-                    <p className="text-xs opacity-75 mt-1">Clients actifs</p>
+                    <p className="text-xs opacity-80 font-medium">Clients actifs</p>
                   </div>
-                  <Users className="w-12 h-12 opacity-50" />
+                  <Users className="w-14 h-14 opacity-20 absolute right-3 top-3" />
                 </div>
               </CardContent>
             </Card>
@@ -348,60 +356,60 @@ export default function Services() {
 
         {/* Subscriptions Tab */}
         {activeTab === 'subscriptions' && (
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 gap-4">
             {subscriptions.map(subscription => (
-              <Card key={subscription.id} className="shadow-xl border-2 border-gray-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
+              <Card key={subscription.id} className="shadow-lg border-2 border-gray-200 hover:shadow-xl transition-all bg-white">
+                <CardContent className="pt-6 pb-6">
+                  <div className="flex items-start justify-between mb-6">
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      <h3 className="text-2xl font-black text-gray-900 mb-3">
                         {subscription.subscription_name}
                       </h3>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                        <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          {subscription.company_name}
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <span className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                          <Users className="w-5 h-5 text-blue-600" />
+                          <span className="font-bold text-gray-900">{subscription.company_name}</span>
                         </span>
                         {subscription.service_name && (
-                          <span className="flex items-center gap-1">
-                            <Package className="w-4 h-4" />
-                            {subscription.service_name}
+                          <span className="flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-lg border border-purple-200">
+                            <Package className="w-5 h-5 text-purple-600" />
+                            <span className="font-bold text-gray-900">{subscription.service_name}</span>
                           </span>
                         )}
                       </div>
+                    </div>
+                  </div>
 
-                      <div className="grid grid-cols-4 gap-4">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Prix</p>
-                          <p className="text-lg font-bold text-indigo-600">
-                            {subscription.price}€
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Cycle</p>
-                          <p className="text-sm font-medium text-gray-900">
-                            {subscription.billing_cycle}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Début</p>
-                          <p className="text-sm font-medium text-gray-900">
-                            {subscription.start_date ? new Date(subscription.start_date).toLocaleDateString('fr-FR') : 'N/A'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Statut</p>
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            subscription.status === 'active'
-                              ? 'bg-green-100 text-green-800'
-                              : subscription.status === 'paused'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {subscription.status}
-                          </span>
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border-2 border-green-200">
+                      <p className="text-xs font-bold text-green-700 mb-1 uppercase tracking-wide">💰 Prix</p>
+                      <p className="text-2xl font-black text-green-600">
+                        {subscription.price}€
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-xl border-2 border-blue-200">
+                      <p className="text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">🔄 Cycle</p>
+                      <p className="text-lg font-bold text-blue-900">
+                        {subscription.billing_cycle}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl border-2 border-purple-200">
+                      <p className="text-xs font-bold text-purple-700 mb-1 uppercase tracking-wide">📅 Début</p>
+                      <p className="text-sm font-bold text-purple-900">
+                        {subscription.start_date ? new Date(subscription.start_date).toLocaleDateString('fr-FR') : 'N/A'}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-50 to-yellow-50 p-4 rounded-xl border-2 border-orange-200">
+                      <p className="text-xs font-bold text-orange-700 mb-1 uppercase tracking-wide">✓ Statut</p>
+                      <span className={`inline-block px-4 py-1.5 rounded-full text-xs font-black ${
+                        subscription.status === 'active'
+                          ? 'bg-green-500 text-white'
+                          : subscription.status === 'paused'
+                          ? 'bg-yellow-500 text-white'
+                          : 'bg-gray-400 text-white'
+                      }`}>
+                        {subscription.status.toUpperCase()}
+                      </span>
                     </div>
                   </div>
                 </CardContent>
