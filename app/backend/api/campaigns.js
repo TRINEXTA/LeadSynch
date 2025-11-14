@@ -147,27 +147,34 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     let leads = [];
-    
+
+    // 🔒 SÉCURITÉ : Utiliser des paramètres SQL au lieu de concaténation
     if (sectors && Object.keys(sectors).length > 0) {
-      const sectorFilter = Object.entries(sectors)
+      const params = [tenantId, database_id];
+      const placeholders = [];
+      let paramIndex = 3;
+
+      Object.entries(sectors)
         .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
-        .map(([dbId, sectorList]) => 
-          `(ldr.database_id = '${dbId}' AND l.sector = ANY(ARRAY[${sectorList.map(s => `'${s}'`).join(',')}]))`
-        )
-        .join(' OR ');
-      
-      if (sectorFilter) {
+        .forEach(([dbId, sectorList]) => {
+          placeholders.push(`(ldr.database_id = $${paramIndex} AND l.sector = ANY($${paramIndex + 1}::text[]))`);
+          params.push(dbId, sectorList);
+          paramIndex += 2;
+        });
+
+      if (placeholders.length > 0) {
+        const whereClause = placeholders.join(' OR ');
         leads = await queryAll(
-          `SELECT DISTINCT l.* 
+          `SELECT DISTINCT l.*
            FROM leads l
            JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorFilter})`,
-          [tenantId, database_id]
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${whereClause})`,
+          params
         );
       }
     } else {
       leads = await queryAll(
-        `SELECT DISTINCT l.* 
+        `SELECT DISTINCT l.*
          FROM leads l
          JOIN lead_database_relations ldr ON l.id = ldr.lead_id
          WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
