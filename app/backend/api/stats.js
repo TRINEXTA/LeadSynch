@@ -107,18 +107,74 @@ router.get("/dashboard", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const tenantId = String(req.user?.tenant_id);
-    
-    const result = await query(`
-      SELECT COALESCE(SUM(total_leads), 0) as total 
-      FROM lead_databases 
+
+    // Statistiques des leads
+    const leadsStatsQuery = `
+      SELECT
+        COUNT(*)::int as total_leads,
+        COUNT(CASE WHEN status = 'converted' THEN 1 END)::int as converted,
+        COUNT(CASE WHEN status = 'qualified' THEN 1 END)::int as qualified,
+        COUNT(CASE WHEN status = 'contacted' THEN 1 END)::int as contacted
+      FROM leads
       WHERE tenant_id = $1
-    `, [tenantId]);
-    
+    `;
+
+    // Distribution par statut
+    const statusDistQuery = `
+      SELECT
+        status,
+        COUNT(*)::int as count
+      FROM leads
+      WHERE tenant_id = $1
+      GROUP BY status
+      ORDER BY count DESC
+    `;
+
+    // Top 5 secteurs
+    const topSectorsQuery = `
+      SELECT
+        sector,
+        COUNT(*)::int as count
+      FROM leads
+      WHERE tenant_id = $1 AND sector IS NOT NULL
+      GROUP BY sector
+      ORDER BY count DESC
+      LIMIT 5
+    `;
+
+    // Statistiques campagnes
+    const campaignsQuery = `
+      SELECT
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN status = 'active' THEN 1 END)::int as active
+      FROM campaigns
+      WHERE tenant_id = $1
+    `;
+
+    const [leadsStats, statusDist, topSectors, campaignsStats] = await Promise.all([
+      query(leadsStatsQuery, [tenantId]),
+      query(statusDistQuery, [tenantId]),
+      query(topSectorsQuery, [tenantId]),
+      query(campaignsQuery, [tenantId])
+    ]);
+
+    const total = leadsStats.rows[0]?.total_leads || 0;
+    const converted = leadsStats.rows[0]?.converted || 0;
+
     res.json({
       ok: true,
       stats: {
-        total: parseInt(result.rows[0]?.total) || 0,
-        byStatus: []
+        total: total,
+        converted: converted,
+        qualified: leadsStats.rows[0]?.qualified || 0,
+        contacted: leadsStats.rows[0]?.contacted || 0,
+        conversion_rate: total > 0 ? ((converted / total) * 100).toFixed(1) : 0,
+        byStatus: statusDist.rows,
+        topSectors: topSectors.rows,
+        campaigns: {
+          total: campaignsStats.rows[0]?.total || 0,
+          active: campaignsStats.rows[0]?.active || 0
+        }
       }
     });
   } catch (err) {
