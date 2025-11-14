@@ -1,8 +1,6 @@
 ﻿import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { 
-  Upload, FileText, Database, CheckCircle, AlertCircle, 
+import {
+  Upload, FileText, Database, CheckCircle, AlertCircle,
   Sparkles, TrendingUp, BarChart3, FileSpreadsheet,
   Building2, Users, MapPin, Zap
 } from "lucide-react";
@@ -137,14 +135,14 @@ export default function ImportLeads() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Carte principale */}
           <div className="lg:col-span-2">
-            <Card className="shadow-xl border-2 border-blue-100">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                <CardTitle className="flex items-center gap-3 text-2xl">
+            <div className="rounded-xl shadow-lgshadow-xl border-2 border-blue-100">
+              <div className="p-4 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <div className="text-lg font-bold flex items-center gap-3 text-2xl">
                   <FileSpreadsheet className="w-8 h-8" />
                   Importer vos leads
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6">
+                </div>
+              </div>
+              <div className="p-6 pt-6 space-y-6">
                 {/* Nom de la base */}
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -316,22 +314,22 @@ export default function ImportLeads() {
                         <Zap className="w-8 h-8 text-yellow-300 animate-bounce" />
                       </div>
                     )}
-                  </Button>
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Carte info latérale */}
           <div className="space-y-6">
-            <Card className="shadow-lg border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-yellow-900">
+            <div className="rounded-xl shadow-lgshadow-lg border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50">
+              <div className="p-4 border-b">
+                <div className="text-lg font-bold flex items-center gap-2 text-yellow-900">
                   <Sparkles className="w-6 h-6 text-yellow-500" />
                   IA Intelligente
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-3">
+                </div>
+              </div>
+              <div className="p-6 text-sm space-y-3">
                 <div className="flex items-start gap-2">
                   <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
                   <p>Détection automatique des secteurs via code NAF</p>
@@ -348,14 +346,14 @@ export default function ImportLeads() {
                   <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
                   <p>Déduplication automatique</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-gray-700">Format CSV accepté</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-gray-600 space-y-2">
+            <div className="rounded-xl shadow-lgshadow-lg">
+              <div className="p-4 border-b">
+                <div className="text-lg font-bold text-gray-700">Format CSV accepté</div>
+              </div>
+              <div className="p-6 text-sm text-gray-600 space-y-2">
                 <p className="font-semibold">Colonnes reconnues :</p>
                 <ul className="space-y-1">
                   <li>• Nom de la société ✓</li>
@@ -367,8 +365,8 @@ export default function ImportLeads() {
                   <li>• SIRET / Code NAF</li>
                   <li>• Étiquette (secteur)</li>
                 </ul>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       </div>

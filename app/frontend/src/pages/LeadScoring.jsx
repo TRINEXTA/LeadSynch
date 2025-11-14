@@ -1,9 +1,6 @@
 ﻿import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Target, Zap, Snowflake, Ban, Users, Mail, Phone, Globe, 
+import {
+  Target, Zap, Snowflake, Ban, Users, Mail, Phone, Globe,
   Download, Upload, RotateCw, CheckCircle, XCircle, AlertCircle,
   TrendingUp, Award, Filter, BarChart3, Activity, User, Building2, MapPin
 } from "lucide-react";
@@ -210,37 +207,35 @@ export default function LeadScoring() {
           </div>
           
           <div className="flex gap-3">
-            <Button 
-              variant="outline"
+            <button
               onClick={exportResults}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
               <Download className="w-4 h-4" />
               Export CSV
-            </Button>
-            <Button 
-              variant="outline"
-              className="flex items-center gap-2"
+            </button>
+            <button
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
               <Upload className="w-4 h-4" />
               Export Excel
-            </Button>
-            <Button 
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+            </button>
+            <button
+              className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold"
             >
               <RotateCw className="w-4 h-4 mr-2" />
               Nouvelle Règle
-            </Button>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Source Filter avec couleurs */}
-      <Card className="mb-6 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-purple-200">
-        <CardContent className="pt-6">
+      <div className="mb-6 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl shadow-lg">
+        <div className="p-6">
           <div className="flex items-center gap-4">
             <label className="font-bold text-gray-700">Source des leads à évaluer</label>
-            <select 
+            <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
               className="px-4 py-2 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
@@ -250,71 +245,71 @@ export default function LeadScoring() {
               <option value="campaign">Campagne spécifique</option>
               <option value="new">Nouveaux leads uniquement</option>
             </select>
-            
+
             <div className="ml-auto flex items-center gap-3 text-sm">
               <span className="text-gray-600 font-medium">Évaluation en cours</span>
-              <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1">
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-full font-semibold">
                 Tous les leads
-              </Badge>
+              </span>
               <span className="text-gray-700 font-bold">{leads.length} lead(s) à évaluer</span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Stats Cards avec plus de couleurs */}
       <div className="grid grid-cols-5 gap-4 mb-6">
         {/* Hot Leads */}
-        <Card className="border-2 border-red-300 bg-gradient-to-br from-red-50 via-orange-50 to-red-100 hover:shadow-xl transition-all transform hover:scale-105">
-          <CardContent className="pt-6">
+        <div className="border-2 border-red-300 bg-gradient-to-br from-red-50 via-orange-50 to-red-100 hover:shadow-xl transition-all transform hover:scale-105 rounded-xl shadow-lg">
+          <div className="p-6">
             <div className="flex items-center justify-between mb-2">
               <Zap className="w-10 h-10 text-red-600" />
               <span className="text-xs font-bold text-red-700">HOT LEADS</span>
             </div>
             <p className="text-5xl font-bold text-red-600">{stats.hot}</p>
             <p className="text-sm text-red-600 font-medium mt-1">Score ≥ 70</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Warm Leads */}
-        <Card className="border-2 border-orange-300 bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 hover:shadow-xl transition-all transform hover:scale-105">
-          <CardContent className="pt-6">
+        <div className="border-2 border-orange-300 bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 hover:shadow-xl transition-all transform hover:scale-105 rounded-xl shadow-lg">
+          <div className="p-6">
             <div className="flex items-center justify-between mb-2">
               <Activity className="w-10 h-10 text-orange-600" />
               <span className="text-xs font-bold text-orange-700">WARM LEADS</span>
             </div>
             <p className="text-5xl font-bold text-orange-600">{stats.warm}</p>
             <p className="text-sm text-orange-600 font-medium mt-1">Cliqués/Contactés</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Cold Leads */}
-        <Card className="border-2 border-blue-300 bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 hover:shadow-xl transition-all transform hover:scale-105">
-          <CardContent className="pt-6">
+        <div className="border-2 border-blue-300 bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 hover:shadow-xl transition-all transform hover:scale-105 rounded-xl shadow-lg">
+          <div className="p-6">
             <div className="flex items-center justify-between mb-2">
               <Snowflake className="w-10 h-10 text-blue-600" />
               <span className="text-xs font-bold text-blue-700">COLD LEADS</span>
             </div>
             <p className="text-5xl font-bold text-blue-600">{stats.cold}</p>
             <p className="text-sm text-blue-600 font-medium mt-1">Nouveaux/Phoning</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Disqualified */}
-        <Card className="border-2 border-gray-400 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 hover:shadow-xl transition-all transform hover:scale-105">
-          <CardContent className="pt-6">
+        <div className="border-2 border-gray-400 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 hover:shadow-xl transition-all transform hover:scale-105 rounded-xl shadow-lg">
+          <div className="p-6">
             <div className="flex items-center justify-between mb-2">
               <Ban className="w-10 h-10 text-gray-700" />
               <span className="text-xs font-bold text-gray-800">DISQUALIFIÉS</span>
             </div>
             <p className="text-5xl font-bold text-gray-700">{stats.disqualified}</p>
             <p className="text-sm text-gray-600 font-medium mt-1">Score inférieur à 20</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Score Moyen */}
-        <Card className="border-2 border-purple-300 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-200 hover:shadow-xl transition-all transform hover:scale-105">
-          <CardContent className="pt-6">
+        <div className="border-2 border-purple-300 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-200 hover:shadow-xl transition-all transform hover:scale-105 rounded-xl shadow-lg">
+          <div className="p-6">
             <div className="flex items-center justify-between mb-2">
               <Award className="w-10 h-10 text-purple-700" />
               <span className="text-xs font-bold text-purple-800">SCORE MOYEN</span>
@@ -323,21 +318,21 @@ export default function LeadScoring() {
               {stats.scoreMoyen}<span className="text-2xl">/100</span>
             </p>
             <p className="text-sm text-purple-600 font-medium mt-1">Total: {stats.total} leads</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Content Grid */}
       <div className="grid grid-cols-2 gap-6">
         {/* Règles de Scoring */}
-        <Card className="shadow-xl border-2 border-blue-200">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50">
-            <CardTitle className="flex items-center justify-between">
+        <div className="rounded-xl shadow-lgshadow-xl border-2 border-blue-200">
+          <div className="p-4 border-bbg-gradient-to-r from-blue-50 to-purple-50">
+            <div className="text-lg font-boldflex items-center justify-between">
               <span className="text-xl">Règles de Scoring</span>
               <span className="text-sm text-gray-500 font-normal">{rules.length} règles actives • 170 pts max</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-6">
+            </div>
+          </div>
+          <div className="p-6pt-6 space-y-6">
             {/* Section Contact */}
             <div>
               <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
@@ -353,7 +348,7 @@ export default function LeadScoring() {
                       <span className="ml-3 text-sm text-green-600 font-bold">+10 points</span>
                     </div>
                   </div>
-                  <Badge className="bg-green-500 text-white">ON</Badge>
+                  <span className="px-3 py-1 rounded-full font-semibold text-xsbg-green-500 text-white">ON</span>
                 </div>
                 
                 <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg hover:shadow-md transition-all">
@@ -364,7 +359,7 @@ export default function LeadScoring() {
                       <span className="ml-3 text-sm text-green-600 font-bold">+10 points</span>
                     </div>
                   </div>
-                  <Badge className="bg-green-500 text-white">ON</Badge>
+                  <span className="px-3 py-1 rounded-full font-semibold text-xsbg-green-500 text-white">ON</span>
                 </div>
               </div>
             </div>
@@ -384,7 +379,7 @@ export default function LeadScoring() {
                       <span className="ml-3 text-sm text-green-600 font-bold">+5 points</span>
                     </div>
                   </div>
-                  <Badge className="bg-green-500 text-white">ON</Badge>
+                  <span className="px-3 py-1 rounded-full font-semibold text-xsbg-green-500 text-white">ON</span>
                 </div>
                 
                 <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-purple-100 border-2 border-purple-200 rounded-lg hover:shadow-md transition-all">
@@ -395,7 +390,7 @@ export default function LeadScoring() {
                       <span className="ml-3 text-sm text-green-600 font-bold">+20 points</span>
                     </div>
                   </div>
-                  <Badge className="bg-green-500 text-white">ON</Badge>
+                  <span className="px-3 py-1 rounded-full font-semibold text-xsbg-green-500 text-white">ON</span>
                 </div>
                 
                 <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-purple-100 border-2 border-purple-200 rounded-lg hover:shadow-md transition-all">
@@ -406,17 +401,17 @@ export default function LeadScoring() {
                       <span className="ml-3 text-sm text-green-600 font-bold">+15 points</span>
                     </div>
                   </div>
-                  <Badge className="bg-green-500 text-white">ON</Badge>
+                  <span className="px-3 py-1 rounded-full font-semibold text-xsbg-green-500 text-white">ON</span>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Leads Qualifiés */}
-        <Card className="shadow-xl border-2 border-green-200">
-          <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50">
-            <CardTitle className="flex items-center justify-between">
+        <div className="rounded-xl shadow-lgshadow-xl border-2 border-green-200">
+          <div className="p-4 border-bbg-gradient-to-r from-green-50 to-blue-50">
+            <div className="text-lg font-boldflex items-center justify-between">
               <span className="text-xl">Leads Qualifiés ({leads.length})</span>
               <div className="flex gap-2">
                 <input 
@@ -432,9 +427,9 @@ export default function LeadScoring() {
                   <option>Disqualifiés</option>
                 </select>
               </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4">
+            </div>
+          </div>
+          <div className="p-6pt-4">
             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
               {leads.length === 0 ? (
                 <div className="text-center py-12">
@@ -477,15 +472,15 @@ export default function LeadScoring() {
                         <Badge className={`${getCategoryStyle(lead.category)} px-3 py-2 shadow-md`}>
                           {getCategoryIcon(lead.category)}
                           <span className="ml-2 font-bold">{lead.category?.toUpperCase()}</span>
-                        </Badge>
+                        </span>
                       </div>
                     </div>
                   </div>
                 ))
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

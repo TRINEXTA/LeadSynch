@@ -1,11 +1,7 @@
 ﻿import React, { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { 
-  Plus, Mail, Phone, MapPin, Star, X, Building2, 
-  User, Globe, Calendar, Edit, Save, Trash2, 
+import {
+  Plus, Mail, Phone, MapPin, Star, X, Building2,
+  User, Globe, Calendar, Edit, Save, Trash2,
   TrendingUp, DollarSign, Hash, FileText, CheckCircle,
   Clock, AlertCircle, Briefcase, MessageSquare
 } from "lucide-react";
@@ -103,10 +99,10 @@ export default function Leads() {
             </h1>
             <p className="text-gray-600 mt-1">Gérez vos prospects et opportunités</p>
           </div>
-          <Button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg transition-all">
+          <button className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all font-semibold">
             <Plus className="w-5 h-5 mr-2" />
             Nouveau Lead
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -236,22 +232,21 @@ export default function Leads() {
               </div>
               
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button 
-                  variant="outline"
+                <button
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                   onClick={() => {
                     setSelectedLead(lead);
                     setShowDetailsModal(true);
                   }}
                 >
                   Voir détails
-                </Button>
-                <Button 
-                  variant="outline"
-                  className="text-red-600 hover:bg-red-50"
+                </button>
+                <button
+                  className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   onClick={() => handleDelete(lead.id)}
                 >
                   <Trash2 className="w-4 h-4" />
-                </Button>
+                </button>
               </div>
             </div>
           </div>
@@ -270,23 +265,23 @@ export default function Leads() {
               <div className="flex gap-2">
                 {!editMode ? (
                   <>
-                    <Button onClick={handleEdit} className="bg-blue-600 text-white hover:bg-blue-700">
+                    <button onClick={handleEdit} className="flex items-center px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
                       <Edit className="w-4 h-4 mr-2" />
                       Modifier
-                    </Button>
+                    </button>
                     <button onClick={() => setShowDetailsModal(false)} className="text-gray-400 hover:text-gray-600">
                       <X className="w-6 h-6" />
                     </button>
                   </>
                 ) : (
                   <>
-                    <Button onClick={handleSave} className="bg-green-600 text-white hover:bg-green-700">
+                    <button onClick={handleSave} className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-semibold">
                       <Save className="w-4 h-4 mr-2" />
                       Enregistrer
-                    </Button>
-                    <Button variant="outline" onClick={() => setEditMode(false)}>
+                    </button>
+                    <button onClick={() => setEditMode(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                       Annuler
-                    </Button>
+                    </button>
                   </>
                 )}
               </div>
@@ -401,70 +396,76 @@ export default function Leads() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Entreprise *</label>
-                      <Input
+                      <input
+                        type="text"
                         value={editedLead.company_name || ''}
                         onChange={(e) => setEditedLead({...editedLead, company_name: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-                      <Input
+                      <input
+                        type="text"
                         value={editedLead.contact_name || ''}
                         onChange={(e) => setEditedLead({...editedLead, contact_name: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                      <Input
+                      <input
                         type="email"
                         value={editedLead.email || ''}
                         onChange={(e) => setEditedLead({...editedLead, email: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                      <Input
+                      <input
+                        type="text"
                         value={editedLead.phone || ''}
                         onChange={(e) => setEditedLead({...editedLead, phone: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
-                      <Input
+                      <input
+                        type="text"
                         value={editedLead.city || ''}
                         onChange={(e) => setEditedLead({...editedLead, city: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Secteur</label>
-                      <Input
+                      <input
+                        type="text"
                         value={editedLead.industry || ''}
                         onChange={(e) => setEditedLead({...editedLead, industry: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Site web</label>
-                      <Input
+                      <input
+                        type="text"
                         value={editedLead.website || ''}
                         onChange={(e) => setEditedLead({...editedLead, website: e.target.value})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Valeur estimée (€)</label>
-                      <Input
+                      <input
                         type="number"
                         value={editedLead.deal_value || ''}
                         onChange={(e) => setEditedLead({...editedLead, deal_value: parseInt(e.target.value) || 0})}
-                        className="w-full"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -487,13 +488,13 @@ export default function Leads() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Score (0-100)</label>
-                    <Input
+                    <input
                       type="number"
                       min="0"
                       max="100"
                       value={editedLead.score || 0}
                       onChange={(e) => setEditedLead({...editedLead, score: parseInt(e.target.value) || 0})}
-                      className="w-full"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>

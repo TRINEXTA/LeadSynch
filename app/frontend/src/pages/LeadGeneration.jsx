@@ -1,6 +1,4 @@
 ﻿import React, { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Sparkles, Loader, Pause, Play, Square, Clock, CheckCircle2 } from "lucide-react";
 
 export default function LeadGeneration() {
@@ -193,11 +191,11 @@ export default function LeadGeneration() {
         <p className="text-gray-600 text-lg">Recherche intelligente : base locale d abord, puis Google Maps</p>
       </div>
 
-      <Card className="shadow-xl mb-6 border-2">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
-          <CardTitle className="text-2xl">🎯 Parametres de recherche</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
+      <div className="rounded-xl shadow-lg shadow-xl mb-6 border-2">
+        <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="text-lg font-bold text-2xl">🎯 Parametres de recherche</div>
+        </div>
+        <div className="p-6 pt-6">
           <div className="grid md:grid-cols-4 gap-6 mb-6">
             <div>
               <label className="block text-sm font-semibold mb-2 text-gray-700">Secteur *</label>
@@ -254,12 +252,12 @@ export default function LeadGeneration() {
               </button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {isGenerating && (
-        <Card className="mb-6 border-4 border-blue-500 shadow-2xl animate-pulse">
-          <CardContent className="pt-6">
+        <div className="rounded-xl shadow-lg mb-6 border-4 border-blue-500 shadow-2xl animate-pulse">
+          <div className="p-6 pt-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-xl flex items-center gap-3">
                 <Loader className="w-6 h-6 animate-spin text-blue-600" />
@@ -298,19 +296,19 @@ export default function LeadGeneration() {
                 <p className="text-4xl font-bold text-purple-600">{stats.total}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {leads.length > 0 && (
-        <Card className="shadow-xl">
-          <CardHeader className="bg-green-50 border-b-2">
-            <CardTitle className="text-2xl flex items-center gap-3">
+        <div className="rounded-xl shadow-lg shadow-xl">
+          <div className="p-4 border-b bg-green-50 border-b-2">
+            <div className="text-lg font-bold text-2xl flex items-center gap-3">
               <CheckCircle2 className="w-7 h-7 text-green-600" />
               Resultats ({leads.length} leads)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4">
+            </div>
+          </div>
+          <div className="p-6 pt-4">
             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
               {leads.map((lead, i) => (
                 <div key={i} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg hover:from-blue-50 hover:to-indigo-50 transition-all border border-gray-200 hover:border-blue-300 hover:shadow-md">
@@ -324,8 +322,8 @@ export default function LeadGeneration() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
