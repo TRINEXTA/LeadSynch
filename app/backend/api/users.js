@@ -154,10 +154,98 @@ async function handler(req, res) {
       });
     }
 
+    // PATCH - Bloquer/Débloquer ou Forcer changement de mot de passe
+    if (method === 'PATCH') {
+      const userId = req.url.split('/')[3]; // /api/users/{userId}/action
+      const action = req.url.split('/')[4]; // block, unblock, force-password-change
+
+      if (!['admin', 'manager'].includes(req.user.role)) {
+        return res.status(403).json({
+          error: 'Permissions insuffisantes'
+        });
+      }
+
+      if (userId === req.user.id && action === 'block') {
+        return res.status(400).json({
+          error: 'Vous ne pouvez pas bloquer votre propre compte'
+        });
+      }
+
+      let updatedUser;
+
+      if (action === 'block') {
+        updatedUser = await queryOne(
+          `UPDATE users
+           SET is_active = false, updated_at = NOW()
+           WHERE id = $1 AND tenant_id = $2
+           RETURNING id, email, first_name, last_name, is_active`,
+          [userId, req.user.tenant_id]
+        );
+
+        if (!updatedUser) {
+          return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        console.log('🔴 User bloqué:', updatedUser.id);
+        return res.status(200).json({
+          success: true,
+          user: updatedUser,
+          message: 'Utilisateur bloqué avec succès'
+        });
+      }
+
+      if (action === 'unblock') {
+        updatedUser = await queryOne(
+          `UPDATE users
+           SET is_active = true, updated_at = NOW()
+           WHERE id = $1 AND tenant_id = $2
+           RETURNING id, email, first_name, last_name, is_active`,
+          [userId, req.user.tenant_id]
+        );
+
+        if (!updatedUser) {
+          return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        console.log('🟢 User débloqué:', updatedUser.id);
+        return res.status(200).json({
+          success: true,
+          user: updatedUser,
+          message: 'Utilisateur débloqué avec succès'
+        });
+      }
+
+      if (action === 'force-password-change') {
+        updatedUser = await queryOne(
+          `UPDATE users
+           SET requires_password_change = true, updated_at = NOW()
+           WHERE id = $1 AND tenant_id = $2
+           RETURNING id, email, first_name, last_name, requires_password_change`,
+          [userId, req.user.tenant_id]
+        );
+
+        if (!updatedUser) {
+          return res.status(404).json({ error: 'Utilisateur non trouvé' });
+        }
+
+        console.log('🔐 Changement de mot de passe forcé pour:', updatedUser.id);
+        return res.status(200).json({
+          success: true,
+          user: updatedUser,
+          message: 'L\'utilisateur devra changer son mot de passe à sa prochaine connexion'
+        });
+      }
+
+      return res.status(400).json({
+        error: 'Action invalide',
+        message: 'Actions valides: block, unblock, force-password-change'
+      });
+    }
+
     // DELETE - Delete user
     if (method === 'DELETE') {
       const userId = req.url.split('/').pop();
-      
+
       if (req.user.role !== 'admin') {
         return res.status(403).json({
           error: 'Seul un admin peut supprimer un utilisateur'
