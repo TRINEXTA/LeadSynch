@@ -8,24 +8,25 @@ export default function Pricing() {
   const plans = [
     {
       id: 'free',
-      name: 'Free',
+      name: 'Gratuit',
       icon: Gift,
       iconColor: 'text-gray-600',
       iconBg: 'bg-gray-100',
       price: { monthly: 0, annual: 0 },
-      description: 'Parfait pour découvrir LeadSynch',
+      description: 'Essai 14 jours pour découvrir LeadSynch',
       badge: null,
       features: [
-        { text: '60 leads max (10 générés IA + 50 importés)', included: true },
+        { text: '30 leads/emails', included: true },
+        { text: '2 recherches Google Maps', included: true },
+        { text: '1 devis/mois', included: true },
+        { text: '0 contrats', included: true },
         { text: '1 utilisateur', included: true },
-        { text: '100 emails/mois', included: true },
         { text: '1 campagne active', included: true },
-        { text: 'Génération de leads IA (limitée)', included: true },
         { text: 'Pipeline basique', included: true },
         { text: 'Import CSV', included: true },
         { text: 'Support email', included: true },
         { text: 'Asefi IA', included: false },
-        { text: 'Campagnes illimitées', included: false },
+        { text: 'Devis & contrats illimités', included: false },
         { text: 'Analytics avancés', included: false },
         { text: 'API', included: false },
       ],
@@ -35,7 +36,7 @@ export default function Pricing() {
     },
     {
       id: 'basic',
-      name: 'Basic',
+      name: 'Starter',
       icon: Zap,
       iconColor: 'text-blue-600',
       iconBg: 'bg-blue-100',
@@ -43,11 +44,12 @@ export default function Pricing() {
       description: 'Pour les entrepreneurs et petites équipes',
       badge: null,
       features: [
-        { text: '1,000 leads', included: true },
+        { text: '5,000 leads/emails', included: true },
+        { text: 'Max 1,000 prospects Google Maps', included: true },
+        { text: '50 devis/mois', included: true },
+        { text: '30 contrats/mois', included: true },
         { text: '3 utilisateurs', included: true },
-        { text: '5,000 emails/mois', included: true },
         { text: '5 campagnes actives', included: true },
-        { text: 'Génération de leads IA illimitée', included: true },
         { text: 'Pipeline avancé', included: true },
         { text: 'Mode Prospection', included: true },
         { text: 'Asefi IA Basic (500 caractères)', included: true },
@@ -57,7 +59,7 @@ export default function Pricing() {
         { text: 'Analytics de base', included: true },
         { text: 'API', included: false },
       ],
-      cta: 'Choisir Basic',
+      cta: 'Choisir Starter',
       ctaLink: '/register?plan=basic',
       buttonStyle: 'bg-blue-600 text-white hover:bg-blue-700'
     },
@@ -69,14 +71,15 @@ export default function Pricing() {
       iconBg: 'bg-purple-100',
       price: { monthly: 99, annual: 79 },
       description: 'Pour les équipes commerciales performantes',
-      badge: ' Plus populaire',
+      badge: '⭐ Plus populaire',
       badgeColor: 'bg-gradient-to-r from-purple-600 to-pink-600',
       features: [
-        { text: '10,000 leads', included: true },
+        { text: '20,000 leads/emails', included: true },
+        { text: '2,500 générations Google Maps', included: true },
+        { text: '500 devis/mois', included: true },
+        { text: '200 contrats/mois', included: true },
         { text: '10 utilisateurs', included: true },
-        { text: '50,000 emails/mois', included: true },
         { text: 'Campagnes illimitées', included: true },
-        { text: 'Génération de leads IA illimitée', included: true },
         { text: 'Pipeline personnalisable', included: true },
         { text: 'Mode Prospection avancé', included: true },
         { text: 'Asefi IA Pro (2000 caractères)', included: true },
@@ -102,9 +105,10 @@ export default function Pricing() {
       description: 'Pour les grandes organisations',
       badge: null,
       features: [
-        { text: 'Leads illimités', included: true },
-        { text: 'Utilisateurs illimités', included: true },
-        { text: 'Emails illimités', included: true },
+        { text: 'Quotas personnalisés selon vos besoins', included: true },
+        { text: 'Utilisateurs selon votre équipe', included: true },
+        { text: 'Volume emails adapté (protection anti-abus)', included: true },
+        { text: 'Devis & contrats personnalisés', included: true },
         { text: 'Tout du plan Pro +', included: true },
         { text: 'Asefi IA Enterprise (10k caractères)', included: true },
         { text: 'Infrastructure dédiée', included: true },
@@ -260,8 +264,8 @@ export default function Pricing() {
                 a: "Oui ! Vous pouvez upgrader ou downgrader votre plan à tout moment. Les changements sont effectifs immédiatement et facturés au prorata."
               },
               {
-                q: "Le plan Free nécessite-t-il une carte bancaire ?",
-                a: "Non ! Le plan Free est 100% gratuit, sans carte bancaire requise. Vous avez 60 leads (10 générés + 50 importés) et 100 emails/mois gratuitement."
+                q: "Le plan Gratuit nécessite-t-il une carte bancaire ?",
+                a: "Non ! Le plan Gratuit est 100% gratuit pour 14 jours d'essai, sans carte bancaire requise. Vous avez 30 leads/emails et 2 recherches Google Maps gratuitement."
               },
               {
                 q: "Que se passe-t-il si je dépasse mes quotas ?",
@@ -302,9 +306,9 @@ export default function Pricing() {
             to="/register"
             className="inline-block px-8 py-4 bg-white text-purple-600 hover:bg-gray-100 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all"
           >
-            Commencer gratuitement 
+            Commencer gratuitement
           </Link>
-          <p className="text-white/80 text-sm mt-4"> Sans carte bancaire   60 leads gratuits   100 emails/mois</p>
+          <p className="text-white/80 text-sm mt-4">✓ Sans carte bancaire   ✓ 30 leads/emails gratuits   ✓ Essai 14 jours</p>
         </div>
       </section>
     </div>
