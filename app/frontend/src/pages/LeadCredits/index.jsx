@@ -82,18 +82,17 @@ export default function LeadCredits() {
     try {
       const { data } = await api.post('/lead-credits/purchase', {
         credits_amount: pack.credits,
-        payment_method: 'stripe'
+        payment_method: 'demo'
       });
 
-      alert('Achat créé avec succès ! Redirection vers le paiement...');
-      // TODO: Redirection vers Stripe Checkout
-      console.log('Purchase created:', data);
+      alert(`✅ Achat complété avec succès !\n\n${data.credits_added} crédits ajoutés\nSolde actuel : ${data.credits_remaining} crédits`);
 
       // Recharger les données
       await fetchData();
     } catch (error) {
       console.error('Erreur achat:', error);
-      alert('Erreur lors de l\'achat des crédits');
+      const errorMsg = error.response?.data?.message || 'Erreur lors de l\'achat des crédits';
+      alert(`❌ Erreur : ${errorMsg}`);
     } finally {
       setPurchasing(false);
       setSelectedPack(null);

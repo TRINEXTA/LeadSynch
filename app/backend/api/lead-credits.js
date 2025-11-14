@@ -136,28 +136,66 @@ router.post('/purchase', async (req, res) => {
 
     // Prix dégressif par quantité
     let pricePerLead = 0.05; // Prix moyen
-    if (credits_amount >= 1000) pricePerLead = 0.04;
+    if (credits_amount >= 5000) pricePerLead = 0.035;
+    else if (credits_amount >= 1000) pricePerLead = 0.04;
     else if (credits_amount >= 500) pricePerLead = 0.045;
 
     const totalPrice = credits_amount * pricePerLead;
 
     // TODO: Intégrer Stripe pour le paiement réel
-    // Pour l'instant, créer l'achat en "pending"
+    // Pour l'instant, auto-compléter l'achat en mode démo
 
+    // Créer l'achat
     const { rows } = await q(
       `INSERT INTO credit_purchases (
         tenant_id, amount_credits, amount_euros, price_per_lead,
-        payment_method, status
-      ) VALUES ($1, $2, $3, $4, $5, 'pending')
+        payment_method, status, payment_id
+      ) VALUES ($1, $2, $3, $4, $5, 'completed', $6)
       RETURNING *`,
-      [tenantId, credits_amount, totalPrice, pricePerLead, payment_method]
+      [tenantId, credits_amount, totalPrice, pricePerLead, payment_method, `demo_${Date.now()}`]
+    );
+
+    const purchase = rows[0];
+
+    // Ajouter les crédits au tenant
+    // D'abord vérifier si le tenant a déjà un enregistrement de crédits
+    const { rows: existingCredits } = await q(
+      `SELECT * FROM lead_credits WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    if (existingCredits.length > 0) {
+      // Mettre à jour l'enregistrement existant
+      await q(
+        `UPDATE lead_credits
+         SET credits_remaining = credits_remaining + $1,
+             credits_purchased = credits_purchased + $1,
+             last_purchase_at = NOW(),
+             updated_at = NOW()
+         WHERE tenant_id = $2`,
+        [credits_amount, tenantId]
+      );
+    } else {
+      // Créer un nouvel enregistrement
+      await q(
+        `INSERT INTO lead_credits (tenant_id, credits_remaining, credits_purchased, last_purchase_at)
+         VALUES ($1, $2, $2, NOW())`,
+        [tenantId, credits_amount]
+      );
+    }
+
+    // Récupérer les crédits mis à jour
+    const { rows: updatedCredits } = await q(
+      `SELECT * FROM lead_credits WHERE tenant_id = $1`,
+      [tenantId]
     );
 
     res.json({
-      message: 'Achat créé',
-      purchase: rows[0],
+      message: 'Achat complété avec succès',
+      purchase: purchase,
       total_price: totalPrice,
-      stripe_session_url: '/api/stripe/create-session' // TODO: URL réelle Stripe
+      credits_added: credits_amount,
+      credits_remaining: updatedCredits[0].credits_remaining
     });
   } catch (error) {
     console.error('Erreur achat crédits:', error);
