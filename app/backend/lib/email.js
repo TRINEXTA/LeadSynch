@@ -81,9 +81,9 @@ export async function sendTemporaryPassword(email, firstName, tempPassword) {
 export async function sendPasswordResetEmail(email, firstName, resetToken) {
   try {
     const client = getGraphClient();
-    
+
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
-    
+
     const message = {
       subject: 'Réinitialisation de votre mot de passe LeadSynch',
       body: {
@@ -126,6 +126,68 @@ export async function sendPasswordResetEmail(email, firstName, resetToken) {
     return { success: true };
   } catch (error) {
     console.error('❌ Erreur Graph API (reset):', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Fonction générique pour envoyer des emails via le provider configuré
+ */
+export async function sendEmail({ to, subject, text, html, from, fromName, replyTo, tenantId }) {
+  try {
+    // Pour l'instant, on utilise Elastic Email par défaut
+    // Tu peux ajouter d'autres providers plus tard
+
+    const { query: q } = await import('./db.js');
+
+    // Récupérer la clé API Elastic Email depuis les settings
+    const { rows } = await q(
+      `SELECT elastic_email_api_key, provider FROM mailing_settings WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    if (rows.length === 0) {
+      throw new Error('Configuration email non trouvée');
+    }
+
+    const apiKey = rows[0].elastic_email_api_key;
+    const provider = rows[0].provider || 'elasticemail';
+
+    if (!apiKey) {
+      throw new Error('Clé API Elastic Email non configurée');
+    }
+
+    // Envoyer via Elastic Email API
+    const fetch = (await import('node-fetch')).default;
+
+    const response = await fetch('https://api.elasticemail.com/v2/email/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        apikey: apiKey,
+        from: from,
+        fromName: fromName || '',
+        to: to,
+        subject: subject,
+        bodyText: text || '',
+        bodyHtml: html || text || '',
+        replyTo: replyTo || from
+      })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Erreur Elastic Email inconnue');
+    }
+
+    console.log(`✅ Email envoyé via Elastic Email à ${to}`);
+    return { success: true, messageId: result.data?.messageid };
+
+  } catch (error) {
+    console.error('❌ Erreur sendEmail:', error.message);
     throw error;
   }
 }
