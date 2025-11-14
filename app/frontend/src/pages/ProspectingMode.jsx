@@ -10,7 +10,7 @@ const QUICK_QUALIFICATIONS = [
   { id: 'pas_interesse', label: '👎 Pas Intéressé', color: 'bg-red-500', stage: 'hors_scope' },
 ];
 
-export default function ProspectionMode({ leads, onExit, onLeadUpdated }) {
+export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [notes, setNotes] = useState('');
   const [processed, setProcessed] = useState(0);
@@ -20,7 +20,8 @@ export default function ProspectionMode({ leads, onExit, onLeadUpdated }) {
   const [leadDuration, setLeadDuration] = useState(0);
   const [generating, setGenerating] = useState(false);
 
-  const currentLead = leads[currentIndex];
+  // Protection contre leads undefined ou vide
+  const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
 
   useEffect(() => {
     const interval = setInterval(() => {

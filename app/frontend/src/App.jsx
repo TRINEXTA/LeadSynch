@@ -22,7 +22,7 @@ import CampaignDetailsPhoning from './pages/CampaignDetailsPhoning';
 import CampaignAnalytics from './pages/CampaignAnalytics';
 import Pipeline from './pages/Pipeline';
 
-// Bases de données
+// Bases de donnï¿½es
 import LeadDatabases from './pages/LeadDatabases';
 import DatabaseDetails from './pages/DatabaseDetails';
 import ImportLeads from './pages/ImportLeads';
@@ -40,7 +40,7 @@ import TestMailing from './pages/TestMailing';
 import SpamDiagnostic from './pages/SpamDiagnostic';
 import Unsubscribe from './pages/Unsubscribe';
 
-// Génération de leads
+// Gï¿½nï¿½ration de leads
 import LeadGeneration from './pages/LeadGeneration';
 import CreateLeadSearch from './pages/CreateLeadSearch';
 import GoogleApiSetup from './pages/GoogleApiSetup';
@@ -56,7 +56,7 @@ import DuplicateManagement from './pages/DuplicateManagement';
 import ManageDuplicateDatabases from './pages/ManageDuplicateDatabases';
 import RecategorizeLeads from './pages/RecategorizeLeads';
 
-// Équipe et statistiques
+// ï¿½quipe et statistiques
 import ManageTeam from './pages/ManageTeam';
 import Statistics from './pages/Statistics';
 
@@ -67,6 +67,12 @@ import TestZone from './pages/TestZone';
 
 // Signature de contrats
 import SignContract from './pages/SignContract';
+
+// Billing et crÃ©dits
+import Billing from './pages/Billing';
+import LeadCredits from './pages/LeadCredits';
+import Duplicates from './pages/Duplicates';
+import Services from './pages/Services';
 
 function App() {
   return (
@@ -83,7 +89,7 @@ function App() {
           <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
-          {/* Routes protégées */}
+          {/* Routes protï¿½gï¿½es */}
           <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/CommercialDashboard" element={<CommercialDashboard />} />
@@ -133,6 +139,11 @@ function App() {
             <Route path="/ManageSectorTaxonomy" element={<ManageSectorTaxonomy />} />
             <Route path="/TestTracking" element={<TestTracking />} />
             <Route path="/TestZone" element={<TestZone />} />
+
+            <Route path="/billing" element={<Billing />} />
+            <Route path="/lead-credits" element={<LeadCredits />} />
+            <Route path="/duplicates" element={<Duplicates />} />
+            <Route path="/services" element={<Services />} />
           </Route>
           
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

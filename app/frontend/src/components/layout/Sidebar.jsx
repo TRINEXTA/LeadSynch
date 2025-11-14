@@ -1,13 +1,13 @@
 ﻿import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Users, 
-  Database, 
-  UserCircle, 
-  Phone, 
-  Mail, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  Database,
+  UserCircle,
+  Phone,
+  Mail,
+  BarChart3,
+  Settings,
   LogOut,
   Sparkles,
   FileSpreadsheet,
@@ -19,7 +19,10 @@ import {
   Calendar,
   Zap,
   TestTube,
-  Megaphone
+  Megaphone,
+  CreditCard,
+  DollarSign,
+  Copy
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -34,6 +37,7 @@ export default function Sidebar() {
     campaigns: false,
     email: false,
     generation: false,
+    billing: false,
     admin: false
   })
 
@@ -96,10 +100,20 @@ export default function Sidebar() {
       roles: ['admin'],
       items: [
         { name: 'Génération de Leads', href: '/LeadGeneration', icon: Search },
-        { name: 'Config Google API', href: '/GoogleApiSetup', icon: Settings },
         { name: 'Recatégoriser (IA)', href: '/RecategorizeLeads', icon: Sparkles },
         { name: 'Détecter Doublons', href: '/DuplicateDetection', icon: Database },
-        { name: 'Gérer Doublons', href: '/DuplicateManagement', icon: Shield }
+        { name: 'Gérer Doublons', href: '/duplicates', icon: Copy }
+      ]
+    },
+
+    billing: {
+      title: 'Facturation & Crédits',
+      icon: CreditCard,
+      roles: ['admin'],
+      items: [
+        { name: 'Crédits Leads', href: '/lead-credits', icon: Zap },
+        { name: 'Services & Abonnements', href: '/services', icon: CreditCard },
+        { name: 'Plans & Tarifs', href: '/billing', icon: DollarSign }
       ]
     },
 
@@ -191,6 +205,7 @@ export default function Sidebar() {
         {renderSection('campaigns', navigation.campaigns)}
         {renderSection('email', navigation.email)}
         {renderSection('generation', navigation.generation)}
+        {renderSection('billing', navigation.billing)}
         {renderSection('admin', navigation.admin)}
       </nav>
 

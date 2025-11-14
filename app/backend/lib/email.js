@@ -1,15 +1,23 @@
 ﻿import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 
-// Configuration de l'authentification
-const credential = new ClientSecretCredential(
-  process.env.MS_TENANT_ID,
-  process.env.MS_CLIENT_ID,
-  process.env.MS_CLIENT_SECRET
-);
+// Initialisation paresseuse d'Azure
+let credential = null;
 
 // Client Graph API
 const getGraphClient = () => {
+  // Initialiser seulement si les variables d'environnement sont présentes
+  if (!credential) {
+    if (!process.env.MS_TENANT_ID || !process.env.MS_CLIENT_ID || !process.env.MS_CLIENT_SECRET) {
+      throw new Error('Azure credentials not configured. Please set MS_TENANT_ID, MS_CLIENT_ID, and MS_CLIENT_SECRET environment variables.');
+    }
+    credential = new ClientSecretCredential(
+      process.env.MS_TENANT_ID,
+      process.env.MS_CLIENT_ID,
+      process.env.MS_CLIENT_SECRET
+    );
+  }
+
   return Client.initWithMiddleware({
     authProvider: {
       getAccessToken: async () => {

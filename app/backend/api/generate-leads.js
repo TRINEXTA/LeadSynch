@@ -206,176 +206,208 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'Secteur et ville requis' });
       }
 
-      if (!GOOGLE_API_KEY) {
-        return res.status(500).json({
-          error: 'Configuration manquante',
-          message: 'La clé API Google Maps n\'est pas configurée. Contactez l\'administrateur.'
-        });
-      }
+      console.log(`🔍 Recherche intelligente: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 
-      console.log(`🔍 Recherche: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
-
-      // 1. VÉRIFIER LES QUOTAS
-      const quotaCheck = await queryAll(
-        `SELECT 
-          s.google_leads_quota,
-          s.google_leads_used,
-          (s.google_leads_quota - s.google_leads_used + 
-           COALESCE(SUM(p.google_leads_remaining), 0)) AS available
-        FROM subscriptions s
-        LEFT JOIN one_shot_packs p ON s.tenant_id = p.tenant_id 
-          AND p.status = 'active' 
-          AND p.expires_at >= CURRENT_DATE
-        WHERE s.tenant_id = $1
-        GROUP BY s.id`,
+      // 1. VÉRIFIER LES CRÉDITS DISPONIBLES
+      const creditCheck = await queryAll(
+        `SELECT credits_remaining FROM lead_credits WHERE tenant_id = $1`,
         [tenant_id]
       );
 
-      if (quotaCheck.length === 0) {
-        return res.status(403).json({ error: 'Aucun abonnement trouvé' });
-      }
-
-      const available = quotaCheck[0].available;
-      console.log(`💳 Quota disponible: ${available} leads Google`);
-
-      if (available < quantity) {
-        return res.status(403).json({
-          error: 'Quota insuffisant',
-          available,
-          requested: quantity
+      if (creditCheck.length === 0) {
+        // Initialiser si n'existe pas
+        await execute(
+          `INSERT INTO lead_credits (tenant_id, credits_remaining) VALUES ($1, 0)`,
+          [tenant_id]
+        );
+        return res.status(402).json({
+          error: 'Crédits insuffisants',
+          message: 'Vous n\'avez pas de crédits. Veuillez acheter des crédits pour générer des leads.',
+          credits_remaining: 0
         });
       }
 
-      // 2. Chercher dans la base
+      const creditsAvailable = creditCheck[0].credits_remaining;
+      console.log(`💳 Crédits disponibles: ${creditsAvailable}`);
+
+      if (creditsAvailable < quantity) {
+        return res.status(402).json({
+          error: 'Crédits insuffisants',
+          credits_remaining: creditsAvailable,
+          credits_needed: quantity,
+          message: `Vous avez ${creditsAvailable} crédits disponibles mais ${quantity} sont nécessaires.`
+        });
+      }
+
+      // 2. RECHERCHE INTELLIGENTE: D'ABORD LA BASE DE DONNÉES (0.03€)
       const existingLeads = await queryAll(
-        `SELECT * FROM global_leads 
-         WHERE industry = $1 AND city ILIKE $2 LIMIT $3`,
+        `SELECT * FROM global_leads
+         WHERE industry = $1 AND city ILIKE $2
+         ORDER BY last_verified_at DESC NULLS LAST
+         LIMIT $3`,
         [sector, `%${city}%`, quantity]
       );
 
-      const foundCount = existingLeads.length;
-      const missingCount = Math.max(0, Math.min(quantity - foundCount, available));
+      const foundInDatabase = existingLeads.length;
+      const missingCount = quantity - foundInDatabase;
 
-      console.log(`✅ ${foundCount} leads en base, il manque ${missingCount}`);
+      console.log(`✅ ${foundInDatabase} leads trouvés en base (0.03€/lead)`);
+      console.log(`🔍 ${missingCount} leads manquants, recherche Google Maps (0.06€/lead)`);
 
       let newLeads = [];
       let googleLeadsGenerated = 0;
+      let creditsConsumed = 0;
+      let totalCost = 0;
 
-      // 3. Générer depuis Google Maps
+      // Consommer les crédits pour les leads de la base (0.03€)
+      if (foundInDatabase > 0) {
+        const dbCost = foundInDatabase * 0.03;
+        creditsConsumed += foundInDatabase;
+        totalCost += dbCost;
+
+        // Enregistrer l'usage pour les leads de la base
+        for (const lead of existingLeads) {
+          await execute(
+            `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
+             VALUES ($1, $2, 1, 'database', 0.03)`,
+            [tenant_id, lead.id]
+          );
+        }
+
+        console.log(`💰 ${foundInDatabase} crédits consommés (BDD): ${dbCost.toFixed(2)}€`);
+      }
+
+      // 3. GÉNÉRER DEPUIS GOOGLE MAPS API (0.06€) SI NÉCESSAIRE
       if (missingCount > 0) {
-        const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
-        
-        for (const type of googleTypes) {
-          if (googleLeadsGenerated >= missingCount) break;
+        if (!GOOGLE_API_KEY) {
+          console.log(`⚠️ Pas de clé Google Maps API configurée, seulement ${foundInDatabase} leads retournés`);
+        } else {
+          const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
 
-          try {
-            const response = await googleMapsClient.textSearch({
-              params: {
-                query: `${type} ${city}`,
-                radius: radius * 1000,
-                key: GOOGLE_API_KEY,
-                language: 'fr'
-              }
-            });
+          for (const type of googleTypes) {
+            if (googleLeadsGenerated >= missingCount) break;
 
-            const places = response.data.results || [];
+            try {
+              const response = await googleMapsClient.textSearch({
+                params: {
+                  query: `${type} ${city}`,
+                  radius: radius * 1000,
+                  key: GOOGLE_API_KEY,
+                  language: 'fr'
+                }
+              });
 
-            for (const place of places) {
-              if (googleLeadsGenerated >= missingCount) break;
+              const places = response.data.results || [];
 
-              const existing = await queryAll(
-                'SELECT id FROM global_leads WHERE google_place_id = $1',
-                [place.place_id]
-              );
+              for (const place of places) {
+                if (googleLeadsGenerated >= missingCount) break;
 
-              if (existing.length > 0) continue;
-
-              try {
-                const detailsResponse = await googleMapsClient.placeDetails({
-                  params: {
-                    place_id: place.place_id,
-                    fields: ['name', 'formatted_address', 'geometry', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'types'],
-                    key: GOOGLE_API_KEY,
-                    language: 'fr'
-                  }
-                });
-
-                const details = detailsResponse.data.result;
-
-                // 🔥 ENRICHIR AVEC LES EMAILS
-                console.log(`📧 Recherche emails pour: ${details.name}`);
-                const emails = await enrichLeadWithEmail(details.name, details.website);
-                const primaryEmail = emails[0] || null;
-                const allEmails = emails.join(', ');
-
-                console.log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
-
-                const newLead = await execute(
-                  `INSERT INTO global_leads 
-                  (company_name, phone, website, email, all_emails, address, city, 
-                   latitude, longitude, industry, google_place_id, google_types, 
-                   rating, review_count, source, first_discovered_by, last_verified_at)
-                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
-                  RETURNING *`,
-                  [
-                    details.name,
-                    details.formatted_phone_number || null,
-                    details.website || null,
-                    primaryEmail,
-                    allEmails || null,
-                    details.formatted_address || null,
-                    city,
-                    details.geometry?.location?.lat || null,
-                    details.geometry?.location?.lng || null,
-                    sector,
-                    place.place_id,
-                    JSON.stringify(details.types || []),
-                    details.rating || null,
-                    details.user_ratings_total || null,
-                    'google_maps',
-                    tenant_id
-                  ]
+                const existing = await queryAll(
+                  'SELECT id FROM global_leads WHERE google_place_id = $1',
+                  [place.place_id]
                 );
 
-                newLeads.push(newLead);
-                googleLeadsGenerated++;
+                if (existing.length > 0) continue;
 
-              } catch (detailsError) {
-                console.error(`Erreur détails:`, detailsError.message);
+                try {
+                  const detailsResponse = await googleMapsClient.placeDetails({
+                    params: {
+                      place_id: place.place_id,
+                      fields: ['name', 'formatted_address', 'geometry', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'types'],
+                      key: GOOGLE_API_KEY,
+                      language: 'fr'
+                    }
+                  });
+
+                  const details = detailsResponse.data.result;
+
+                  // 🔥 ENRICHIR AVEC LES EMAILS
+                  console.log(`📧 Recherche emails pour: ${details.name}`);
+                  const emails = await enrichLeadWithEmail(details.name, details.website);
+                  const primaryEmail = emails[0] || null;
+                  const allEmails = emails.join(', ');
+
+                  console.log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
+
+                  const newLead = await execute(
+                    `INSERT INTO global_leads
+                    (company_name, phone, website, email, all_emails, address, city,
+                     latitude, longitude, industry, google_place_id, google_types,
+                     rating, review_count, source, first_discovered_by, last_verified_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+                    RETURNING *`,
+                    [
+                      details.name,
+                      details.formatted_phone_number || null,
+                      details.website || null,
+                      primaryEmail,
+                      allEmails || null,
+                      details.formatted_address || null,
+                      city,
+                      details.geometry?.location?.lat || null,
+                      details.geometry?.location?.lng || null,
+                      sector,
+                      place.place_id,
+                      JSON.stringify(details.types || []),
+                      details.rating || null,
+                      details.user_ratings_total || null,
+                      'google_maps',
+                      tenant_id
+                    ]
+                  );
+
+                  // Enregistrer l'usage pour ce lead Google Maps (0.06€)
+                  await execute(
+                    `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
+                     VALUES ($1, $2, 1, 'google_maps', 0.06)`,
+                    [tenant_id, newLead.id]
+                  );
+
+                  newLeads.push(newLead);
+                  googleLeadsGenerated++;
+                  creditsConsumed++;
+                  totalCost += 0.06;
+
+                  console.log(`💰 1 crédit consommé (Google Maps): 0.06€`);
+
+                } catch (detailsError) {
+                  console.error(`Erreur détails:`, detailsError.message);
+                }
               }
-            }
 
-          } catch (searchError) {
-            console.error(`Erreur recherche:`, searchError.message);
+            } catch (searchError) {
+              console.error(`Erreur recherche:`, searchError.message);
+            }
           }
         }
       }
 
-      // 4. Consommer les quotas
-      if (googleLeadsGenerated > 0) {
+      // 4. METTRE À JOUR LES CRÉDITS RESTANTS
+      if (creditsConsumed > 0) {
         await execute(
-          `UPDATE subscriptions 
-           SET google_leads_used = google_leads_used + $1, updated_at = NOW()
+          `UPDATE lead_credits
+           SET credits_remaining = credits_remaining - $1,
+               credits_used = credits_used + $1,
+               updated_at = NOW()
            WHERE tenant_id = $2`,
-          [googleLeadsGenerated, tenant_id]
+          [creditsConsumed, tenant_id]
         );
 
-        await execute(
-          `INSERT INTO usage_history (tenant_id, action_type, quantity, cost)
-           VALUES ($1, 'google_lead', $2, $3)`,
-          [tenant_id, googleLeadsGenerated, googleLeadsGenerated * 1.0]
-        );
+        console.log(`💳 Total crédits consommés: ${creditsConsumed} (${totalCost.toFixed(2)}€)`);
       }
 
       const totalLeads = [...existingLeads, ...newLeads];
 
       return res.json({
         success: true,
-        found_in_database: foundCount,
+        found_in_database: foundInDatabase,
         fetched_from_google: googleLeadsGenerated,
         total: totalLeads.length,
-        quota_consumed: googleLeadsGenerated,
-        quota_remaining: available - googleLeadsGenerated,
+        credits_consumed: creditsConsumed,
+        cost_database: (foundInDatabase * 0.03).toFixed(2),
+        cost_google_maps: (googleLeadsGenerated * 0.06).toFixed(2),
+        total_cost: totalCost.toFixed(2),
+        credits_remaining: creditsAvailable - creditsConsumed,
         leads: totalLeads.slice(0, quantity)
       });
     }

@@ -116,6 +116,9 @@ import { getMailingSettings, updateMailingSettings, testMailingSettings } from '
 import billingRoutes from './api/billing.js';
 import duplicatesRoutes from './api/duplicates.js';
 import exportRoutes from './api/export.js';
+import leadCreditsRoutes from './api/lead-credits.js';
+import servicesRoutes from './api/services.js';
+import subscriptionsRoutes from './api/subscriptions.js';
 
 // ========== ?? NOUVELLES ROUTES LEAD MANAGEMENT ==========
 import leadContactsRoute from './api/lead-contacts.js';
@@ -172,6 +175,13 @@ app.use('/api/duplicates', duplicatesRoutes);
 
 // ========== ?? ROUTES EXPORT CSV ==========
 app.use('/api/export', exportRoutes);
+
+// ========== ?? ROUTES LEAD CREDITS (SYSTÈME 0.03€/0.06€) ==========
+app.use('/api/lead-credits', leadCreditsRoutes);
+
+// ========== ?? ROUTES SERVICES & ABONNEMENTS ==========
+app.use('/api/services', servicesRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes);
 
 // ========== ?? ROUTES LEAD MANAGEMENT AVANC� ==========
 app.use('/api/leads', leadContactsRoute);

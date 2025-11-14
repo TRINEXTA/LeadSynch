@@ -8,6 +8,120 @@ const router = express.Router();
 router.use(authMiddleware);
 
 /**
+ * POST /api/duplicates/detect
+ * Détecte les doublons potentiels dans les leads (via POST pour filtres avancés)
+ */
+router.post('/detect', async (req, res) => {
+  try {
+    const { tenant_id: tenantId } = req.user;
+    const { method = 'all' } = req.body; // email, phone, company_name, ou all
+
+    let duplicateGroups = [];
+
+    // Détecter par email
+    if (method === 'email' || method === 'all') {
+      const { rows: emailDups } = await q(
+        `SELECT
+          email as key,
+          'email' as method,
+          array_agg(id ORDER BY created_at ASC) as lead_ids,
+          COUNT(*)::int as count
+         FROM leads
+         WHERE tenant_id = $1 AND email IS NOT NULL AND email != ''
+         GROUP BY email
+         HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC`,
+        [tenantId]
+      );
+
+      for (const dup of emailDups) {
+        const { rows: leads } = await q(
+          `SELECT * FROM leads WHERE id = ANY($1) ORDER BY created_at ASC`,
+          [dup.lead_ids]
+        );
+        duplicateGroups.push({
+          method: 'email',
+          key: dup.key,
+          count: dup.count,
+          leads
+        });
+      }
+    }
+
+    // Détecter par téléphone
+    if (method === 'phone' || method === 'all') {
+      const { rows: phoneDups } = await q(
+        `SELECT
+          phone as key,
+          'phone' as method,
+          array_agg(id ORDER BY created_at ASC) as lead_ids,
+          COUNT(*)::int as count
+         FROM leads
+         WHERE tenant_id = $1 AND phone IS NOT NULL AND phone != ''
+         GROUP BY phone
+         HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC`,
+        [tenantId]
+      );
+
+      for (const dup of phoneDups) {
+        const { rows: leads } = await q(
+          `SELECT * FROM leads WHERE id = ANY($1) ORDER BY created_at ASC`,
+          [dup.lead_ids]
+        );
+        duplicateGroups.push({
+          method: 'phone',
+          key: dup.key,
+          count: dup.count,
+          leads
+        });
+      }
+    }
+
+    // Détecter par nom d'entreprise
+    if (method === 'company_name' || method === 'all') {
+      const { rows: nameDups } = await q(
+        `SELECT
+          LOWER(TRIM(company_name)) as key,
+          'company_name' as method,
+          array_agg(id ORDER BY created_at ASC) as lead_ids,
+          COUNT(*)::int as count
+         FROM leads
+         WHERE tenant_id = $1
+           AND company_name IS NOT NULL
+           AND company_name != ''
+         GROUP BY LOWER(TRIM(company_name))
+         HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC`,
+        [tenantId]
+      );
+
+      for (const dup of nameDups) {
+        const { rows: leads } = await q(
+          `SELECT * FROM leads WHERE id = ANY($1) ORDER BY created_at ASC`,
+          [dup.lead_ids]
+        );
+        duplicateGroups.push({
+          method: 'company_name',
+          key: dup.key,
+          count: dup.count,
+          leads
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      total: duplicateGroups.length,
+      duplicates: duplicateGroups
+    });
+  } catch (error) {
+    console.error('Erreur détection doublons POST:', error);
+    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  }
+});
+
+/**
  * GET /api/duplicates/detect
  * Détecte les doublons potentiels dans les leads
  */
@@ -207,11 +321,21 @@ router.post('/merge', async (req, res) => {
       );
 
       // Transférer les relations de base de données
+      // Supprimer d'abord les conflits potentiels (même database_id pour le lead principal)
+      await q(
+        `DELETE FROM lead_database_relations
+         WHERE lead_id = $1
+         AND database_id IN (
+           SELECT database_id FROM lead_database_relations WHERE lead_id = $2
+         )`,
+        [primary_lead_id, duplicateId]
+      );
+
+      // Puis transférer toutes les relations du doublon
       await q(
         `UPDATE lead_database_relations
          SET lead_id = $1
-         WHERE lead_id = $2
-         ON CONFLICT (lead_id, database_id) DO NOTHING`,
+         WHERE lead_id = $2`,
         [primary_lead_id, duplicateId]
       );
     }
@@ -240,6 +364,92 @@ router.post('/merge', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur fusion doublons:', error);
+    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  }
+});
+
+/**
+ * POST /api/duplicates/merge-auto
+ * Fusionne automatiquement plusieurs leads avec stratégie de conservation
+ */
+router.post('/merge-auto', async (req, res) => {
+  try {
+    const { tenant_id: tenantId, id: userId } = req.user;
+    const { primary_lead_id, duplicate_ids, merge_strategy = 'keep_oldest' } = req.body;
+
+    if (!primary_lead_id || !duplicate_ids || !Array.isArray(duplicate_ids)) {
+      return res.status(400).json({
+        error: 'Paramètres invalides',
+        message: 'primary_lead_id et duplicate_ids (array) requis'
+      });
+    }
+
+    // Vérifier que tous les leads appartiennent au tenant
+    const allLeadIds = [primary_lead_id, ...duplicate_ids];
+    const { rows: leadCheck } = await q(
+      `SELECT id FROM leads WHERE id = ANY($1) AND tenant_id = $2`,
+      [allLeadIds, tenantId]
+    );
+
+    if (leadCheck.length !== allLeadIds.length) {
+      return res.status(403).json({
+        error: 'Accès refusé',
+        message: 'Un ou plusieurs leads n\'appartiennent pas à ce tenant'
+      });
+    }
+
+    // Transférer automatiquement toutes les données des doublons
+    for (const duplicateId of duplicate_ids) {
+      // Transférer les contacts
+      await q(
+        `UPDATE lead_contacts SET lead_id = $1 WHERE lead_id = $2`,
+        [primary_lead_id, duplicateId]
+      ).catch(() => {}); // Ignorer si la table n'existe pas
+
+      // Transférer les téléphones
+      await q(
+        `UPDATE lead_phones SET lead_id = $1 WHERE lead_id = $2`,
+        [primary_lead_id, duplicateId]
+      ).catch(() => {});
+
+      // Transférer les notes
+      await q(
+        `UPDATE lead_notes SET lead_id = $1 WHERE lead_id = $2`,
+        [primary_lead_id, duplicateId]
+      ).catch(() => {});
+
+      // Transférer les activités
+      await q(
+        `UPDATE activities SET lead_id = $1 WHERE lead_id = $2`,
+        [primary_lead_id, duplicateId]
+      ).catch(() => {});
+    }
+
+    // Supprimer les leads dupliqués
+    await q(
+      `DELETE FROM leads WHERE id = ANY($1)`,
+      [duplicate_ids]
+    );
+
+    // Enregistrer l'action
+    await q(
+      `INSERT INTO lead_notes (lead_id, user_id, content, type)
+       VALUES ($1, $2, $3, 'system')`,
+      [
+        primary_lead_id,
+        userId,
+        `🔄 Fusion automatique de ${duplicate_ids.length} doublon(s) (stratégie: ${merge_strategy})`
+      ]
+    ).catch(() => {}); // Ignorer si lead_notes n'existe pas
+
+    res.json({
+      success: true,
+      message: `${duplicate_ids.length} lead(s) fusionné(s) automatiquement`,
+      primary_lead_id,
+      merged_count: duplicate_ids.length
+    });
+  } catch (error) {
+    console.error('Erreur fusion automatique:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

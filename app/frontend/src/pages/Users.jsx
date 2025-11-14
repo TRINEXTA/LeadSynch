@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle } from 'lucide-react';
+import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -105,7 +105,7 @@ export default function Users() {
 
   const handleDelete = async (userId) => {
     if (!confirm('⚠️ Supprimer définitivement cet utilisateur ? Cette action est irréversible.')) return;
-    
+
     try {
       await api.delete(`/users/${userId}`);
       alert('✅ Utilisateur supprimé');
@@ -113,6 +113,45 @@ export default function Users() {
     } catch (error) {
       console.error('❌ Erreur:', error);
       alert('Erreur lors de la suppression');
+    }
+  };
+
+  const handleBlockUser = async (userId) => {
+    if (!confirm('⚠️ Bloquer cet utilisateur ? Il ne pourra plus se connecter.')) return;
+
+    try {
+      await api.patch(`/users/${userId}/block`);
+      alert('✅ Utilisateur bloqué');
+      loadUsers();
+    } catch (error) {
+      console.error('❌ Erreur:', error);
+      alert(error.response?.data?.error || 'Erreur lors du blocage');
+    }
+  };
+
+  const handleUnblockUser = async (userId) => {
+    if (!confirm('✅ Débloquer cet utilisateur ?')) return;
+
+    try {
+      await api.patch(`/users/${userId}/unblock`);
+      alert('✅ Utilisateur débloqué');
+      loadUsers();
+    } catch (error) {
+      console.error('❌ Erreur:', error);
+      alert(error.response?.data?.error || 'Erreur lors du déblocage');
+    }
+  };
+
+  const handleForcePasswordChange = async (userId) => {
+    if (!confirm('🔐 Forcer le changement de mot de passe ? L\'utilisateur devra le modifier à sa prochaine connexion.')) return;
+
+    try {
+      await api.patch(`/users/${userId}/force-password-change`);
+      alert('✅ Changement de mot de passe forcé');
+      loadUsers();
+    } catch (error) {
+      console.error('❌ Erreur:', error);
+      alert(error.response?.data?.error || 'Erreur lors de l\'opération');
     }
   };
 
@@ -365,6 +404,42 @@ export default function Users() {
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
+
+                          {/* Bloquer/Débloquer */}
+                          {isAdmin && user.id !== currentUser.id && (
+                            <>
+                              {user.is_active ? (
+                                <button
+                                  onClick={() => handleBlockUser(user.id)}
+                                  className="p-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-all"
+                                  title="Bloquer l'utilisateur"
+                                >
+                                  <Lock className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleUnblockUser(user.id)}
+                                  className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all"
+                                  title="Débloquer l'utilisateur"
+                                >
+                                  <Unlock className="w-4 h-4" />
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          {/* Forcer changement de mot de passe */}
+                          {(isAdmin || isManager) && user.id !== currentUser.id && (
+                            <button
+                              onClick={() => handleForcePasswordChange(user.id)}
+                              className="p-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-all"
+                              title="Forcer le changement de mot de passe"
+                            >
+                              <Key className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Supprimer */}
                           {isAdmin && user.id !== currentUser.id && (
                             <button
                               onClick={() => handleDelete(user.id)}

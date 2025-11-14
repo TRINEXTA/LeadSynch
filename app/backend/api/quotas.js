@@ -1,5 +1,33 @@
-﻿import { authMiddleware } from '../middleware/auth.js';
-import { queryAll } from '../lib/db.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { queryAll, queryOne } from '../lib/db.js';
+
+// Définition des quotas par plan
+const PLAN_QUOTAS = {
+  'FREE': {
+    google_leads_quota: 10,
+    emails_quota: 100,
+    local_leads_quota: 50,
+    campaigns_quota: 1
+  },
+  'STARTER': {
+    google_leads_quota: 100,
+    emails_quota: 1000,
+    local_leads_quota: 500,
+    campaigns_quota: 5
+  },
+  'PRO': {
+    google_leads_quota: 500,
+    emails_quota: 5000,
+    local_leads_quota: 2000,
+    campaigns_quota: 20
+  },
+  'BUSINESS': {
+    google_leads_quota: -1,  // illimité
+    emails_quota: -1,         // illimité
+    local_leads_quota: -1,    // illimité
+    campaigns_quota: -1       // illimité
+  }
+};
 
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
@@ -7,91 +35,145 @@ async function handler(req, res) {
   try {
     // GET /api/quotas - Vérifier les quotas disponibles
     if (req.method === 'GET') {
-      const quotas = await queryAll(
-        `SELECT 
-          s.plan,
-          s.google_leads_quota,
-          s.google_leads_used,
-          (s.google_leads_quota - s.google_leads_used + 
-           COALESCE(SUM(p.google_leads_remaining), 0)) AS google_leads_available,
-          
-          s.emails_quota,
-          s.emails_used,
-          (s.emails_quota - s.emails_used + 
-           COALESCE(SUM(p.emails_remaining), 0)) AS emails_available,
-          
-          s.local_leads_quota,
-          s.local_leads_used,
-          CASE 
-            WHEN s.local_leads_quota = -1 THEN -1
-            ELSE (s.local_leads_quota - s.local_leads_used)
-          END AS local_leads_available,
-          
-          s.campaigns_quota,
-          s.active_campaigns,
-          (s.campaigns_quota - s.active_campaigns) AS campaigns_available,
-          
-          s.current_period_end
-        FROM subscriptions s
-        LEFT JOIN one_shot_packs p ON s.tenant_id = p.tenant_id 
-          AND p.status = 'active' 
-          AND p.expires_at >= CURRENT_DATE
-        WHERE s.tenant_id = $1
-        GROUP BY s.tenant_id, s.plan, s.google_leads_quota, s.google_leads_used,
-                 s.emails_quota, s.emails_used, s.local_leads_quota, 
-                 s.local_leads_used, s.campaigns_quota, s.active_campaigns,
-                 s.current_period_end`,
+      // Récupérer le plan du tenant
+      const tenant = await queryOne(
+        `SELECT plan, subscription_status FROM tenants WHERE id = $1`,
         [tenant_id]
       );
 
-      if (quotas.length === 0) {
-        return res.status(404).json({ 
-          error: 'Aucun abonnement trouvé',
-          suggestion: 'Contactez le support'
+      if (!tenant) {
+        return res.status(404).json({
+          error: 'Tenant non trouvé'
         });
       }
 
-      const quota = quotas[0];
+      const plan = tenant.plan || 'FREE';
+      const quotas = PLAN_QUOTAS[plan] || PLAN_QUOTAS['FREE'];
+
+      // Calculer l'utilisation réelle depuis les différentes tables
+
+      // 1. Google Leads utilisés (depuis credit_usage avec source = 'google_maps')
+      const googleLeadsUsed = await queryOne(
+        `SELECT COALESCE(SUM(credits_used), 0) as total
+         FROM credit_usage
+         WHERE tenant_id = $1 AND source = 'google_maps'
+         AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+        [tenant_id]
+      );
+
+      // 2. Emails utilisés (estimation depuis leads avec status = 'contacted')
+      const emailsUsed = await queryOne(
+        `SELECT COUNT(*) as total
+         FROM leads
+         WHERE tenant_id = $1 AND status = 'contacted'
+         AND updated_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+        [tenant_id]
+      );
+
+      // 3. Leads locaux utilisés (leads créés ce mois)
+      const localLeadsUsed = await queryOne(
+        `SELECT COUNT(*) as total
+         FROM leads
+         WHERE tenant_id = $1
+         AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+        [tenant_id]
+      );
+
+      // 4. Campagnes actives
+      const activeCampaigns = await queryOne(
+        `SELECT COUNT(*) as total
+         FROM campaigns
+         WHERE tenant_id = $1 AND status = 'active'`,
+        [tenant_id]
+      );
+
+      // Récupérer les crédits achetés disponibles
+      const leadCredits = await queryOne(
+        `SELECT credits_remaining FROM lead_credits WHERE tenant_id = $1`,
+        [tenant_id]
+      );
+
+      const bonusCredits = leadCredits?.credits_remaining || 0;
+
+      // Calculer les disponibilités
+      const google_used = parseInt(googleLeadsUsed?.total || 0);
+      const emails_used = parseInt(emailsUsed?.total || 0);
+      const local_used = parseInt(localLeadsUsed?.total || 0);
+      const campaigns_active = parseInt(activeCampaigns?.total || 0);
+
+      const google_available = quotas.google_leads_quota === -1
+        ? -1
+        : Math.max(0, quotas.google_leads_quota - google_used + bonusCredits);
+
+      const emails_available = quotas.emails_quota === -1
+        ? -1
+        : Math.max(0, quotas.emails_quota - emails_used);
+
+      const local_available = quotas.local_leads_quota === -1
+        ? -1
+        : Math.max(0, quotas.local_leads_quota - local_used);
+
+      const campaigns_available = quotas.campaigns_quota === -1
+        ? -1
+        : Math.max(0, quotas.campaigns_quota - campaigns_active);
 
       // Calculer les pourcentages
-      const googlePercentage = quota.google_leads_quota > 0 
-        ? Math.round((quota.google_leads_used / quota.google_leads_quota) * 100)
+      const googlePercentage = quotas.google_leads_quota > 0
+        ? Math.round((google_used / quotas.google_leads_quota) * 100)
         : 0;
-      
-      const emailsPercentage = quota.emails_quota > 0
-        ? Math.round((quota.emails_used / quota.emails_quota) * 100)
+
+      const emailsPercentage = quotas.emails_quota > 0
+        ? Math.round((emails_used / quotas.emails_quota) * 100)
         : 0;
+
+      // Calculer la date de fin de période
+      const period_end = new Date();
+      period_end.setMonth(period_end.getMonth() + 1);
+      period_end.setDate(1);
+      period_end.setDate(period_end.getDate() - 1);
 
       return res.json({
         success: true,
-        plan: quota.plan,
+        plan: plan,
         quotas: {
           google_leads: {
-            quota: quota.google_leads_quota,
-            used: quota.google_leads_used,
-            available: quota.google_leads_available,
-            percentage: googlePercentage
+            quota: quotas.google_leads_quota,
+            used: google_used,
+            available: google_available,
+            bonus_credits: bonusCredits,
+            percentage: googlePercentage,
+            unlimited: quotas.google_leads_quota === -1
           },
           emails: {
-            quota: quota.emails_quota,
-            used: quota.emails_used,
-            available: quota.emails_available,
-            percentage: emailsPercentage
+            quota: quotas.emails_quota,
+            used: emails_used,
+            available: emails_available,
+            percentage: emailsPercentage,
+            unlimited: quotas.emails_quota === -1
           },
           local_leads: {
-            quota: quota.local_leads_quota,
-            used: quota.local_leads_used,
-            available: quota.local_leads_available,
-            unlimited: quota.local_leads_quota === -1
+            quota: quotas.local_leads_quota,
+            used: local_used,
+            available: local_available,
+            unlimited: quotas.local_leads_quota === -1
           },
           campaigns: {
-            quota: quota.campaigns_quota,
-            active: quota.active_campaigns,
-            available: quota.campaigns_available
+            quota: quotas.campaigns_quota,
+            active: campaigns_active,
+            available: campaigns_available,
+            unlimited: quotas.campaigns_quota === -1
           }
         },
-        period_end: quota.current_period_end,
-        alerts: generateAlerts(quota)
+        period_end: period_end.toISOString(),
+        alerts: generateAlerts({
+          plan,
+          google_used,
+          google_quota: quotas.google_leads_quota,
+          emails_used,
+          emails_quota: quotas.emails_quota,
+          campaigns_active,
+          campaigns_quota: quotas.campaigns_quota
+        })
       });
     }
 
@@ -103,68 +185,114 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'action et quantity requis' });
       }
 
-      const quotas = await queryAll(
-        `SELECT 
-          s.*,
-          COALESCE(SUM(p.google_leads_remaining), 0) AS pack_google_leads,
-          COALESCE(SUM(p.emails_remaining), 0) AS pack_emails
-        FROM subscriptions s
-        LEFT JOIN one_shot_packs p ON s.tenant_id = p.tenant_id 
-          AND p.status = 'active' 
-          AND p.expires_at >= CURRENT_DATE
-        WHERE s.tenant_id = $1
-        GROUP BY s.id`,
+      // Récupérer le plan actuel
+      const tenant = await queryOne(
+        `SELECT plan FROM tenants WHERE id = $1`,
         [tenant_id]
       );
 
-      if (quotas.length === 0) {
-        return res.status(404).json({ 
-          error: 'Aucun abonnement trouvé' 
-        });
-      }
+      const plan = tenant?.plan || 'FREE';
+      const quotas = PLAN_QUOTAS[plan] || PLAN_QUOTAS['FREE'];
 
-      const quota = quotas[0];
       let allowed = false;
       let message = '';
       let remaining = 0;
 
+      // Récupérer l'utilisation actuelle selon l'action
       switch (action) {
-        case 'google_leads':
-          remaining = (quota.google_leads_quota - quota.google_leads_used) + quota.pack_google_leads;
-          allowed = remaining >= quantity;
-          message = allowed 
-            ? `✅ Vous pouvez générer ${quantity} leads Google Maps`
-            : `❌ Quota insuffisant. Reste: ${remaining} / Demandé: ${quantity}`;
-          break;
+        case 'google_leads': {
+          const used = await queryOne(
+            `SELECT COALESCE(SUM(credits_used), 0) as total
+             FROM credit_usage
+             WHERE tenant_id = $1 AND source = 'google_maps'
+             AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+            [tenant_id]
+          );
 
-        case 'emails':
-          remaining = (quota.emails_quota - quota.emails_used) + quota.pack_emails;
-          allowed = remaining >= quantity;
-          message = allowed
-            ? `✅ Vous pouvez envoyer ${quantity} emails`
-            : `❌ Quota insuffisant. Reste: ${remaining} / Demandé: ${quantity}`;
-          break;
+          const leadCredits = await queryOne(
+            `SELECT credits_remaining FROM lead_credits WHERE tenant_id = $1`,
+            [tenant_id]
+          );
 
-        case 'local_leads':
-          if (quota.local_leads_quota === -1) {
+          const bonusCredits = leadCredits?.credits_remaining || 0;
+
+          if (quotas.google_leads_quota === -1) {
+            allowed = true;
+            message = '✅ Leads Google Maps illimités';
+          } else {
+            remaining = quotas.google_leads_quota - parseInt(used?.total || 0) + bonusCredits;
+            allowed = remaining >= quantity;
+            message = allowed
+              ? `✅ Vous pouvez générer ${quantity} leads Google Maps`
+              : `❌ Quota insuffisant. Reste: ${remaining} / Demandé: ${quantity}`;
+          }
+          break;
+        }
+
+        case 'emails': {
+          const used = await queryOne(
+            `SELECT COUNT(*) as total
+             FROM leads
+             WHERE tenant_id = $1 AND status = 'contacted'
+             AND updated_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+            [tenant_id]
+          );
+
+          if (quotas.emails_quota === -1) {
+            allowed = true;
+            message = '✅ Emails illimités';
+          } else {
+            remaining = quotas.emails_quota - parseInt(used?.total || 0);
+            allowed = remaining >= quantity;
+            message = allowed
+              ? `✅ Vous pouvez envoyer ${quantity} emails`
+              : `❌ Quota insuffisant. Reste: ${remaining} / Demandé: ${quantity}`;
+          }
+          break;
+        }
+
+        case 'local_leads': {
+          const used = await queryOne(
+            `SELECT COUNT(*) as total
+             FROM leads
+             WHERE tenant_id = $1
+             AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+            [tenant_id]
+          );
+
+          if (quotas.local_leads_quota === -1) {
             allowed = true;
             message = '✅ Leads locaux illimités';
           } else {
-            remaining = quota.local_leads_quota - quota.local_leads_used;
+            remaining = quotas.local_leads_quota - parseInt(used?.total || 0);
             allowed = remaining >= quantity;
             message = allowed
               ? `✅ Vous pouvez utiliser ${quantity} leads locaux`
               : `❌ Quota insuffisant. Reste: ${remaining} / Demandé: ${quantity}`;
           }
           break;
+        }
 
-        case 'campaign':
-          remaining = quota.campaigns_quota - quota.active_campaigns;
-          allowed = remaining > 0;
-          message = allowed
-            ? `✅ Vous pouvez créer ${remaining} campagne(s) supplémentaire(s)`
-            : `❌ Limite atteinte (${quota.active_campaigns}/${quota.campaigns_quota})`;
+        case 'campaign': {
+          const active = await queryOne(
+            `SELECT COUNT(*) as total
+             FROM campaigns
+             WHERE tenant_id = $1 AND status = 'active'`,
+            [tenant_id]
+          );
+
+          if (quotas.campaigns_quota === -1) {
+            allowed = true;
+            message = '✅ Campagnes illimitées';
+          } else {
+            remaining = quotas.campaigns_quota - parseInt(active?.total || 0);
+            allowed = remaining > 0;
+            message = allowed
+              ? `✅ Vous pouvez créer ${remaining} campagne(s) supplémentaire(s)`
+              : `❌ Limite atteinte (${active?.total}/${quotas.campaigns_quota})`;
+          }
           break;
+        }
 
         default:
           return res.status(400).json({ error: 'Action non reconnue' });
@@ -175,8 +303,8 @@ async function handler(req, res) {
         allowed,
         message,
         remaining,
-        plan: quota.plan,
-        upgrade_suggestion: !allowed ? getUpgradeSuggestion(quota.plan, action) : null
+        plan: plan,
+        upgrade_suggestion: !allowed ? getUpgradeSuggestion(plan, action) : null
       });
     }
 
@@ -184,39 +312,46 @@ async function handler(req, res) {
 
   } catch (error) {
     console.error('Quotas error:', error);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({
+      error: 'Server error',
+      message: error.message
+    });
   }
 }
 
-function generateAlerts(quota) {
+function generateAlerts(data) {
   const alerts = [];
 
-  // Alerte Google Leads
-  const googlePercentage = (quota.google_leads_used / quota.google_leads_quota) * 100;
-  if (googlePercentage >= 80) {
-    alerts.push({
-      type: 'warning',
-      category: 'google_leads',
-      message: `⚠️ ${quota.google_leads_used}/${quota.google_leads_quota} leads Google utilisés (${Math.round(googlePercentage)}%)`
-    });
+  // Alerte Google Leads (seulement si pas illimité)
+  if (data.google_quota > 0) {
+    const googlePercentage = (data.google_used / data.google_quota) * 100;
+    if (googlePercentage >= 80) {
+      alerts.push({
+        type: googlePercentage >= 95 ? 'error' : 'warning',
+        category: 'google_leads',
+        message: `⚠️ ${data.google_used}/${data.google_quota} leads Google utilisés (${Math.round(googlePercentage)}%)`
+      });
+    }
   }
 
-  // Alerte Emails
-  const emailsPercentage = (quota.emails_used / quota.emails_quota) * 100;
-  if (emailsPercentage >= 80) {
-    alerts.push({
-      type: 'warning',
-      category: 'emails',
-      message: `⚠️ ${quota.emails_used}/${quota.emails_quota} emails utilisés (${Math.round(emailsPercentage)}%)`
-    });
+  // Alerte Emails (seulement si pas illimité)
+  if (data.emails_quota > 0) {
+    const emailsPercentage = (data.emails_used / data.emails_quota) * 100;
+    if (emailsPercentage >= 80) {
+      alerts.push({
+        type: emailsPercentage >= 95 ? 'error' : 'warning',
+        category: 'emails',
+        message: `⚠️ ${data.emails_used}/${data.emails_quota} emails utilisés (${Math.round(emailsPercentage)}%)`
+      });
+    }
   }
 
-  // Alerte Campagnes
-  if (quota.active_campaigns >= quota.campaigns_quota) {
+  // Alerte Campagnes (seulement si pas illimité)
+  if (data.campaigns_quota > 0 && data.campaigns_active >= data.campaigns_quota) {
     alerts.push({
       type: 'error',
       category: 'campaigns',
-      message: `🛑 Limite campagnes atteinte (${quota.active_campaigns}/${quota.campaigns_quota})`
+      message: `🛑 Limite campagnes atteinte (${data.campaigns_active}/${data.campaigns_quota})`
     });
   }
 
@@ -225,9 +360,9 @@ function generateAlerts(quota) {
 
 function getUpgradeSuggestion(currentPlan, action) {
   const suggestions = {
-    'free': 'Upgrade vers Starter (29€/mois) pour débloquer plus de ressources',
-    'starter': 'Upgrade vers Pro (79€/mois) pour 1000 leads + 20k emails',
-    'pro': 'Upgrade vers Business (199€/mois) pour des quotas illimités'
+    'FREE': 'Upgrade vers Starter (29€/mois) pour débloquer plus de ressources',
+    'STARTER': 'Upgrade vers Pro (79€/mois) pour 500 leads + 5000 emails',
+    'PRO': 'Upgrade vers Business (199€/mois) pour des quotas illimités'
   };
 
   return suggestions[currentPlan] || 'Contactez-nous pour un plan personnalisé';
