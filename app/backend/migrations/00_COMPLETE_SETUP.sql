@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS credit_usage (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Ajouter les colonnes manquantes si la table existait déjà
+ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS source VARCHAR(50);
+ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS cost_euros DECIMAL(10, 3);
+
 -- ========== 2. SERVICES ET ABONNEMENTS ==========
 
 -- Table des services disponibles
@@ -62,6 +66,11 @@ CREATE TABLE IF NOT EXISTS services (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Ajouter les colonnes manquantes si la table existait déjà
+ALTER TABLE services ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50);
+ALTER TABLE services ADD COLUMN IF NOT EXISTS features JSONB;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS metadata JSONB;
 
 -- Table des abonnements clients
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -113,10 +122,11 @@ CREATE TABLE IF NOT EXISTS subscription_invoices (
 -- ========== 3. HISTORIQUE ABONNEMENTS (VERSION CONSOLIDÉE) ==========
 
 -- Supprimer l'ancienne table si elle existe avec une structure différente
+-- Note: Cette table peut avoir différentes structures selon les migrations précédentes
 DROP TABLE IF EXISTS subscription_history CASCADE;
 
 -- Créer la nouvelle version consolidée
-CREATE TABLE subscription_history (
+CREATE TABLE IF NOT EXISTS subscription_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 
