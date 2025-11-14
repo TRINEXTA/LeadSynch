@@ -146,15 +146,20 @@ export async function sendEmail({ to, subject, text, html, from, fromName, reply
       [tenantId]
     );
 
-    if (rows.length === 0) {
-      throw new Error('Configuration email non trouvée');
+    // Utiliser la clé de la DB si elle existe, sinon fallback sur la variable d'environnement
+    let apiKey, provider;
+
+    if (rows.length > 0) {
+      apiKey = rows[0].elastic_email_api_key || process.env.ELASTIC_EMAIL_API_KEY;
+      provider = rows[0].provider || 'elasticemail';
+    } else {
+      // Pas de config en DB, utiliser le .env directement
+      apiKey = process.env.ELASTIC_EMAIL_API_KEY;
+      provider = 'elasticemail';
     }
 
-    const apiKey = rows[0].elastic_email_api_key;
-    const provider = rows[0].provider || 'elasticemail';
-
     if (!apiKey) {
-      throw new Error('Clé API Elastic Email non configurée');
+      throw new Error('Clé API Elastic Email non configurée (ni en DB ni dans .env)');
     }
 
     // Envoyer via Elastic Email API
