@@ -10,9 +10,10 @@ export default function MailingSettings() {
   const [settings, setSettings] = useState({
     from_email: '',
     from_name: '',
-    reply_to: '',
+    reply_to_email: '',
     company_name: '',
-    signature: ''
+    signature: '',
+    use_company_name: false // true = nom entreprise, false = nom personne
   });
 
   useEffect(() => {
@@ -26,9 +27,10 @@ export default function MailingSettings() {
         setSettings({
           from_email: response.data.settings.from_email || '',
           from_name: response.data.settings.from_name || '',
-          reply_to: response.data.settings.reply_to || response.data.settings.reply_to_email || '',
+          reply_to_email: response.data.settings.reply_to_email || '',
           company_name: response.data.settings.company_name || '',
-          signature: response.data.settings.signature || ''
+          signature: response.data.settings.signature || '',
+          use_company_name: response.data.settings.use_company_name || false
         });
       }
     } catch (error) {
@@ -169,6 +171,28 @@ export default function MailingSettings() {
                 </p>
               </div>
 
+              {/* Option: Afficher nom entreprise au lieu du nom personnel */}
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.use_company_name}
+                    onChange={(e) => setSettings({...settings, use_company_name: e.target.checked})}
+                    className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-gray-800">
+                      📢 Marketing : Afficher le nom de l'entreprise au lieu du nom personnel
+                    </span>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {settings.use_company_name
+                        ? `✅ Les emails afficheront "${settings.company_name || 'Votre Entreprise'}" comme expéditeur`
+                        : `Les emails afficheront "${settings.from_name || 'Votre nom'}" comme expéditeur`}
+                    </p>
+                  </div>
+                </label>
+              </div>
+
               {/* Email de réponse */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -176,8 +200,8 @@ export default function MailingSettings() {
                 </label>
                 <input
                   type="email"
-                  value={settings.reply_to}
-                  onChange={(e) => setSettings({...settings, reply_to: e.target.value})}
+                  value={settings.reply_to_email}
+                  onChange={(e) => setSettings({...settings, reply_to_email: e.target.value})}
                   placeholder="support@votre-entreprise.com (optionnel)"
                   className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 font-semibold transition-all"
                 />

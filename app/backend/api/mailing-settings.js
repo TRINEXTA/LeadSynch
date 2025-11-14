@@ -38,10 +38,10 @@ export async function getMailingSettings(req, res) {
       settings: {
         from_email: settings.from_email,
         from_name: settings.from_name,
-        reply_to: settings.reply_to,
+        reply_to_email: settings.reply_to_email,
         provider: settings.provider,
         api_key: maskedApiKey,
-        configured: settings.configured,
+        configured: settings.is_active || false, // Utiliser is_active au lieu de configured
         created_at: settings.created_at,
         updated_at: settings.updated_at
       }
@@ -62,7 +62,7 @@ export async function getMailingSettings(req, res) {
 export async function updateMailingSettings(req, res) {
   try {
     const { tenant_id: tenantId } = req.user;
-    const { from_email, from_name, reply_to, provider, api_key } = req.body;
+    const { from_email, from_name, reply_to_email, provider, elastic_email_api_key, company_name, signature, use_company_name } = req.body;
 
     // Validation
     if (!from_email || !from_name) {
@@ -71,6 +71,9 @@ export async function updateMailingSettings(req, res) {
         message: 'L\'email expéditeur et le nom sont requis'
       });
     }
+
+    // Déterminer le nom à afficher dans les emails
+    const displayName = use_company_name && company_name ? company_name : from_name;
 
     // Vérifier si une config existe déjà
     const { rows: existing } = await q(
@@ -81,41 +84,26 @@ export async function updateMailingSettings(req, res) {
     let result;
 
     if (existing.length > 0) {
-      // Mise à jour
-      const updateFields = [];
-      const values = [];
-      let paramCount = 1;
-
-      updateFields.push(`from_email = $${paramCount++}`);
-      values.push(from_email);
-
-      updateFields.push(`from_name = $${paramCount++}`);
-      values.push(from_name);
-
-      updateFields.push(`reply_to = $${paramCount++}`);
-      values.push(reply_to || from_email);
-
-      updateFields.push(`provider = $${paramCount++}`);
-      values.push(provider || 'elasticemail');
-
-      // Si une nouvelle clé API est fournie (non masquée)
-      if (api_key && !api_key.includes('...')) {
-        updateFields.push(`api_key = $${paramCount++}`);
-        values.push(api_key);
-      }
-
-      updateFields.push(`configured = true`);
-      updateFields.push(`updated_at = NOW()`);
-
-      values.push(tenantId);
-      values.push(existing[0].id);
-
+      // Mise à jour - Utiliser SEULEMENT les colonnes qui existent dans la table
       const { rows } = await q(
         `UPDATE mailing_settings
-         SET ${updateFields.join(', ')}
-         WHERE tenant_id = $${paramCount++} AND id = $${paramCount}
+         SET from_email = $1,
+             from_name = $2,
+             reply_to_email = $3,
+             provider = $4,
+             elastic_email_api_key = $5,
+             is_active = true,
+             updated_at = NOW()
+         WHERE tenant_id = $6
          RETURNING *`,
-        values
+        [
+          from_email,
+          displayName, // Utilise le nom d'entreprise si la checkbox est cochée
+          reply_to_email || from_email,
+          provider || 'elasticemail',
+          elastic_email_api_key || '',
+          tenantId
+        ]
       );
 
       result = rows[0];
@@ -123,16 +111,16 @@ export async function updateMailingSettings(req, res) {
       // Création
       const { rows } = await q(
         `INSERT INTO mailing_settings (
-          tenant_id, from_email, from_name, reply_to, provider, api_key, configured
+          tenant_id, from_email, from_name, reply_to_email, provider, elastic_email_api_key, is_active
         ) VALUES ($1, $2, $3, $4, $5, $6, true)
         RETURNING *`,
         [
           tenantId,
           from_email,
-          from_name,
-          reply_to || from_email,
+          displayName, // Utilise le nom d'entreprise si la checkbox est cochée
+          reply_to_email || from_email,
           provider || 'elasticemail',
-          api_key || ''
+          elastic_email_api_key || ''
         ]
       );
 
@@ -144,9 +132,12 @@ export async function updateMailingSettings(req, res) {
       settings: {
         from_email: result.from_email,
         from_name: result.from_name,
-        reply_to: result.reply_to,
+        reply_to_email: result.reply_to_email,
         provider: result.provider,
-        configured: result.configured
+        company_name: company_name,
+        signature: signature,
+        use_company_name: use_company_name,
+        configured: true
       }
     });
   } catch (error) {
@@ -183,7 +174,7 @@ export async function testMailingSettings(req, res) {
       [tenantId]
     );
 
-    if (rows.length === 0 || !rows[0].configured) {
+    if (rows.length === 0 || !rows[0].is_active) {
       return res.status(400).json({
         error: 'Configuration email non définie',
         message: 'Veuillez d\'abord configurer vos paramètres d\'envoi email'
