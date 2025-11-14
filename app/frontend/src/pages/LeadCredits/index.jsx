@@ -9,32 +9,32 @@ import api from '../../api/axios';
 const CREDIT_PACKS = [
   {
     credits: 100,
-    price: 5,
-    pricePerLead: 0.05,
+    price: 6,
+    pricePerLead: 0.06,
     savings: 0,
     popular: false,
     color: 'from-blue-600 to-cyan-600'
   },
   {
     credits: 500,
-    price: 22.5,
-    pricePerLead: 0.045,
+    price: 27,
+    pricePerLead: 0.054,
     savings: 10,
     popular: true,
     color: 'from-purple-600 to-pink-600'
   },
   {
     credits: 1000,
-    price: 40,
-    pricePerLead: 0.04,
+    price: 48,
+    pricePerLead: 0.048,
     savings: 20,
     popular: false,
     color: 'from-orange-600 to-red-600'
   },
   {
     credits: 5000,
-    price: 175,
-    pricePerLead: 0.035,
+    price: 210,
+    pricePerLead: 0.042,
     savings: 30,
     popular: false,
     color: 'from-green-600 to-teal-600'
@@ -258,41 +258,62 @@ export default function LeadCredits() {
           {/* Purchase History */}
           <Card className="shadow-xl border-2 border-gray-200">
             <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-green-600" />
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Clock className="w-6 h-6 text-green-600" />
                 Historique des achats
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               {purchases.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  Aucun achat pour le moment
-                </p>
+                <div className="text-center py-12">
+                  <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 font-medium text-lg">
+                    Aucun achat pour le moment
+                  </p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Vos achats de crédits apparaîtront ici
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                   {purchases.map((purchase) => (
                     <div
                       key={purchase.id}
-                      className="p-4 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-all"
+                      className="p-5 rounded-xl border-2 border-gray-200 hover:border-green-300 hover:shadow-lg transition-all bg-white"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-gray-900">
-                          {purchase.amount_credits} crédits
-                        </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="text-xl font-black text-gray-900">
+                            {purchase.amount_credits} crédits
+                          </span>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(purchase.created_at).toLocaleDateString('fr-FR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <span className={`px-4 py-2 rounded-full text-sm font-black shadow-md ${
                           purchase.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-green-500 text-white'
                             : purchase.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-yellow-500 text-white'
+                            : 'bg-red-500 text-white'
                         }`}>
-                          {purchase.status === 'completed' ? '✓ Payé' :
-                           purchase.status === 'pending' ? '⏳ En attente' : '✗ Échoué'}
+                          {purchase.status === 'completed' ? '✓ PAYÉ' :
+                           purchase.status === 'pending' ? '⏳ EN ATTENTE' : '✗ ÉCHOUÉ'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>{purchase.amount_euros}€</span>
-                        <span>{new Date(purchase.created_at).toLocaleDateString('fr-FR')}</span>
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                        <span className="text-2xl font-bold text-green-600">
+                          {purchase.amount_euros}€
+                        </span>
+                        <span className="text-sm text-gray-600 font-medium">
+                          {(purchase.amount_euros / purchase.amount_credits).toFixed(3)}€ / crédit
+                        </span>
                       </div>
                     </div>
                   ))}
