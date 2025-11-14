@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, Users, Mail, Phone, Target, DollarSign,
   Calendar, CheckCircle, XCircle, Clock, BarChart3,
-  Activity, Zap, Database, Award, ArrowUp, ArrowDown, Loader2
+  Activity, Zap, Database, Award, ArrowUp, ArrowDown, Loader2,
+  TrendingDown, Percent, Eye, MousePointer
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -101,128 +102,195 @@ export default function Statistics() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-purple-400 mx-auto mb-4" />
+          <p className="text-white text-lg font-semibold">Chargement des statistiques...</p>
+        </div>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen">
+      <div className="p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900">Erreur de chargement</h1>
+          <h1 className="text-3xl font-bold text-white">Erreur de chargement</h1>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen">
+    <div className="p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        {/* Header - Plus compact */}
+        <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
-              Statistiques & Analytics
+            <h1 className="text-4xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent mb-1 animate-pulse">
+              📊 Analytics Dashboard
             </h1>
-            <p className="text-gray-700 text-lg font-medium">
-              Vue d'ensemble de votre activité commerciale
+            <p className="text-gray-300 text-sm font-medium">
+              Vue temps réel de votre performance commerciale
             </p>
           </div>
 
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white font-semibold"
+            className="px-4 py-2 border-2 border-purple-500 rounded-xl focus:ring-2 focus:ring-purple-400 bg-slate-800 text-white font-semibold text-sm hover:bg-slate-700 transition-all cursor-pointer"
           >
-            <option value="7">7 derniers jours</option>
-            <option value="30">30 derniers jours</option>
-            <option value="90">90 derniers jours</option>
-            <option value="365">12 derniers mois</option>
+            <option value="7">7 jours</option>
+            <option value="30">30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="365">365 jours</option>
           </select>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* KPI Cards - Plus compactes avec animations */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           {/* Total Leads */}
-          <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-blue-500 to-blue-600 hover:scale-105 transition-all">
-            <CardContent className="pt-6 pb-6">
-              <div className="flex items-center justify-between text-white">
-                <div>
-                  <p className="text-sm font-medium opacity-90">Total Leads</p>
-                  <p className="text-4xl font-bold mt-1">{stats.total_leads}</p>
-                  <p className="text-xs opacity-75 mt-2 flex items-center gap-1">
-                    <ArrowUp className="w-3 h-3" />
-                    {stats.recent_leads} nouveaux
-                  </p>
+          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-blue-600 to-blue-700 hover:scale-105 hover:shadow-blue-500/50 transition-all duration-300 group cursor-pointer">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <CardContent className="pt-4 pb-4 relative z-10">
+              <div className="flex items-start justify-between text-white">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="w-4 h-4 opacity-80" />
+                    <p className="text-xs font-bold opacity-90 uppercase tracking-wide">Total Leads</p>
+                  </div>
+                  <p className="text-5xl font-black mb-1">{stats.total_leads}</p>
+                  <div className="flex items-center gap-2 text-xs opacity-90">
+                    <div className="flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full">
+                      <ArrowUp className="w-3 h-3" />
+                      <span className="font-bold">{stats.recent_leads}</span>
+                    </div>
+                    <span>récents</span>
+                  </div>
                 </div>
-                <Users className="w-16 h-16 opacity-30" />
+                <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-sm">
+                  <Database className="w-8 h-8" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Taux de conversion */}
-          <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-green-500 to-green-600 hover:scale-105 transition-all">
-            <CardContent className="pt-6 pb-6">
-              <div className="flex items-center justify-between text-white">
-                <div>
-                  <p className="text-sm font-medium opacity-90">Taux Conversion</p>
-                  <p className="text-4xl font-bold mt-1">{stats.conversion_rate}%</p>
-                  <p className="text-xs opacity-75 mt-2">
-                    {stats.converted_leads} leads gagnés
-                  </p>
+          {/* Taux de conversion avec graphique circulaire */}
+          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-green-600 to-emerald-700 hover:scale-105 hover:shadow-green-500/50 transition-all duration-300 group cursor-pointer">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <CardContent className="pt-4 pb-4 relative z-10">
+              <div className="flex items-start justify-between text-white">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingUp className="w-4 h-4 opacity-80" />
+                    <p className="text-xs font-bold opacity-90 uppercase tracking-wide">Conversion</p>
+                  </div>
+                  <p className="text-5xl font-black mb-1">{stats.conversion_rate}%</p>
+                  <div className="text-xs opacity-90 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    <span className="font-bold">{stats.converted_leads}</span>
+                    <span>gagnés</span>
+                  </div>
                 </div>
-                <TrendingUp className="w-16 h-16 opacity-30" />
+                <div className="relative">
+                  {/* Mini graphique circulaire */}
+                  <svg className="w-20 h-20 transform -rotate-90">
+                    <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="6" />
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="32"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="6"
+                      strokeDasharray={`${stats.conversion_rate * 2} 200`}
+                      className="transition-all duration-1000"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Target className="w-6 h-6" />
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Leads qualifiés */}
-          <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-purple-500 to-purple-600 hover:scale-105 transition-all">
-            <CardContent className="pt-6 pb-6">
-              <div className="flex items-center justify-between text-white">
-                <div>
-                  <p className="text-sm font-medium opacity-90">Leads Qualifiés</p>
-                  <p className="text-4xl font-bold mt-1">{stats.qualified_leads}</p>
-                  <p className="text-xs opacity-75 mt-2">
-                    {stats.qualification_rate}% du total
-                  </p>
+          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-purple-600 to-violet-700 hover:scale-105 hover:shadow-purple-500/50 transition-all duration-300 group cursor-pointer">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <CardContent className="pt-4 pb-4 relative z-10">
+              <div className="flex items-start justify-between text-white">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Award className="w-4 h-4 opacity-80" />
+                    <p className="text-xs font-bold opacity-90 uppercase tracking-wide">Qualifiés</p>
+                  </div>
+                  <p className="text-5xl font-black mb-1">{stats.qualified_leads}</p>
+                  <div className="text-xs opacity-90 flex items-center gap-1">
+                    <Percent className="w-3 h-3" />
+                    <span className="font-bold">{stats.qualification_rate}%</span>
+                    <span>du total</span>
+                  </div>
                 </div>
-                <Target className="w-16 h-16 opacity-30" />
+                <div className="relative">
+                  <svg className="w-20 h-20 transform -rotate-90">
+                    <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="6" />
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="32"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="6"
+                      strokeDasharray={`${stats.qualification_rate * 2} 200`}
+                      className="transition-all duration-1000"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Award className="w-6 h-6" />
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Campagnes actives */}
-          <Card className="shadow-xl border-2 border-gray-200 bg-gradient-to-br from-orange-500 to-orange-600 hover:scale-105 transition-all">
-            <CardContent className="pt-6 pb-6">
-              <div className="flex items-center justify-between text-white">
-                <div>
-                  <p className="text-sm font-medium opacity-90">Campagnes Actives</p>
-                  <p className="text-4xl font-bold mt-1">{stats.active_campaigns}</p>
-                  <p className="text-xs opacity-75 mt-2">
-                    {stats.total_campaigns} au total
-                  </p>
+          <Card className="relative overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-orange-600 to-red-600 hover:scale-105 hover:shadow-orange-500/50 transition-all duration-300 group cursor-pointer">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <CardContent className="pt-4 pb-4 relative z-10">
+              <div className="flex items-start justify-between text-white">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="w-4 h-4 opacity-80" />
+                    <p className="text-xs font-bold opacity-90 uppercase tracking-wide">Campagnes</p>
+                  </div>
+                  <p className="text-5xl font-black mb-1">{stats.active_campaigns}</p>
+                  <div className="text-xs opacity-90 flex items-center gap-1">
+                    <Activity className="w-3 h-3" />
+                    <span className="font-bold">{stats.total_campaigns}</span>
+                    <span>total</span>
+                  </div>
                 </div>
-                <Zap className="w-16 h-16 opacity-30" />
+                <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-sm">
+                  <Zap className="w-8 h-8" />
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Statistiques détaillées */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Statistiques détaillées - Plus compactes */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
           {/* Répartition par statut */}
-          <Card className="shadow-xl border-2 border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-indigo-600" />
+          <Card className="shadow-2xl border-0 bg-slate-800/90 backdrop-blur-lg hover:shadow-purple-500/30 transition-all">
+            <CardHeader className="bg-gradient-to-r from-purple-600/50 to-blue-600/50 border-b border-slate-700 py-3">
+              <CardTitle className="flex items-center gap-2 text-white text-base">
+                <BarChart3 className="w-5 h-5" />
                 Répartition par Statut
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
+            <CardContent className="pt-4 pb-4">
+              <div className="space-y-2.5">
                 {Object.entries(stats.status_counts || {})
                   .sort((a, b) => b[1] - a[1])
                   .map(([status, count]) => {
@@ -240,33 +308,33 @@ export default function Statistics() {
                     };
 
                     const statusColors = {
-                      'cold_call': 'bg-indigo-500',
-                      'leads_click': 'bg-cyan-500',
-                      'nrp': 'bg-gray-500',
-                      'qualifie': 'bg-blue-500',
-                      'relancer': 'bg-yellow-500',
-                      'tres_qualifie': 'bg-green-500',
-                      'proposition': 'bg-purple-500',
-                      'gagne': 'bg-emerald-600',
-                      'hors_scope': 'bg-orange-500'
+                      'cold_call': 'from-indigo-500 to-indigo-600',
+                      'leads_click': 'from-cyan-500 to-cyan-600',
+                      'nrp': 'from-gray-500 to-gray-600',
+                      'qualifie': 'from-blue-500 to-blue-600',
+                      'relancer': 'from-yellow-500 to-yellow-600',
+                      'tres_qualifie': 'from-green-500 to-green-600',
+                      'proposition': 'from-purple-500 to-purple-600',
+                      'gagne': 'from-emerald-500 to-emerald-600',
+                      'hors_scope': 'from-orange-500 to-orange-600'
                     };
 
                     return (
-                      <div key={status} className="flex items-center gap-4">
-                        <div className="w-32 text-sm font-medium text-gray-700">
+                      <div key={status} className="flex items-center gap-3 group">
+                        <div className="w-28 text-xs font-bold text-gray-300">
                           {statusLabels[status] || status}
                         </div>
                         <div className="flex-1">
-                          <div className="h-6 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-5 bg-slate-700 rounded-full overflow-hidden relative">
                             <div
-                              className={`h-full ${statusColors[status] || 'bg-gray-400'} flex items-center justify-end pr-2 text-white text-xs font-bold transition-all`}
+                              className={`h-full bg-gradient-to-r ${statusColors[status] || 'from-gray-400 to-gray-500'} flex items-center justify-end px-2 text-white text-xs font-bold transition-all duration-500 group-hover:brightness-125`}
                               style={{ width: `${percentage}%` }}
                             >
-                              {percentage}%
+                              {percentage > 5 && `${percentage}%`}
                             </div>
                           </div>
                         </div>
-                        <div className="w-16 text-right text-sm font-bold text-gray-900">
+                        <div className="w-14 text-right text-sm font-black text-white">
                           {count}
                         </div>
                       </div>
@@ -277,42 +345,42 @@ export default function Statistics() {
           </Card>
 
           {/* Top Secteurs */}
-          <Card className="shadow-xl border-2 border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-purple-600" />
-                Top 5 Secteurs
+          <Card className="shadow-2xl border-0 bg-slate-800/90 backdrop-blur-lg hover:shadow-pink-500/30 transition-all">
+            <CardHeader className="bg-gradient-to-r from-pink-600/50 to-purple-600/50 border-b border-slate-700 py-3">
+              <CardTitle className="flex items-center gap-2 text-white text-base">
+                <Award className="w-5 h-5" />
+                Top 5 Secteurs d'Activité
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
+            <CardContent className="pt-4 pb-4">
+              <div className="space-y-3">
                 {stats.top_sectors.map(([sector, count], index) => {
                   const percentage = ((count / stats.total_leads) * 100).toFixed(1);
-                  const colors = [
-                    'bg-purple-500',
-                    'bg-pink-500',
-                    'bg-blue-500',
-                    'bg-indigo-500',
-                    'bg-cyan-500'
+                  const gradients = [
+                    'from-purple-500 to-pink-500',
+                    'from-pink-500 to-rose-500',
+                    'from-blue-500 to-cyan-500',
+                    'from-indigo-500 to-purple-500',
+                    'from-cyan-500 to-teal-500'
                   ];
 
                   return (
-                    <div key={sector} className="flex items-center gap-4">
-                      <div className={`w-8 h-8 ${colors[index]} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    <div key={sector} className="flex items-center gap-3 group cursor-pointer">
+                      <div className={`w-9 h-9 bg-gradient-to-br ${gradients[index]} rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg group-hover:scale-110 transition-transform`}>
                         {index + 1}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700 capitalize">
+                          <span className="text-sm font-bold text-white capitalize">
                             {sector}
                           </span>
-                          <span className="text-xs font-bold text-gray-900">
-                            {count} leads ({percentage}%)
+                          <span className="text-xs font-black text-gray-300">
+                            {count} • {percentage}%
                           </span>
                         </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                           <div
-                            className={`h-full ${colors[index]} transition-all`}
+                            className={`h-full bg-gradient-to-r ${gradients[index]} transition-all duration-500 group-hover:brightness-125`}
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
@@ -325,29 +393,32 @@ export default function Statistics() {
           </Card>
         </div>
 
-        {/* Stats globales */}
+        {/* Stats globales - Plus compactes */}
         {stats.email_stats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Emails envoyés */}
-            <Card className="shadow-xl border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-600" />
+            <Card className="shadow-2xl border-0 bg-gradient-to-br from-blue-600/90 to-cyan-600/90 backdrop-blur-lg hover:scale-105 transition-all">
+              <CardHeader className="bg-white/10 border-b border-white/20 py-3">
+                <CardTitle className="flex items-center gap-2 text-white text-base">
+                  <Mail className="w-5 h-5" />
                   Emails
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-blue-600 mb-2">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-4xl font-black text-white mb-1">
                   {stats.email_stats.total_sent || 0}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-xs text-white/80 font-semibold mb-3">
                   Emails envoyés
                 </div>
                 {stats.email_stats.open_rate && (
-                  <div className="mt-3 pt-3 border-t">
+                  <div className="pt-2 border-t border-white/20">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Taux d'ouverture</span>
-                      <span className="font-bold text-green-600">
+                      <div className="flex items-center gap-1 text-white/90">
+                        <Eye className="w-4 h-4" />
+                        <span className="font-semibold">Taux d'ouverture</span>
+                      </div>
+                      <span className="font-black text-white text-lg">
                         {stats.email_stats.open_rate}%
                       </span>
                     </div>
@@ -357,26 +428,29 @@ export default function Statistics() {
             </Card>
 
             {/* Appels */}
-            <Card className="shadow-xl border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="w-5 h-5 text-green-600" />
-                  Appels
+            <Card className="shadow-2xl border-0 bg-gradient-to-br from-green-600/90 to-emerald-600/90 backdrop-blur-lg hover:scale-105 transition-all">
+              <CardHeader className="bg-white/10 border-b border-white/20 py-3">
+                <CardTitle className="flex items-center gap-2 text-white text-base">
+                  <Phone className="w-5 h-5" />
+                  Appels Téléphoniques
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-green-600 mb-2">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-4xl font-black text-white mb-1">
                   {stats.call_stats?.total_calls || 0}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-xs text-white/80 font-semibold mb-3">
                   Appels effectués
                 </div>
                 {stats.call_stats?.avg_duration && (
-                  <div className="mt-3 pt-3 border-t">
+                  <div className="pt-2 border-t border-white/20">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Durée moyenne</span>
-                      <span className="font-bold text-blue-600">
-                        {stats.call_stats.avg_duration} min
+                      <div className="flex items-center gap-1 text-white/90">
+                        <Clock className="w-4 h-4" />
+                        <span className="font-semibold">Durée moyenne</span>
+                      </div>
+                      <span className="font-black text-white text-lg">
+                        {stats.call_stats.avg_duration}m
                       </span>
                     </div>
                   </div>
@@ -385,24 +459,27 @@ export default function Statistics() {
             </Card>
 
             {/* Activité */}
-            <Card className="shadow-xl border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-orange-600" />
-                  Activité
+            <Card className="shadow-2xl border-0 bg-gradient-to-br from-orange-600/90 to-red-600/90 backdrop-blur-lg hover:scale-105 transition-all">
+              <CardHeader className="bg-white/10 border-b border-white/20 py-3">
+                <CardTitle className="flex items-center gap-2 text-white text-base">
+                  <Activity className="w-5 h-5" />
+                  Score d'Activité
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-orange-600 mb-2">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-4xl font-black text-white mb-1">
                   {stats.activity_score || 'N/A'}
                 </div>
-                <div className="text-sm text-gray-600">
-                  Score d'activité
+                <div className="text-xs text-white/80 font-semibold mb-3">
+                  Score global
                 </div>
-                <div className="mt-3 pt-3 border-t">
+                <div className="pt-2 border-t border-white/20">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Actions/jour</span>
-                    <span className="font-bold text-purple-600">
+                    <div className="flex items-center gap-1 text-white/90">
+                      <Zap className="w-4 h-4" />
+                      <span className="font-semibold">Actions/jour</span>
+                    </div>
+                    <span className="font-black text-white text-lg">
                       {stats.daily_actions || 0}
                     </span>
                   </div>
