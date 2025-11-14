@@ -5,7 +5,14 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 const googleMapsClient = new Client({});
-const GOOGLE_API_KEY = 'AIzaSyCbNyMZXznzh-tHNxI3akt6RcrERH3pYFg';
+
+// 🔒 SÉCURITÉ : Clé Google Maps depuis variable d'environnement
+const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+// Vérification fail-fast au démarrage
+if (!GOOGLE_API_KEY) {
+  throw new Error('❌ GOOGLE_MAPS_API_KEY non configurée dans les variables d\'environnement');
+}
 
 // Configuration Hunter.io (optionnel)
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY || null;
