@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS credit_usage (
 );
 
 -- Ajouter les colonnes manquantes si la table existait déjà
+ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS lead_id UUID REFERENCES leads(id) ON DELETE SET NULL;
+ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS credits_used INTEGER DEFAULT 1;
 ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS source VARCHAR(50);
 ALTER TABLE credit_usage ADD COLUMN IF NOT EXISTS cost_euros DECIMAL(10, 3);
 
