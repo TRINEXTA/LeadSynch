@@ -13,68 +13,88 @@ const PLANS = {
     icon: Zap,
     color: 'from-gray-600 to-gray-700',
     features: [
-      { text: '60 leads Google Maps', included: true },
-      { text: '100 emails/mois', included: true },
+      { text: '30 leads/emails', included: true },
+      { text: '2 recherches Google Maps', included: true },
+      { text: '1 devis/mois', included: true },
+      { text: '0 contrats', included: true },
+      { text: '1 utilisateur', included: true },
       { text: '1 campagne active', included: true },
-      { text: '3 pièces jointes', included: true },
+      { text: 'Pipeline basique', included: true },
+      { text: 'Import CSV', included: true },
       { text: 'Support email', included: true },
-      { text: 'Templates basiques', included: true },
-      { text: 'Lead scoring', included: false },
-      { text: 'Export CSV/PDF', included: false }
+      { text: 'Asefi IA', included: false },
+      { text: 'API', included: false }
     ]
   },
   BASIC: {
-    name: 'Basic',
+    name: 'Starter',
     price: 49,
     icon: TrendingUp,
     color: 'from-blue-600 to-cyan-600',
     popular: false,
     features: [
-      { text: '1 000 leads Google Maps', included: true },
-      { text: '5 000 emails/mois', included: true },
+      { text: '5,000 leads/emails', included: true },
+      { text: 'Max 1,000 prospects Google Maps', included: true },
+      { text: '50 devis/mois', included: true },
+      { text: '30 contrats/mois', included: true },
+      { text: '3 utilisateurs', included: true },
       { text: '5 campagnes actives', included: true },
-      { text: '5 pièces jointes', included: true },
-      { text: 'Support prioritaire', included: true },
-      { text: 'Templates avancés', included: true },
-      { text: 'Lead scoring', included: true },
-      { text: 'Export CSV/PDF', included: true }
+      { text: 'Pipeline avancé', included: true },
+      { text: 'Mode Prospection', included: true },
+      { text: 'Asefi IA Basic (500 caractères)', included: true },
+      { text: 'Templates email', included: true },
+      { text: 'Import CSV illimité', included: true },
+      { text: 'Support email + chat', included: true },
+      { text: 'Analytics de base', included: true },
+      { text: 'API', included: false }
     ]
   },
   PRO: {
     name: 'Pro',
-    price: 149,
+    price: 99,
     icon: Crown,
     color: 'from-purple-600 to-pink-600',
     popular: true,
     features: [
-      { text: '10 000 leads Google Maps', included: true },
-      { text: '50 000 emails/mois', included: true },
+      { text: '20,000 leads/emails', included: true },
+      { text: '2,500 générations Google Maps', included: true },
+      { text: '500 devis/mois', included: true },
+      { text: '200 contrats/mois', included: true },
+      { text: '10 utilisateurs', included: true },
       { text: 'Campagnes illimitées', included: true },
-      { text: '10 pièces jointes', included: true },
-      { text: 'Support premium 24/7', included: true },
-      { text: 'Tous les templates', included: true },
-      { text: 'Lead scoring avancé', included: true },
-      { text: 'Export + API', included: true },
-      { text: 'Automation avancée', included: true },
-      { text: 'Multi-utilisateurs', included: true }
+      { text: 'Pipeline personnalisable', included: true },
+      { text: 'Mode Prospection avancé', included: true },
+      { text: 'Asefi IA Pro (2000 caractères)', included: true },
+      { text: 'Templates illimités + IA', included: true },
+      { text: 'Scoring automatique des leads', included: true },
+      { text: 'Support prioritaire 24/7', included: true },
+      { text: 'Analytics avancés + rapports', included: true },
+      { text: 'API complète', included: true },
+      { text: 'Intégrations (Zapier, Make)', included: true },
+      { text: 'Webhooks', included: true }
     ]
   },
   ENTERPRISE: {
     name: 'Enterprise',
-    price: 499,
+    price: 'Sur mesure',
     icon: Building,
     color: 'from-orange-600 to-red-600',
     features: [
-      { text: 'Leads illimités', included: true },
-      { text: 'Emails illimités', included: true },
-      { text: 'Tout illimité', included: true },
-      { text: '20 pièces jointes', included: true },
+      { text: 'Quotas personnalisés selon vos besoins', included: true },
+      { text: 'Utilisateurs selon votre équipe', included: true },
+      { text: 'Volume emails adapté (protection anti-abus)', included: true },
+      { text: 'Devis & contrats personnalisés', included: true },
+      { text: 'Tout du plan Pro +', included: true },
+      { text: 'Asefi IA Enterprise (10k caractères)', included: true },
+      { text: 'Infrastructure dédiée', included: true },
+      { text: 'Onboarding personnalisé', included: true },
+      { text: 'Formation équipe complète', included: true },
+      { text: 'Support dédié 24/7', included: true },
       { text: 'Account manager dédié', included: true },
-      { text: 'Templates personnalisés', included: true },
-      { text: 'IA & prédictions', included: true },
-      { text: 'Intégrations sur mesure', included: true },
-      { text: 'Formation équipe', included: true },
-      { text: 'SLA garanti', included: true }
+      { text: 'SSO & sécurité avancée', included: true },
+      { text: 'SLA garanti 99.9%', included: true },
+      { text: 'Développements sur-mesure', included: true },
+      { text: 'White label (optionnel)', included: true }
     ]
   }
 };
@@ -169,8 +189,14 @@ export default function Billing() {
                   <div className="flex items-center justify-between mb-4">
                     <PlanIcon className="w-10 h-10" />
                     <div className="text-right">
-                      <div className="text-4xl font-bold">{plan.price}€</div>
-                      <div className="text-sm opacity-90">/ mois</div>
+                      {typeof plan.price === 'number' ? (
+                        <>
+                          <div className="text-4xl font-bold">{plan.price}€</div>
+                          <div className="text-sm opacity-90">/ mois</div>
+                        </>
+                      ) : (
+                        <div className="text-2xl font-bold">{plan.price}</div>
+                      )}
                     </div>
                   </div>
                   <CardTitle className="text-2xl">{plan.name}</CardTitle>
@@ -210,7 +236,15 @@ export default function Billing() {
                     >
                       Plan gratuit
                     </button>
-                  ) : currentPlan === 'FREE' || PLANS[key].price > PLANS[currentPlan]?.price ? (
+                  ) : key === 'ENTERPRISE' ? (
+                    <button
+                      onClick={() => handleUpgrade(key)}
+                      className={`w-full bg-gradient-to-r ${plan.color} text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
+                    >
+                      <Rocket className="w-5 h-5" />
+                      Nous contacter
+                    </button>
+                  ) : currentPlan === 'FREE' || (typeof PLANS[key].price === 'number' && typeof PLANS[currentPlan]?.price === 'number' && PLANS[key].price > PLANS[currentPlan]?.price) ? (
                     <button
                       onClick={() => handleUpgrade(key)}
                       className={`w-full bg-gradient-to-r ${plan.color} text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
