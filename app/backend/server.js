@@ -96,6 +96,7 @@ import campaignsRoute from './api/campaigns.js';
 import statsRoute from './api/stats.js';
 import templatesRoute from './api/templates.js';
 import generateLeadsRoute from './api/generate-leads.js';
+import generateLeadsStreamRoute from './api/generate-leads-stream.js';
 import followUpsRoute from './api/follow-ups.js';
 import quotasRoute from './api/quotas.js';
 import importCsvRoute from './api/import-csv.js';
@@ -142,6 +143,10 @@ app.use('/api/campaigns', campaignsRoute);
 app.use('/api/stats', statsRoute);
 app.use('/api/templates', templatesRoute);
 app.use('/api/generate-leads', generateLeadsRoute);
+app.use('/api/generate-leads-stream', generateLeadsStreamRoute);
+app.use('/api/pause-search', generateLeadsStreamRoute);
+app.use('/api/resume-search', generateLeadsStreamRoute);
+app.use('/api/stop-search', generateLeadsStreamRoute);
 app.use('/api/quotas', quotasRoute);
 app.use('/api/follow-ups', followUpsRoute);
 
