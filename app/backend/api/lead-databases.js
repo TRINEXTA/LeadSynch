@@ -193,4 +193,64 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /lead-databases/:id/add-lead - Ajouter un lead à une base (migration)
+router.post('/:id/add-lead', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { id: databaseId } = req.params;
+    const { lead_id } = req.body;
+
+    if (!lead_id) {
+      return res.status(400).json({ error: 'lead_id requis' });
+    }
+
+    // Vérifier que la base existe et appartient au tenant
+    const { rows: dbRows } = await q(
+      'SELECT id FROM lead_databases WHERE id = $1 AND tenant_id = $2',
+      [databaseId, tenantId]
+    );
+
+    if (!dbRows.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
+    }
+
+    // Vérifier que le lead existe et appartient au tenant
+    const { rows: leadRows } = await q(
+      'SELECT id FROM leads WHERE id = $1 AND tenant_id = $2',
+      [lead_id, tenantId]
+    );
+
+    if (!leadRows.length) {
+      return res.status(404).json({ error: 'Lead non trouvé' });
+    }
+
+    // Ajouter la relation (ou ignorer si elle existe déjà)
+    await q(
+      `INSERT INTO lead_database_relations (lead_id, database_id, added_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (lead_id, database_id) DO NOTHING`,
+      [lead_id, databaseId]
+    );
+
+    // Mettre à jour le compteur
+    await q(
+      `UPDATE lead_databases
+       SET total_leads = (
+         SELECT COUNT(DISTINCT lead_id)
+         FROM lead_database_relations
+         WHERE database_id = $1
+       ),
+       updated_at = NOW()
+       WHERE id = $1`,
+      [databaseId]
+    );
+
+    console.log(`✅ Lead ${lead_id} ajouté à la base ${databaseId}`);
+    return res.json({ success: true, message: 'Lead ajouté à la base' });
+  } catch (error) {
+    console.error('❌ Erreur POST add-lead:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

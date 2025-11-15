@@ -26,6 +26,7 @@ import Pipeline from './pages/Pipeline';
 import LeadDatabases from './pages/LeadDatabases';
 import DatabaseDetails from './pages/DatabaseDetails';
 import ImportLeads from './pages/ImportLeads';
+import MigrateLeads from './pages/MigrateLeads';
 
 // Leads
 import LeadDetails from './pages/LeadDetails';
@@ -102,7 +103,8 @@ function App() {
             <Route path="/LeadDatabases" element={<LeadDatabases />} />
             <Route path="/DatabaseDetails" element={<DatabaseDetails />} />
             <Route path="/ImportLeads" element={<ImportLeads />} />
-            
+            <Route path="/MigrateLeads" element={<MigrateLeads />} />
+
             <Route path="/Campaigns" element={<Campaigns />} />
             <Route path="/CampaignsManager" element={<CampaignsManager />} />
             <Route path="/pipeline" element={<Pipeline />} />
