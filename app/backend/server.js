@@ -143,10 +143,10 @@ app.use('/api/campaigns', campaignsRoute);
 app.use('/api/stats', statsRoute);
 app.use('/api/templates', templatesRoute);
 app.use('/api/generate-leads', generateLeadsRoute);
-app.use('/api/generate-leads-stream', generateLeadsStreamRoute);
-app.use('/api/pause-search', generateLeadsStreamRoute);
-app.use('/api/resume-search', generateLeadsStreamRoute);
-app.use('/api/stop-search', generateLeadsStreamRoute);
+app.all('/api/generate-leads-stream', generateLeadsStreamRoute);
+app.all('/api/pause-search', generateLeadsStreamRoute);
+app.all('/api/resume-search', generateLeadsStreamRoute);
+app.all('/api/stop-search', generateLeadsStreamRoute);
 app.use('/api/quotas', quotasRoute);
 app.use('/api/follow-ups', followUpsRoute);
 
