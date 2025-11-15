@@ -53,8 +53,6 @@ import CommercialDashboard from './pages/CommercialDashboard';
 
 // Gestion des doublons
 import DuplicateDetection from './pages/DuplicateDetection';
-import DuplicateManagement from './pages/DuplicateManagement';
-import ManageDuplicateDatabases from './pages/ManageDuplicateDatabases';
 import RecategorizeLeads from './pages/RecategorizeLeads';
 
 // �quipe et statistiques
@@ -73,7 +71,6 @@ import SignContract from './pages/SignContract';
 // Billing et crédits
 import Billing from './pages/Billing';
 import LeadCredits from './pages/LeadCredits';
-import Duplicates from './pages/Duplicates';
 import Services from './pages/Services';
 
 function App() {
@@ -131,8 +128,7 @@ function App() {
             <Route path="/ProspectingMode" element={<ProspectingMode />} />
             
             <Route path="/DuplicateDetection" element={<DuplicateDetection />} />
-            <Route path="/DuplicateManagement" element={<DuplicateManagement />} />
-            <Route path="/ManageDuplicateDatabases" element={<ManageDuplicateDatabases />} />
+            <Route path="/duplicates" element={<DuplicateDetection />} />
             <Route path="/RecategorizeLeads" element={<RecategorizeLeads />} />
             
             <Route path="/users" element={<Users />} />
@@ -146,7 +142,6 @@ function App() {
 
             <Route path="/billing" element={<Billing />} />
             <Route path="/lead-credits" element={<LeadCredits />} />
-            <Route path="/duplicates" element={<Duplicates />} />
             <Route path="/services" element={<Services />} />
           </Route>
           
