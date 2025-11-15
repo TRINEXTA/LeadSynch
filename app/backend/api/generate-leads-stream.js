@@ -244,6 +244,7 @@ async function handler(req, res) {
       }
       */
       console.log(`💳 Vérification quota désactivée - Mode développement`);
+      const available = 999999; // Mode développement : quota illimité
 
       // 2. Chercher dans la base
       const existingLeads = await queryAll(
