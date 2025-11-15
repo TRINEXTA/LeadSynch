@@ -58,6 +58,7 @@ import ManageDuplicateDatabases from './pages/ManageDuplicateDatabases';
 import RecategorizeLeads from './pages/RecategorizeLeads';
 
 // �quipe et statistiques
+import Teams from './pages/Teams';
 import ManageTeam from './pages/ManageTeam';
 import Statistics from './pages/Statistics';
 
@@ -135,6 +136,7 @@ function App() {
             <Route path="/RecategorizeLeads" element={<RecategorizeLeads />} />
             
             <Route path="/users" element={<Users />} />
+            <Route path="/teams" element={<Teams />} />
             <Route path="/ManageTeam" element={<ManageTeam />} />
             <Route path="/Statistics" element={<Statistics />} />
             
