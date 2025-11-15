@@ -48,7 +48,7 @@ import GoogleApiSetup from './pages/GoogleApiSetup';
 
 // Suivi et prospection
 import FollowUps from './pages/FollowUps';
-import ProspectingMode from './pages/ProspectingMode';
+import ProspectingModePage from './pages/ProspectingModePage';
 import CommercialDashboard from './pages/CommercialDashboard';
 
 // Gestion des doublons
@@ -125,7 +125,7 @@ function App() {
             <Route path="/GoogleApiSetup" element={<GoogleApiSetup />} />
             
             <Route path="/FollowUps" element={<FollowUps />} />
-            <Route path="/ProspectingMode" element={<ProspectingMode />} />
+            <Route path="/ProspectingMode" element={<ProspectingModePage />} />
             
             <Route path="/DuplicateDetection" element={<DuplicateDetection />} />
             <Route path="/duplicates" element={<DuplicateDetection />} />
