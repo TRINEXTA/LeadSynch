@@ -126,6 +126,7 @@ import leadContactsRoute from './api/lead-contacts.js';
 import leadPhonesRoute from './api/lead-phones.js';
 import leadOfficesRoute from './api/lead-offices.js';
 import leadNotesRoute from './api/lead-notes.js';
+import callRecordingsRoute from './api/call-recordings.js';
 
 // ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
@@ -193,6 +194,9 @@ app.use('/api/leads', leadContactsRoute);
 app.use('/api/leads', leadPhonesRoute);
 app.use('/api/leads', leadOfficesRoute);
 app.use('/api/leads', leadNotesRoute);
+
+// ========== 📞 ROUTES ENREGISTREMENTS D'APPELS ==========
+app.use('/api/call-recordings', callRecordingsRoute);
 
 // ========== ROUTES TRACKING ==========
 import * as unsubscribeController from './controllers/unsubscribeController.js';
