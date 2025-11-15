@@ -15,7 +15,8 @@ async function handler(req, res) {
 
   try {
     const { email, password } = req.body;
-    console.log('📧 Tentative de connexion pour:', email);
+    console.log('Email recu:', email);
+    console.log('Password length:', password?.length);
 
     if (!email || !password) {
       console.log('ERREUR: Email ou mot de passe manquant');
@@ -50,7 +51,9 @@ async function handler(req, res) {
     }
 
     // Vérifier le mot de passe
+    console.log('Verification bcrypt...');
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    console.log('bcrypt.compare result:', isPasswordValid);
 
     if (!isPasswordValid) {
       console.log('ERREUR: Mot de passe incorrect');

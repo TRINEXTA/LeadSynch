@@ -4,14 +4,11 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Configuration SSL sécurisée : strict en production, permissif en dev
-const sslConfig = process.env.NODE_ENV === 'production'
-  ? { rejectUnauthorized: true }  // Production : vérifie les certificats SSL
-  : { rejectUnauthorized: false }; // Dev local : accepte les certificats auto-signés
-
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
-  ssl: sslConfig
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 export async function query(query, params = []) {
