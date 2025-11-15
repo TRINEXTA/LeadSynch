@@ -337,59 +337,98 @@ router.post('/:id/transcribe', authMiddleware, async (req, res) => {
       [id]
     );
 
-    // Note: Claude AI ne supporte pas directement l'audio
-    // Il faut utiliser un service de Speech-to-Text comme:
-    // - OpenAI Whisper API
-    // - Google Speech-to-Text
-    // - AWS Transcribe
-    // - Azure Speech Services
+    console.log(`🎤 Début transcription : ${recording.original_filename}`);
 
-    // Pour l'instant, on retourne un message d'erreur explicatif
-    await execute(
-      `UPDATE call_recordings
-       SET
-         transcription_status = 'failed',
-         transcription_error = 'Service de transcription non configuré. Installer Whisper API ou Google Speech-to-Text.',
-         updated_at = NOW()
-       WHERE id = $1`,
-      [id]
-    );
+    // Vérifier que le fichier existe
+    if (!fs.existsSync(recording.filepath)) {
+      throw new Error('Fichier audio non trouvé sur le disque');
+    }
 
-    return res.status(501).json({
-      error: 'Service de transcription non configuré',
-      message: 'Pour activer la transcription, installez un service Speech-to-Text (Whisper, Google, AWS, Azure)',
-      recording_id: id
-    });
+    // ========== WHISPER LOCAL (GRATUIT) ==========
+    // Appeler le script Python Whisper local
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execPromise = promisify(exec);
+    const { fileURLToPath } = await import('url');
 
-    // TODO: Implémenter la transcription avec Whisper API
-    // Exemple avec OpenAI Whisper:
-    /*
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
 
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(recording.filepath),
-      model: 'whisper-1',
-      language: 'fr'
-    });
+    const whisperScriptPath = path.join(__dirname, '../services/whisper-service.py');
+    const pythonEnvPath = path.join(__dirname, '../whisper-env/bin/python3');
 
-    await execute(
-      `UPDATE call_recordings
-       SET
-         transcription_status = 'completed',
-         transcription_text = $1,
-         transcription_language = 'fr',
-         transcription_confidence = 95,
-         transcribed_at = NOW(),
-         updated_at = NOW()
-       WHERE id = $2`,
-      [transcription.text, id]
-    );
+    // Vérifier que le script existe
+    if (!fs.existsSync(whisperScriptPath)) {
+      throw new Error(
+        `Script Whisper non trouvé: ${whisperScriptPath}\n` +
+        `Consulter WHISPER_LOCAL_SETUP.md pour l'installation`
+      );
+    }
 
-    return res.json({
-      success: true,
-      transcription: transcription.text
-    });
-    */
+    // Vérifier que Python est installé
+    const pythonPath = fs.existsSync(pythonEnvPath) ? pythonEnvPath : 'python3';
+
+    try {
+      // Appeler Whisper avec timeout de 5 minutes
+      const { stdout, stderr } = await execPromise(
+        `${pythonPath} "${whisperScriptPath}" "${recording.filepath}"`,
+        { timeout: 300000, maxBuffer: 10 * 1024 * 1024 } // 10MB buffer
+      );
+
+      if (stderr && !stderr.includes('✅')) {
+        console.warn('⚠️ Whisper stderr:', stderr);
+      }
+
+      // Parser le résultat JSON
+      const result = JSON.parse(stdout);
+
+      if (result.success) {
+        // Sauvegarder la transcription en DB
+        await execute(
+          `UPDATE call_recordings
+           SET
+             transcription_status = 'completed',
+             transcription_text = $1,
+             transcription_language = $2,
+             transcription_confidence = 95,
+             transcribed_at = NOW(),
+             updated_at = NOW()
+           WHERE id = $3`,
+          [result.text, result.language, id]
+        );
+
+        console.log(`✅ Transcription terminée : ${result.segments} segments`);
+
+        return res.json({
+          success: true,
+          transcription: result.text,
+          language: result.language,
+          segments: result.segments
+        });
+      } else {
+        throw new Error(result.error || 'Erreur transcription Whisper');
+      }
+
+    } catch (execError) {
+      // Erreur d'exécution Python
+      if (execError.message.includes('python3: command not found')) {
+        throw new Error(
+          'Python 3 non installé sur le serveur.\n' +
+          'Installer avec: sudo apt install python3 python3-pip\n' +
+          'Puis installer Whisper: pip install openai-whisper'
+        );
+      }
+
+      if (execError.message.includes('ModuleNotFoundError')) {
+        throw new Error(
+          'Module Whisper non installé.\n' +
+          'Installer avec: pip install openai-whisper\n' +
+          'Consulter: WHISPER_LOCAL_SETUP.md'
+        );
+      }
+
+      throw execError;
+    }
 
   } catch (error) {
     console.error('❌ Erreur transcription:', error);

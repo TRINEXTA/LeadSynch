@@ -72,19 +72,46 @@ Ce système permet d'uploader, stocker, écouter et transcrire les enregistremen
 
 ### Étape 1 : Exécuter la migration SQL
 
+**⚠️ IMPORTANT : Ta base est sur Neon (cloud), pas en local**
+
+#### Option A : Via ligne de commande (recommandé)
+
 ```bash
-# Se connecter à la base de données PostgreSQL
-psql $POSTGRES_URL
+# Récupérer ton URL Neon depuis .env
+# Exemple : postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb
 
-# Exécuter la migration
-\i app/backend/migrations/create_call_recordings.sql
+# Exécuter la migration directement
+psql "postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb" \
+  -f app/backend/migrations/create_call_recordings.sql
 
+# Ou si tu as déjà $POSTGRES_URL configuré
+psql $POSTGRES_URL -f app/backend/migrations/create_call_recordings.sql
+```
+
+#### Option B : Via interface web Neon
+
+1. Va sur **Neon Dashboard** : https://console.neon.tech
+2. Sélectionne ton projet LeadSynch
+3. Va dans **SQL Editor**
+4. Copie-colle le contenu de `app/backend/migrations/create_call_recordings.sql`
+5. Clique sur **Run**
+
+#### Option C : Via TablePlus / pgAdmin
+
+1. Connecte-toi à ta base Neon avec TablePlus
+2. Ouvre une nouvelle query
+3. Copie-colle le contenu de `create_call_recordings.sql`
+4. Exécute
+
+**Vérification :**
+```bash
 # Vérifier que les tables sont créées
-\dt lead_call_history
-\dt call_recordings
+psql $POSTGRES_URL -c "\dt lead_call_history"
+psql $POSTGRES_URL -c "\dt call_recordings"
 
-# Quitter
-\q
+# Compter les colonnes
+psql $POSTGRES_URL -c "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'call_recordings';"
+# Devrait retourner : 25 colonnes
 ```
 
 **Vérification :**
@@ -190,87 +217,43 @@ Si vous voulez ajouter un bouton dans la liste des leads :
 
 ---
 
-## 🤖 Configuration de la transcription (OPTIONNEL)
+## 🤖 Configuration de la transcription (RECOMMANDÉ)
 
-La transcription nécessite un service externe. Options recommandées :
+⚠️ **NE PAS UTILISER les APIs payantes** (Whisper API, Google, Azure) → Trop cher avec des milliers d'appels !
 
-### Option A : OpenAI Whisper API (recommandé)
+### ✅ Solution : Whisper LOCAL (Open Source, GRATUIT)
 
 **Avantages :**
-- Très précis
-- Support multilingue
-- Facile à intégrer
+- ✅ **100% gratuit** (pas de coût par minute)
+- ✅ Même précision que Whisper API
+- ✅ Pas de limite d'utilisation
+- ✅ Données restent sur ton serveur (RGPD)
+- ✅ Support français natif
 
-**Installation :**
+**Économies :** ~600€ pour 1000 appels de 10 minutes (vs Whisper API)
 
-1. Installer le SDK :
+**👉 Voir le guide complet :** [`WHISPER_LOCAL_SETUP.md`](./WHISPER_LOCAL_SETUP.md)
+
+**Installation rapide :**
+
+1. Installer Python + ffmpeg :
 ```bash
-npm install openai
+sudo apt install python3 python3-pip ffmpeg
 ```
 
-2. Ajouter dans `.env` :
+2. Installer Whisper :
 ```bash
-OPENAI_API_KEY=sk-proj-...
+cd app/backend
+python3 -m venv whisper-env
+source whisper-env/bin/activate
+pip install openai-whisper
 ```
 
-3. Modifier `app/backend/api/call-recordings.js` (ligne ~350) :
+3. Créer le script Python (`services/whisper-service.py`) - voir le guide complet
 
-```javascript
-// Remplacer la section TODO par :
-import OpenAI from 'openai';
+4. Modifier l'API Node.js pour appeler le script - voir le guide complet
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-const transcription = await openai.audio.transcriptions.create({
-  file: fs.createReadStream(recording.filepath),
-  model: 'whisper-1',
-  language: 'fr',
-  response_format: 'text'
-});
-
-await execute(
-  `UPDATE call_recordings
-   SET
-     transcription_status = 'completed',
-     transcription_text = $1,
-     transcription_language = 'fr',
-     transcription_confidence = 95,
-     transcribed_at = NOW(),
-     updated_at = NOW()
-   WHERE id = $2`,
-  [transcription, id]
-);
-
-return res.json({
-  success: true,
-  transcription: transcription
-});
-```
-
-**Coût :** ~0,006€ par minute d'audio
-
-### Option B : Google Speech-to-Text
-
-```bash
-npm install @google-cloud/speech
-```
-
-Variables d'environnement :
-```bash
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-```
-
-### Option C : Azure Speech Services
-
-```bash
-npm install microsoft-cognitiveservices-speech-sdk
-```
-
-Variables d'environnement :
-```bash
-AZURE_SPEECH_KEY=your-key
-AZURE_SPEECH_REGION=westeurope
-```
+**Alternative si pas d'accès serveur :** Utiliser un microservice Whisper sur Railway/Render (gratuit)
 
 ---
 
