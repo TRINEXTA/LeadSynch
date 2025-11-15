@@ -1,45 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  CreditCard, ShoppingCart, TrendingUp, DollarSign, Zap, Package,
-  Clock, CheckCircle, Loader2, ArrowRight, Star, Database, MapPin
+  CreditCard, ShoppingCart, TrendingUp, Clock, Loader2, Zap, AlertCircle
 } from 'lucide-react';
 import api from '../../api/axios';
 
-const CREDIT_PACKS = [
-  {
-    credits: 100,
-    price: 5,
-    pricePerLead: 0.05,
-    savings: 0,
-    popular: false,
-    color: 'from-blue-600 to-cyan-600'
-  },
-  {
-    credits: 500,
-    price: 22.5,
-    pricePerLead: 0.045,
-    savings: 10,
-    popular: true,
-    color: 'from-purple-600 to-pink-600'
-  },
-  {
-    credits: 1000,
-    price: 40,
-    pricePerLead: 0.04,
-    savings: 20,
-    popular: false,
-    color: 'from-orange-600 to-red-600'
-  },
-  {
-    credits: 5000,
-    price: 175,
-    pricePerLead: 0.035,
-    savings: 30,
-    popular: false,
-    color: 'from-green-600 to-teal-600'
-  }
-];
+const PRICE_PER_PROSPECT = 0.10; // Prix fixe par prospect
 
 export default function LeadCredits() {
   const [credits, setCredits] = useState(null);
@@ -47,7 +13,10 @@ export default function LeadCredits() {
   const [usage, setUsage] = useState({ usage: [], stats: {} });
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const [selectedPack, setSelectedPack] = useState(null);
+
+  // Formulaire d'achat
+  const [prospectCount, setProspectCount] = useState('');
+  const totalPrice = prospectCount ? (parseFloat(prospectCount) * PRICE_PER_PROSPECT).toFixed(2) : '0.00';
 
   useEffect(() => {
     fetchData();
@@ -71,31 +40,39 @@ export default function LeadCredits() {
     }
   };
 
-  const handlePurchase = async (pack) => {
-    if (!confirm(`Acheter ${pack.credits} crédits pour ${pack.price}€ ?`)) {
+  const handlePurchase = async (e) => {
+    e.preventDefault();
+
+    const count = parseInt(prospectCount);
+    if (!count || count <= 0) {
+      alert('⚠️ Veuillez entrer un nombre de prospects valide');
+      return;
+    }
+
+    const price = count * PRICE_PER_PROSPECT;
+
+    if (!confirm(`Acheter ${count} prospects pour ${price.toFixed(2)}€ ?`)) {
       return;
     }
 
     setPurchasing(true);
-    setSelectedPack(pack);
 
     try {
       const { data } = await api.post('/lead-credits/purchase', {
-        credits_amount: pack.credits,
+        credits_amount: count,
         payment_method: 'demo'
       });
 
-      alert(`✅ Achat complété avec succès !\n\n${data.credits_added} crédits ajoutés\nSolde actuel : ${data.credits_remaining} crédits`);
+      alert(`✅ Achat complété avec succès !\n\n${data.credits_added} prospects ajoutés\nSolde actuel : ${data.credits_remaining} prospects`);
 
-      // Recharger les données
+      setProspectCount('');
       await fetchData();
     } catch (error) {
       console.error('Erreur achat:', error);
-      const errorMsg = error.response?.data?.message || 'Erreur lors de l\'achat des crédits';
+      const errorMsg = error.response?.data?.message || 'Erreur lors de l\'achat des prospects';
       alert(`❌ Erreur : ${errorMsg}`);
     } finally {
       setPurchasing(false);
-      setSelectedPack(null);
     }
   };
 
@@ -109,304 +86,240 @@ export default function LeadCredits() {
 
   return (
     <div className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
-            Crédits Leads
+            Fiches Prospects
           </h1>
           <p className="text-gray-700 text-lg font-medium">
-            Achetez des crédits pour générer des leads qualifiés
+            Achetez des fiches prospects qualifiées pour développer votre activité
           </p>
         </div>
 
         {/* Balance Card */}
-        <Card className="mb-8 shadow-2xl border-4 border-indigo-500 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500">
+        <Card className="mb-8 shadow-2xl border-0" style={{background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%)'}}>
           <CardContent className="pt-8 pb-8">
             <div className="flex items-center justify-between text-white">
-              <div>
-                <p className="text-indigo-100 text-lg mb-2">Crédits disponibles</p>
+              <div className="flex-1">
+                <p className="text-indigo-100 text-lg mb-2 font-semibold">Vos prospects disponibles</p>
                 <div className="flex items-baseline gap-3">
-                  <span className="text-6xl font-bold">
+                  <span className="text-7xl font-black">
                     {credits?.credits_remaining || 0}
                   </span>
-                  <span className="text-2xl text-indigo-200">crédits</span>
+                  <span className="text-3xl text-indigo-200 font-bold">prospects</span>
                 </div>
-                <div className="mt-4 space-y-1">
-                  <p className="text-indigo-200 text-sm">
-                    💰 Total acheté: {credits?.credits_purchased || 0} crédits
-                  </p>
-                  <p className="text-indigo-200 text-sm">
-                    📊 Total utilisé: {credits?.credits_used || 0} crédits
-                  </p>
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                    <p className="text-indigo-200 text-sm font-semibold mb-1">Total acheté</p>
+                    <p className="text-2xl font-black">{credits?.credits_purchased || 0}</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                    <p className="text-indigo-200 text-sm font-semibold mb-1">Total utilisé</p>
+                    <p className="text-2xl font-black">{credits?.credits_used || 0}</p>
+                  </div>
                 </div>
               </div>
               <div className="text-right">
-                <CreditCard className="w-24 h-24 text-white opacity-50" />
+                <CreditCard className="w-32 h-32 text-white opacity-20" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Pricing Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card className="shadow-xl border-2 border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Database className="w-5 h-5 text-blue-600" />
-                Leads depuis la base de données
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-4xl font-bold text-blue-600">0.03€</span>
-                <span className="text-gray-600">par lead</span>
-              </div>
-              <p className="text-sm text-gray-600">
-                Leads déjà présents dans notre base de données enrichie. Plus rapide et moins cher.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-xl border-2 border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-orange-600" />
-                Leads depuis Google Maps
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-4xl font-bold text-orange-600">0.06€</span>
-                <span className="text-gray-600">par lead</span>
-              </div>
-              <p className="text-sm text-gray-600">
-                Leads récupérés en temps réel via l'API Google Maps. Données fraîches et géolocalisées.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Credit Packs */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Packs de crédits</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {CREDIT_PACKS.map((pack, idx) => (
-              <Card
-                key={idx}
-                className={`relative overflow-hidden transition-all duration-300 ${
-                  pack.popular
-                    ? 'ring-4 ring-purple-400 shadow-2xl scale-105'
-                    : 'shadow-xl hover:shadow-2xl hover:scale-105'
-                } border-2 border-gray-200`}
-              >
-                {pack.popular && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-1 text-xs font-bold rounded-bl-lg">
-                    ⭐ POPULAIRE
-                  </div>
-                )}
-
-                {pack.savings > 0 && (
-                  <div className="absolute top-0 left-0 bg-green-500 text-white px-3 py-1 text-xs font-bold rounded-br-lg">
-                    -{pack.savings}%
-                  </div>
-                )}
-
-                <CardHeader className={`bg-gradient-to-r ${pack.color} text-white pb-8 pt-8`}>
-                  <div className="text-center">
-                    <Package className="w-12 h-12 mx-auto mb-3" />
-                    <div className="text-4xl font-bold mb-1">{pack.credits}</div>
-                    <div className="text-sm opacity-90">crédits</div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-6">
-                  <div className="text-center mb-4">
-                    <div className="text-3xl font-bold text-gray-900 mb-1">
-                      {pack.price}€
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {pack.pricePerLead}€ / crédit
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handlePurchase(pack)}
-                    disabled={purchasing}
-                    className={`w-full bg-gradient-to-r ${pack.color} text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50`}
-                  >
-                    {purchasing && selectedPack === pack ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Achat...
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart className="w-5 h-5" />
-                        Acheter
-                      </>
-                    )}
-                  </button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Purchase History & Usage Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Purchase History */}
-          <Card className="shadow-xl border-2 border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-green-600" />
-                Historique des achats
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {purchases.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  Aucun achat pour le moment
-                </p>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {purchases.map((purchase) => (
-                    <div
-                      key={purchase.id}
-                      className="p-4 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-all"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-gray-900">
-                          {purchase.amount_credits} crédits
-                        </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          purchase.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : purchase.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {purchase.status === 'completed' ? '✓ Payé' :
-                           purchase.status === 'pending' ? '⏳ En attente' : '✗ Échoué'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>{purchase.amount_euros}€</span>
-                        <span>{new Date(purchase.created_at).toLocaleDateString('fr-FR')}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Usage Statistics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Achat de prospects */}
           <Card className="shadow-xl border-2 border-gray-200">
             <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-indigo-600" />
-                Statistiques d'utilisation
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <ShoppingCart className="w-7 h-7 text-indigo-600" />
+                Acheter des prospects
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              {usage.stats && Object.keys(usage.stats).length > 0 ? (
-                <div className="space-y-4">
-                  {usage.stats.database && (
-                    <div className="p-4 rounded-lg bg-blue-50 border-2 border-blue-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Database className="w-5 h-5 text-blue-600" />
-                        <span className="font-semibold text-blue-900">Base de données</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-blue-700">
-                          {usage.stats.database.count} leads
-                        </span>
-                        <span className="font-bold text-blue-900">
-                          {parseFloat(usage.stats.database.total_cost).toFixed(2)}€
-                        </span>
-                      </div>
-                    </div>
-                  )}
+              <form onSubmit={handlePurchase} className="space-y-6">
+                {/* Prix fixe */}
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-5 rounded-xl border-2 border-green-200">
+                  <p className="text-sm font-bold text-green-700 mb-2">💰 Tarif unique</p>
+                  <p className="text-5xl font-black text-green-600 mb-1">0,10€</p>
+                  <p className="text-sm text-green-700 font-semibold">par fiche prospect</p>
+                </div>
 
-                  {usage.stats.google_maps && (
-                    <div className="p-4 rounded-lg bg-orange-50 border-2 border-orange-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MapPin className="w-5 h-5 text-orange-600" />
-                        <span className="font-semibold text-orange-900">Google Maps</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-orange-700">
-                          {usage.stats.google_maps.count} leads
-                        </span>
-                        <span className="font-bold text-orange-900">
-                          {parseFloat(usage.stats.google_maps.total_cost).toFixed(2)}€
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                {/* Champ nombre de prospects */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-3">
+                    Combien de prospects souhaitez-vous ?
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={prospectCount}
+                    onChange={(e) => setProspectCount(e.target.value)}
+                    placeholder="Ex: 100"
+                    className="w-full px-6 py-4 border-2 border-gray-300 rounded-xl text-2xl font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  />
+                </div>
 
-                  <div className="pt-4 border-t-2 border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-900">Total dépensé</span>
-                      <span className="text-2xl font-bold text-indigo-600">
-                        {(
-                          (usage.stats.database?.total_cost || 0) +
-                          (usage.stats.google_maps?.total_cost || 0)
-                        ).toFixed(2)}€
-                      </span>
-                    </div>
+                {/* Calcul du total */}
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-5 rounded-xl border-2 border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-gray-700">Total à payer :</span>
+                    <span className="text-4xl font-black text-blue-600">{totalPrice}€</span>
+                  </div>
+                  {prospectCount && (
+                    <p className="text-sm text-blue-700 mt-2 font-semibold">
+                      {prospectCount} prospects × 0,10€ = {totalPrice}€
+                    </p>
+                  )}
+                </div>
+
+                {/* Bouton d'achat */}
+                <button
+                  type="submit"
+                  disabled={purchasing || !prospectCount}
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-5 px-6 rounded-xl font-bold text-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {purchasing ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      Achat en cours...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="w-6 h-6" />
+                      Acheter maintenant
+                    </>
+                  )}
+                </button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Comment ça marche */}
+          <Card className="shadow-xl border-2 border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Zap className="w-7 h-7 text-purple-600" />
+                Comment ça marche ?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-black text-xl flex-shrink-0">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-1 text-lg">Prix fixe et transparent</h3>
+                    <p className="text-gray-600 text-sm">
+                      Chaque fiche prospect coûte <strong>0,10€</strong>, quel que soit le nombre acheté. Simple et clair.
+                    </p>
                   </div>
                 </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">
-                  Aucune utilisation pour le moment
-                </p>
-              )}
+
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-black text-xl flex-shrink-0">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-1 text-lg">Recherche intelligente</h3>
+                    <p className="text-gray-600 text-sm">
+                      Nous cherchons d'abord dans notre base de données, puis lançons une recherche Google Maps si nécessaire.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-red-500 rounded-full flex items-center justify-center text-white font-black text-xl flex-shrink-0">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-1 text-lg">Prospects qualifiés</h3>
+                    <p className="text-gray-600 text-sm">
+                      Vous recevez des fiches complètes avec nom, email, téléphone, adresse et informations pertinentes.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-blue-900 font-medium">
+                      <strong>Bon à savoir :</strong> Les prospects sont ajoutés instantanément à votre compte et ne périment jamais.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* How it works */}
-        <Card className="mt-8 shadow-xl border-2 border-gray-200">
-          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-purple-600" />
-              Comment ça marche ?
+        {/* Historique des achats */}
+        <Card className="shadow-xl border-2 border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b">
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <Clock className="w-7 h-7 text-green-600" />
+              Historique des achats
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-2xl font-bold text-indigo-600">1</span>
-                </div>
-                <h3 className="font-bold text-gray-900 mb-2">Achetez des crédits</h3>
-                <p className="text-sm text-gray-600">
-                  Choisissez un pack adapté à vos besoins. Plus vous achetez, plus c'est avantageux.
+            {purchases.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 font-medium text-lg">
+                  Aucun achat pour le moment
+                </p>
+                <p className="text-gray-400 text-sm mt-2">
+                  Vos achats de prospects apparaîtront ici
                 </p>
               </div>
-
-              <div className="text-center">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-2xl font-bold text-purple-600">2</span>
-                </div>
-                <h3 className="font-bold text-gray-900 mb-2">Générez des leads</h3>
-                <p className="text-sm text-gray-600">
-                  Notre système cherche d'abord dans notre base (0.03€), puis sur Google Maps (0.06€).
-                </p>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                {purchases.map((purchase) => (
+                  <div
+                    key={purchase.id}
+                    className="p-5 rounded-xl border-2 border-gray-200 hover:border-green-300 hover:shadow-lg transition-all bg-white"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <span className="text-2xl font-black text-gray-900">
+                          {purchase.amount_credits} prospects
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(purchase.created_at).toLocaleDateString('fr-FR', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                      <span className={`px-4 py-2 rounded-full text-sm font-black shadow-md ${
+                        purchase.status === 'completed'
+                          ? 'bg-green-500 text-white'
+                          : purchase.status === 'pending'
+                          ? 'bg-yellow-500 text-white'
+                          : 'bg-red-500 text-white'
+                      }`}>
+                        {purchase.status === 'completed' ? '✓ PAYÉ' :
+                         purchase.status === 'pending' ? '⏳ EN ATTENTE' : '✗ ÉCHOUÉ'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                      <span className="text-3xl font-black text-green-600">
+                        {purchase.amount_euros}€
+                      </span>
+                      <span className="text-sm text-gray-600 font-semibold">
+                        0,10€ par prospect
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              <div className="text-center">
-                <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-2xl font-bold text-pink-600">3</span>
-                </div>
-                <h3 className="font-bold text-gray-900 mb-2">Payez ce que vous utilisez</h3>
-                <p className="text-sm text-gray-600">
-                  Les crédits sont consommés uniquement quand vous générez des leads.
-                </p>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

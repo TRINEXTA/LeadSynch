@@ -266,8 +266,12 @@ export default function RecategorizeLeads() {
                       <input
                         type="checkbox"
                         checked={selectedLeads.includes(lead.id)}
-                        onChange={() => {}}
-                        className="mt-1 w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSelectLead(lead.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
                       />
                       <div className="flex-1">
                         <h4 className="font-bold text-gray-900">{lead.company_name}</h4>

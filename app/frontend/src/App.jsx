@@ -26,6 +26,7 @@ import Pipeline from './pages/Pipeline';
 import LeadDatabases from './pages/LeadDatabases';
 import DatabaseDetails from './pages/DatabaseDetails';
 import ImportLeads from './pages/ImportLeads';
+import MigrateLeads from './pages/MigrateLeads';
 
 // Leads
 import LeadDetails from './pages/LeadDetails';
@@ -47,16 +48,15 @@ import GoogleApiSetup from './pages/GoogleApiSetup';
 
 // Suivi et prospection
 import FollowUps from './pages/FollowUps';
-import ProspectingMode from './pages/ProspectingMode';
+import ProspectingModePage from './pages/ProspectingModePage';
 import CommercialDashboard from './pages/CommercialDashboard';
 
 // Gestion des doublons
 import DuplicateDetection from './pages/DuplicateDetection';
-import DuplicateManagement from './pages/DuplicateManagement';
-import ManageDuplicateDatabases from './pages/ManageDuplicateDatabases';
 import RecategorizeLeads from './pages/RecategorizeLeads';
 
 // �quipe et statistiques
+import Teams from './pages/Teams';
 import ManageTeam from './pages/ManageTeam';
 import Statistics from './pages/Statistics';
 
@@ -71,7 +71,6 @@ import SignContract from './pages/SignContract';
 // Billing et crédits
 import Billing from './pages/Billing';
 import LeadCredits from './pages/LeadCredits';
-import Duplicates from './pages/Duplicates';
 import Services from './pages/Services';
 
 function App() {
@@ -102,7 +101,8 @@ function App() {
             <Route path="/LeadDatabases" element={<LeadDatabases />} />
             <Route path="/DatabaseDetails" element={<DatabaseDetails />} />
             <Route path="/ImportLeads" element={<ImportLeads />} />
-            
+            <Route path="/MigrateLeads" element={<MigrateLeads />} />
+
             <Route path="/Campaigns" element={<Campaigns />} />
             <Route path="/CampaignsManager" element={<CampaignsManager />} />
             <Route path="/pipeline" element={<Pipeline />} />
@@ -125,14 +125,14 @@ function App() {
             <Route path="/GoogleApiSetup" element={<GoogleApiSetup />} />
             
             <Route path="/FollowUps" element={<FollowUps />} />
-            <Route path="/ProspectingMode" element={<ProspectingMode />} />
+            <Route path="/ProspectingMode" element={<ProspectingModePage />} />
             
             <Route path="/DuplicateDetection" element={<DuplicateDetection />} />
-            <Route path="/DuplicateManagement" element={<DuplicateManagement />} />
-            <Route path="/ManageDuplicateDatabases" element={<ManageDuplicateDatabases />} />
+            <Route path="/duplicates" element={<DuplicateDetection />} />
             <Route path="/RecategorizeLeads" element={<RecategorizeLeads />} />
             
             <Route path="/users" element={<Users />} />
+            <Route path="/teams" element={<Teams />} />
             <Route path="/ManageTeam" element={<ManageTeam />} />
             <Route path="/Statistics" element={<Statistics />} />
             
@@ -142,7 +142,6 @@ function App() {
 
             <Route path="/billing" element={<Billing />} />
             <Route path="/lead-credits" element={<LeadCredits />} />
-            <Route path="/duplicates" element={<Duplicates />} />
             <Route path="/services" element={<Services />} />
           </Route>
           

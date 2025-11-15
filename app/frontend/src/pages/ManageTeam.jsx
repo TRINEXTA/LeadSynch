@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit2, Trash2, UserPlus, Crown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Plus, Edit2, Trash2, UserPlus, Crown, X, UserMinus } from 'lucide-react';
 import api from '../api/axios';
 
 export default function ManageTeam() {
@@ -7,8 +7,11 @@ export default function ManageTeam() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [editingTeam, setEditingTeam] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -38,6 +41,16 @@ export default function ManageTeam() {
       setUsers(response.data.users || []);
     } catch (error) {
       console.error('Erreur users:', error);
+    }
+  };
+
+  const loadTeamMembers = async (teamId) => {
+    try {
+      const response = await api.get(`/teams/${teamId}/members`);
+      setTeamMembers(response.data.members || []);
+    } catch (error) {
+      console.error('Erreur chargement membres:', error);
+      setTeamMembers([]);
     }
   };
 
@@ -71,7 +84,40 @@ export default function ManageTeam() {
     }
   };
 
+  const openMembersModal = async (team) => {
+    setSelectedTeam(team);
+    await loadTeamMembers(team.id);
+    setShowMembersModal(true);
+  };
+
+  const handleAddMember = async (userId) => {
+    try {
+      await api.post(`/teams/${selectedTeam.id}/members`, { user_id: userId });
+      await loadTeamMembers(selectedTeam.id);
+      await loadTeams();
+      alert('Membre ajouté !');
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erreur lors de l\'ajout');
+    }
+  };
+
+  const handleRemoveMember = async (userId) => {
+    if (!confirm('Retirer ce membre de l\'équipe ?')) return;
+    try {
+      await api.delete(`/teams/${selectedTeam.id}/members/${userId}`);
+      await loadTeamMembers(selectedTeam.id);
+      await loadTeams();
+      alert('Membre retiré !');
+    } catch (error) {
+      alert('Erreur lors du retrait');
+    }
+  };
+
   const colors = ['from-blue-500 to-blue-700', 'from-green-500 to-green-700', 'from-purple-500 to-purple-700'];
+
+  const availableUsers = users.filter(
+    user => !teamMembers.find(member => member.id === user.id)
+  );
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -121,11 +167,32 @@ export default function ManageTeam() {
                   {team.manager_name}
                 </div>
               )}
-              <div className="flex gap-2">
-                <button onClick={() => { setEditingTeam(team); setFormData({ name: team.name, description: team.description || '', manager_id: team.manager_id || '' }); setShowModal(true); }} className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => openMembersModal(team)}
+                  className="flex-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Membres
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingTeam(team);
+                    setFormData({
+                      name: team.name,
+                      description: team.description || '',
+                      manager_id: team.manager_id || ''
+                    });
+                    setShowModal(true);
+                  }}
+                  className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all"
+                >
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(team.id)} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg">
+                <button
+                  onClick={() => handleDelete(team.id)}
+                  className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all"
+                >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -134,31 +201,157 @@ export default function ManageTeam() {
         </div>
       )}
 
+      {/* Modal Créer/Modifier Equipe */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-lg w-full">
             <h2 className="text-2xl font-bold mb-6">{editingTeam ? 'Modifier' : 'Nouvelle'} Equipe</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block font-semibold mb-2">Nom *</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required className="w-full px-4 py-3 border-2 rounded-xl" />
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  required
+                  className="w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500"
+                />
               </div>
               <div>
                 <label className="block font-semibold mb-2">Description</label>
-                <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} rows={3} className="w-full px-4 py-3 border-2 rounded-xl" />
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500"
+                />
               </div>
               <div>
                 <label className="block font-semibold mb-2">Manager</label>
-                <select value={formData.manager_id} onChange={(e) => setFormData({...formData, manager_id: e.target.value})} className="w-full px-4 py-3 border-2 rounded-xl">
+                <select
+                  value={formData.manager_id}
+                  onChange={(e) => setFormData({...formData, manager_id: e.target.value})}
+                  className="w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-purple-500"
+                >
                   <option value="">Aucun</option>
-                  {users.map(user => <option key={user.id} value={user.id}>{user.first_name} {user.last_name}</option>)}
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.first_name} {user.last_name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="flex gap-3 mt-6">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 bg-gray-200 rounded-xl">Annuler</button>
-                <button type="submit" className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-xl">{editingTeam ? 'Modifier' : 'Creer'}</button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-4 py-3 bg-gray-200 rounded-xl hover:bg-gray-300 transition-all font-semibold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all font-semibold"
+                >
+                  {editingTeam ? 'Modifier' : 'Creer'}
+                </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Gestion des Membres */}
+      {showMembersModal && selectedTeam && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">
+                Membres de {selectedTeam.name}
+              </h2>
+              <button
+                onClick={() => setShowMembersModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Membres actuels */}
+            <div className="mb-6">
+              <h3 className="font-bold text-lg mb-3">Membres actuels ({teamMembers.length})</h3>
+              {teamMembers.length === 0 ? (
+                <p className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                  Aucun membre dans cette équipe
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {teamMembers.map(member => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border-2 border-gray-200"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
+                          {member.first_name?.[0]}{member.last_name?.[0]}
+                        </div>
+                        <div>
+                          <p className="font-semibold">
+                            {member.first_name} {member.last_name}
+                          </p>
+                          <p className="text-sm text-gray-600">{member.email}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveMember(member.id)}
+                        className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all flex items-center gap-2"
+                      >
+                        <UserMinus className="w-4 h-4" />
+                        Retirer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Ajouter des membres */}
+            <div>
+              <h3 className="font-bold text-lg mb-3">Ajouter des membres</h3>
+              {availableUsers.length === 0 ? (
+                <p className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                  Tous les utilisateurs sont déjà membres
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {availableUsers.map(user => (
+                    <div
+                      key={user.id}
+                      className="flex items-center justify-between p-4 bg-white rounded-lg border-2 border-gray-200 hover:border-green-300 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold">
+                          {user.first_name?.[0]}{user.last_name?.[0]}
+                        </div>
+                        <div>
+                          <p className="font-semibold">
+                            {user.first_name} {user.last_name}
+                          </p>
+                          <p className="text-sm text-gray-600">{user.email}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleAddMember(user.id)}
+                        className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all flex items-center gap-2 font-semibold"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        Ajouter
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
