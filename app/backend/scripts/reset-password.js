@@ -13,9 +13,13 @@ async function resetPassword() {
       [hashedPassword]
     );
 
-    console.log('? Mot de passe r�initialis� !');
-    console.log(`?? Email: vprince@trinexta.fr`);
-    console.log(`?? Nouveau mot de passe: password123`);
+    console.log('✅ Mot de passe réinitialisé !');
+    console.log(`📧 Email: vprince@trinexta.fr`);
+    // ⚠️ SÉCURITÉ: Ne jamais logger les mots de passe en production
+    // Ce script est uniquement pour le développement local
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🔐 Nouveau mot de passe: ${newPassword}`);
+    }
 
     process.exit(0);
   } catch (error) {

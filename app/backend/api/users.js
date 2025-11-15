@@ -63,8 +63,8 @@ async function handler(req, res) {
         });
       }
 
-      const tempPassword = crypto.randomBytes(4).toString('hex');  
-      console.log('🔐 Mot de passe temporaire généré:', tempPassword);
+      const tempPassword = crypto.randomBytes(4).toString('hex');
+      // Note: Le mot de passe temporaire sera envoyé par email à l'utilisateur
 
       const password_hash = await hashPassword(tempPassword);
 

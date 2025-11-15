@@ -5,7 +5,12 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 const googleMapsClient = new Client({});
-const GOOGLE_API_KEY = 'AIzaSyCbNyMZXznzh-tHNxI3akt6RcrERH3pYFg';
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+
+// Validation : la clé API doit être définie
+if (!GOOGLE_API_KEY) {
+  console.error('❌ GOOGLE_API_KEY non configurée dans les variables d\'environnement');
+}
 
 const activeSearches = new Map();
 
