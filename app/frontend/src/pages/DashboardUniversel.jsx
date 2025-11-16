@@ -14,6 +14,7 @@ export default function DashboardUniversel() {
   const [stats, setStats] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
+  const [campaignsDetailed, setCampaignsDetailed] = useState([]);
   const [topCommercials, setTopCommercials] = useState([]);
   const [pendingValidations, setPendingValidations] = useState([]);
   const [urgentAlerts, setUrgentAlerts] = useState([]);
@@ -39,13 +40,30 @@ export default function DashboardUniversel() {
       setStats(statsRes.data.stats);
       setDashboardData(dashRes.data);
 
-      // Top 5 campagnes réelles
-      const allCampaigns = campaignsRes.data.campaigns || [];
-      const activeCampaigns = allCampaigns
-        .filter(c => c.status === 'active' || c.status === 'running')
-        .sort((a, b) => (b.sent_count || 0) - (a.sent_count || 0))
-        .slice(0, 5);
-      setCampaigns(activeCampaigns);
+      // TOUTES les campagnes (plus de limite à 5)
+      const allCampaigns = (campaignsRes.data.campaigns || [])
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));  // Plus récent en premier
+      setCampaigns(allCampaigns);
+
+      // Charger stats détaillées pour CHAQUE campagne
+      const detailedPromises = allCampaigns.map(async (campaign) => {
+        try {
+          const detailRes = await api.get(`/campaign-detailed-stats?campaign_id=${campaign.id}`);
+          return {
+            ...campaign,
+            detailed: detailRes.data.stats
+          };
+        } catch (err) {
+          console.warn(`Stats détaillées non disponibles pour ${campaign.name}:`, err.message);
+          return {
+            ...campaign,
+            detailed: null
+          };
+        }
+      });
+
+      const detailed = await Promise.all(detailedPromises);
+      setCampaignsDetailed(detailed);
 
       // Rendez-vous du jour RÉELS
       const today = new Date().toISOString().split('T')[0];
@@ -322,15 +340,15 @@ export default function DashboardUniversel() {
               </div>
             )}
 
-            {/* Top 5 Campagnes - VRAIES DONNÉES */}
-            {campaigns.length > 0 && (
+            {/* TOUTES les Campagnes avec Détails Complets - VRAIES DONNÉES */}
+            {campaignsDetailed.length > 0 && (
               <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
                       <Zap className="w-6 h-6 text-white" />
                     </div>
-                    Top Campagnes Actives
+                    Toutes les Campagnes
                   </h2>
                   <button
                     onClick={() => navigate('/campaigns')}
@@ -341,8 +359,10 @@ export default function DashboardUniversel() {
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {campaigns.map((campaign, idx) => {
+                <div className="space-y-4">
+                  {campaignsDetailed.map((campaign, idx) => {
+                    const details = campaign.detailed || {};
+                    const leads = details.leads || {};
                     const openRate = campaign.sent_count > 0
                       ? ((campaign.opened_count || 0) / campaign.sent_count * 100).toFixed(1)
                       : 0;
@@ -353,43 +373,79 @@ export default function DashboardUniversel() {
                     return (
                       <div
                         key={campaign.id}
-                        className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
+                        className="bg-white/60 backdrop-blur-sm p-5 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
                         onClick={() => navigate(`/CampaignDetails?id=${campaign.id}`)}
                       >
-                        <div className="flex items-center justify-between mb-3">
+                        {/* En-tête campagne */}
+                        <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 text-white font-bold text-sm">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 text-white font-bold">
                               {idx + 1}
                             </div>
                             <div>
-                              <p className="font-bold text-gray-900">{campaign.name}</p>
-                              <p className="text-xs text-gray-600">{campaign.sent_count || 0} envoyés</p>
+                              <p className="font-bold text-gray-900 text-lg">{campaign.name}</p>
+                              <p className="text-xs text-gray-600">
+                                {campaign.type === 'email' ? '📧 Email' : '📞 Appel'} • {campaign.sent_count || 0} envoyés
+                              </p>
                             </div>
                           </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${
                             campaign.status === 'active' || campaign.status === 'running'
                               ? 'bg-green-100 text-green-700'
-                              : 'bg-orange-100 text-orange-700'
+                              : campaign.status === 'paused'
+                              ? 'bg-orange-100 text-orange-700'
+                              : 'bg-gray-100 text-gray-700'
                           }`}>
-                            {campaign.status === 'running' ? 'En cours' : campaign.status}
+                            {campaign.status === 'running' ? 'En cours' :
+                             campaign.status === 'paused' ? 'En pause' :
+                             campaign.status === 'active' ? 'Active' : campaign.status}
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                          <div>
+                        {/* Stats principales */}
+                        <div className="grid grid-cols-4 gap-3 mb-4">
+                          <div className="text-center bg-blue-50 rounded-lg p-2">
+                            <div className="text-xs text-gray-600">Total Leads</div>
+                            <div className="text-xl font-bold text-blue-600">{leads.total || 0}</div>
+                          </div>
+                          <div className="text-center bg-green-50 rounded-lg p-2">
+                            <div className="text-xs text-gray-600">Contactés</div>
+                            <div className="text-xl font-bold text-green-600">{leads.contacted || 0}</div>
+                          </div>
+                          <div className="text-center bg-purple-50 rounded-lg p-2">
                             <div className="text-xs text-gray-600">Ouvertures</div>
-                            <div className="text-lg font-bold text-green-600">{campaign.opened_count || 0}</div>
+                            <div className="text-xl font-bold text-purple-600">{campaign.opened_count || 0}</div>
                             <div className="text-xs text-gray-500">{openRate}%</div>
                           </div>
-                          <div>
+                          <div className="text-center bg-indigo-50 rounded-lg p-2">
                             <div className="text-xs text-gray-600">Clics</div>
-                            <div className="text-lg font-bold text-blue-600">{campaign.clicked_count || 0}</div>
+                            <div className="text-xl font-bold text-indigo-600">{campaign.clicked_count || 0}</div>
                             <div className="text-xs text-gray-500">{clickRate}%</div>
                           </div>
-                          <div>
-                            <div className="text-xs text-gray-600">Type</div>
-                            <div className="text-sm font-bold text-purple-600">
-                              {campaign.type === 'email' ? 'Email' : 'Appel'}
+                        </div>
+
+                        {/* Détails du pipeline */}
+                        <div className="border-t border-gray-200 pt-3">
+                          <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                            <div>
+                              <div className="text-gray-600 mb-1">One Call</div>
+                              <div className="font-bold text-teal-600">{leads.one_call || 0}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-600 mb-1">Pas de réponse</div>
+                              <div className="font-bold text-yellow-600">{leads.no_answer || 0}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-600 mb-1">Qualifié</div>
+                              <div className="font-bold text-green-600">{leads.qualified || 0}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-600 mb-1">Arrêté</div>
+                              <div className="font-bold text-red-600">{leads.stopped || 0}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-600 mb-1">Commerciaux</div>
+                              <div className="font-bold text-blue-600">{details.commercials_assigned || 0}</div>
                             </div>
                           </div>
                         </div>
