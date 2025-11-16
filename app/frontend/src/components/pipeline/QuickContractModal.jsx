@@ -89,19 +89,67 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
 
     setSaving(true);
     try {
+      // Construire la liste des features formatées
+      const featuresList = offer.features.map(cat => ({
+        category: cat.category,
+        items: cat.items
+      }));
+
+      // Récupérer les options sélectionnées avec détails
+      const selectedOptionsDetails = selectedOptions.map(optId => {
+        const opt = offer.options.find(o => o.id === optId);
+        return opt ? {
+          id: opt.id,
+          name: opt.name,
+          price: opt.price,
+          unit: opt.unit,
+          description: opt.description
+        } : null;
+      }).filter(Boolean);
+
       const contractData = {
+        // Lead info
         pipeline_lead_id: lead.id,
         lead_id: lead.lead_id || lead.id,
+        company_name: lead.company_name,
+        contact_name: lead.contact_name,
+        email: lead.email,
+        phone: lead.phone,
+
+        // Offer info
         offer_type: offer.id,
         offer_name: offer.name,
-        services: offer.services,
+        offer_tagline: offer.tagline,
+
+        // Features et options
+        features: featuresList,
+        selected_options: selectedOptionsDetails,
+        limitations: offer.limitations,
+        sla: offer.sla || null,
+
+        // Contract terms
         contract_type: contractType,
         payment_frequency: paymentFrequency,
+        engagement_type: offer.engagement.type,
+        engagement_duration: offer.engagement.minimum_duration,
+        notice_period: offer.engagement.notice_period,
+
+        // Pricing
         user_count: userCount,
         monthly_price: price,
+        base_price: offer.pricing.monthly,
+        options_price: price - (paymentFrequency === 'annuel' ? offer.pricing.annual / 12 : offer.pricing.monthly),
         total_amount: paymentFrequency === 'annuel' ? price * 12 : price,
+        setup_fee: offer.pricing.setup_fee || 0,
+
+        // Dates
         start_date: startDate,
-        notes,
+
+        // Custom fields
+        custom_cgv: customCGV.trim() || null,
+        notes: notes.trim() || null,
+
+        // Signature
         send_for_signature: sendForSignature
       };
 
@@ -269,10 +317,124 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
             </div>
           )}
 
+          {/* Options supplémentaires */}
+          {selectedOffer && getSelectedOfferDetails()?.options?.length > 0 && (
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-3">
+                📦 Options supplémentaires
+              </label>
+              <div className="space-y-2 bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
+                {getSelectedOfferDetails().options.map(option => (
+                  <label
+                    key={option.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                      selectedOptions.includes(option.id)
+                        ? 'border-orange-500 bg-white shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedOptions.includes(option.id)}
+                      onChange={() => toggleOption(option.id)}
+                      className="mt-1 w-5 h-5 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-900">{option.name}</span>
+                        <span className="text-orange-600 font-bold text-lg">
+                          +{option.price}€ <span className="text-xs text-gray-600">/ {option.unit}</span>
+                        </span>
+                      </div>
+                      {option.description && (
+                        <p className="text-sm text-gray-600 mt-1">{option.description}</p>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Fonctionnalités détaillées */}
+          {selectedOffer && getSelectedOfferDetails()?.features?.length > 0 && (
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-3">
+                ⭐ Fonctionnalités incluses
+              </label>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200 space-y-4">
+                {getSelectedOfferDetails().features.map((category, idx) => (
+                  <div key={idx}>
+                    <h4 className="font-bold text-blue-900 mb-2 text-sm">{category.category}</h4>
+                    <ul className="grid grid-cols-1 gap-1.5">
+                      {category.items.map((item, itemIdx) => (
+                        <li key={itemIdx} className="text-sm text-gray-700 flex items-start gap-2">
+                          <span className="text-green-600 flex-shrink-0 font-bold">✓</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Limitations */}
+          {selectedOffer && getSelectedOfferDetails()?.limitations?.length > 0 && (
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-3">
+                ⚠️ Limitations de l'offre
+              </label>
+              <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
+                <ul className="space-y-1.5">
+                  {getSelectedOfferDetails().limitations.map((limitation, idx) => (
+                    <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
+                      <span className="text-yellow-600 flex-shrink-0">⚠</span>
+                      <span>{limitation}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* SLA (si disponible) */}
+          {selectedOffer && getSelectedOfferDetails()?.sla && (
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-3">
+                🎯 Garanties SLA (Service Level Agreement)
+              </label>
+              <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Disponibilité :</span>
+                    <span className="font-bold text-green-900 ml-2">
+                      {getSelectedOfferDetails().sla.availability}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Temps de réponse critique :</span>
+                    <span className="font-bold text-green-900 ml-2">
+                      {getSelectedOfferDetails().sla.response_time_critical}
+                    </span>
+                  </div>
+                </div>
+                {getSelectedOfferDetails().sla.penalties && (
+                  <div className="mt-2 pt-2 border-t border-green-300">
+                    <p className="text-xs text-gray-700">
+                      <span className="font-semibold">Pénalités :</span> {getSelectedOfferDetails().sla.penalties}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Date de début */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
-              Date de début du contrat
+              📅 Date de début du contrat
             </label>
             <input
               type="date"
@@ -282,16 +444,64 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
             />
           </div>
 
-          {/* Notes */}
+          {/* Informations client (auto-remplies) */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-3">
+              👤 Informations client (auto-remplies du lead)
+            </label>
+            <div className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Entreprise :</span>
+                <span className="font-bold text-gray-900 ml-2">{lead.company_name}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Contact :</span>
+                <span className="font-bold text-gray-900 ml-2">{lead.contact_name || '-'}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-gray-600">Email :</span>
+                <span className="font-bold text-gray-900 ml-2">{lead.email || '-'}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Téléphone :</span>
+                <span className="font-bold text-gray-900 ml-2">{lead.phone || '-'}</span>
+              </div>
+              {lead.deal_value && (
+                <div>
+                  <span className="text-gray-600">Valeur estimée :</span>
+                  <span className="font-bold text-green-600 ml-2">{lead.deal_value}€</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CGV personnalisées */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
-              Notes internes (optionnel)
+              📄 Conditions Générales de Vente (optionnel)
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Vous pouvez coller ici vos CGV personnalisées. Si vide, les CGV Trinexta par défaut seront utilisées.
+            </p>
+            <textarea
+              value={customCGV}
+              onChange={(e) => setCustomCGV(e.target.value)}
+              rows={6}
+              placeholder="Collez vos CGV personnalisées ici..."
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 resize-none font-mono text-xs"
+            />
+          </div>
+
+          {/* Notes internes */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              📝 Notes internes (optionnel)
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              placeholder="Notes pour le contrat..."
+              placeholder="Notes pour le contrat (visible uniquement en interne)..."
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 resize-none"
             />
           </div>
@@ -304,6 +514,10 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
                 <div className="flex justify-between">
                   <span className="text-gray-700">Offre :</span>
                   <span className="font-bold text-gray-900">{getSelectedOfferDetails()?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Client :</span>
+                  <span className="font-bold text-gray-900">{lead.company_name}</span>
                 </div>
                 {selectedOffer === 'essentielle' && (
                   <>
@@ -321,6 +535,22 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
                     </div>
                   </>
                 )}
+                {selectedOptions.length > 0 && (
+                  <div className="border-t border-orange-300 pt-2 mt-2">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Options sélectionnées :</p>
+                    <ul className="space-y-1">
+                      {selectedOptions.map(optId => {
+                        const opt = getSelectedOfferDetails()?.options.find(o => o.id === optId);
+                        return opt ? (
+                          <li key={optId} className="text-sm text-gray-600 flex justify-between">
+                            <span>• {opt.name}</span>
+                            <span className="font-semibold text-orange-600">+{opt.price}€</span>
+                          </li>
+                        ) : null;
+                      })}
+                    </ul>
+                  </div>
+                )}
                 <div className="border-t border-orange-300 pt-2 mt-2">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-gray-900">Tarif mensuel :</span>
@@ -328,6 +558,11 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
                       {calculatePrice()} {typeof calculatePrice() === 'number' ? '€ HT/mois' : ''}
                     </span>
                   </div>
+                  {paymentFrequency === 'annuel' && (
+                    <p className="text-xs text-gray-600 text-right mt-1">
+                      Soit {calculatePrice() * 12}€ HT/an
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
