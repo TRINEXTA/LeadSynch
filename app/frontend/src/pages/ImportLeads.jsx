@@ -1,8 +1,9 @@
 ﻿import React, { useState } from "react";
+import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Upload, FileText, Database, CheckCircle, AlertCircle, 
+import {
+  Upload, FileText, Database, CheckCircle, AlertCircle,
   Sparkles, TrendingUp, BarChart3, FileSpreadsheet,
   Building2, Users, MapPin, Zap
 } from "lucide-react";
@@ -44,7 +45,7 @@ export default function ImportLeads() {
       setFile(selectedFile);
       analyzeCSVPreview(selectedFile);
     } else {
-      alert('Veuillez sélectionner un fichier CSV');
+      toast.error('Veuillez sélectionner un fichier CSV');
     }
   };
 
@@ -70,12 +71,12 @@ export default function ImportLeads() {
 
   const handleImport = async () => {
     if (!file || !databaseName) {
-      alert('Veuillez remplir tous les champs');
+      toast.error('Veuillez remplir tous les champs');
       return;
     }
 
     setImporting(true);
-    
+
     try {
       // Créer d'abord la base de données
       const dbResponse = await api.post('/lead-databases', {
@@ -91,7 +92,7 @@ export default function ImportLeads() {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const csvContent = e.target.result;
-        
+
         // L'API /import-csv analyse automatiquement les secteurs !
         const importResponse = await api.post('/import-csv', {
           database_id: databaseId,
@@ -103,17 +104,19 @@ export default function ImportLeads() {
           ...importResponse.data.stats,
           segmentation: importResponse.data.segmentation // Les secteurs détectés automatiquement
         });
-        
+
+        toast.success(`Import réussi ! ${importResponse.data.stats?.added || 0} leads importés`);
+
         // Redirection après 3 secondes vers DatabaseDetails avec le bon format d'URL
         setTimeout(() => {
           navigate(`/DatabaseDetails?id=${databaseId}`);
         }, 3000);
       };
-      
+
       reader.readAsText(file);
     } catch (error) {
       console.error('Erreur import:', error);
-      alert('Erreur lors de l\'import');
+      toast.error('Erreur lors de l\'import : ' + (error.response?.data?.error || error.message));
     } finally {
       setImporting(false);
     }
