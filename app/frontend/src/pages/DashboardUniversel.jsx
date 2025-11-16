@@ -8,6 +8,7 @@ import {
   BarChart3, PlayCircle, MessageSquare, ThumbsUp, ThumbsDown, MapPin
 } from 'lucide-react';
 import api from '../api/axios';
+import ChatbotAsefi from '../components/ChatbotAsefi';
 
 export default function DashboardUniversel() {
   const [stats, setStats] = useState(null);
@@ -19,6 +20,7 @@ export default function DashboardUniversel() {
   const [todayAppointments, setTodayAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [chatbotOpen, setChatbotOpen] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -538,7 +540,7 @@ export default function DashboardUniversel() {
               </p>
 
               <button
-                onClick={() => navigate('/chatbot')}
+                onClick={() => setChatbotOpen(true)}
                 className="w-full px-4 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
               >
                 <MessageSquare className="w-5 h-5" />
@@ -589,6 +591,9 @@ export default function DashboardUniversel() {
           </div>
         </div>
       </div>
+
+      {/* Chatbot Asefi Modal */}
+      <ChatbotAsefi isOpen={chatbotOpen} onClose={() => setChatbotOpen(false)} />
     </div>
   );
 }
