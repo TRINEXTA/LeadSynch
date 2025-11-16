@@ -3,6 +3,7 @@ import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Ta
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
+import TaskModal from '../components/pipeline/TaskModal';
 
 const QUICK_QUALIFICATIONS = [
   { id: 'tres_qualifie', label: '🔥 Très Chaud', color: 'bg-green-500', stage: 'tres_qualifie' },
@@ -26,6 +27,8 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   // Modals state
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationRequestType, setValidationRequestType] = useState('validation');
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskModalMode, setTaskModalMode] = useState('create'); // 'create' ou 'assign'
 
   // Protection contre leads undefined ou vide
   const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
@@ -160,13 +163,18 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   };
 
   const handleAssignTask = async () => {
-    // TODO: Implémenter attribution de tâche
-    alert('Attribution de tâche - Fonctionnalité à venir');
+    setTaskModalMode('assign');
+    setShowTaskModal(true);
   };
 
   const handleSendTask = async () => {
-    // TODO: Implémenter tâche d'envoi
-    alert('Tâche d\'envoi - Fonctionnalité à venir');
+    setTaskModalMode('create');
+    setShowTaskModal(true);
+  };
+
+  const handleTaskSuccess = () => {
+    setShowTaskModal(false);
+    // Optionnel: recharger les tâches
   };
 
   const formatDuration = (seconds) => {
@@ -482,6 +490,17 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
           onClose={() => setShowValidationModal(false)}
           lead={currentLead}
           type={validationRequestType}
+        />
+      )}
+
+      {/* Task Modal */}
+      {showTaskModal && currentLead && (
+        <TaskModal
+          isOpen={showTaskModal}
+          onClose={() => setShowTaskModal(false)}
+          lead={currentLead}
+          mode={taskModalMode}
+          onSuccess={handleTaskSuccess}
         />
       )}
     </div>
