@@ -62,7 +62,7 @@ export default function ChatbotAsefi() {
           text: msg.text
         }));
 
-      const response = await fetch('http://localhost:3000/api/chatbot/ask', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chatbot/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

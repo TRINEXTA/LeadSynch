@@ -20,10 +20,12 @@ async function handler(req, res) {
   try {
     // GET - List users
     if (method === 'GET') {
-      console.log('🔍 GET /api/users - User:', req.user.email, 'Tenant:', req.user.tenant_id);
-      
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔍 GET /api/users - User:', req.user.email, 'Tenant:', req.user.tenant_id);
+      }
+
       const users = await queryAll(
-        `SELECT u.id, u.email, u.first_name, u.last_name, u.role,  
+        `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
                 u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
                 t.name as tenant_name
          FROM users u
@@ -33,7 +35,9 @@ async function handler(req, res) {
         [req.user.tenant_id]
       );
 
-      console.log('✅ Users trouvés:', users.length);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ Users trouvés:', users.length);
+      }
 
       return res.status(200).json({
         success: true,
@@ -93,7 +97,9 @@ async function handler(req, res) {
 
       try {
         await sendTemporaryPassword(data.email, data.first_name, tempPassword);
-        console.log(`✅ Email envoyé à ${data.email}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`✅ Email envoyé à ${data.email}`);
+        }
       } catch (emailError) {
         console.error('⚠️ Erreur envoi email:', emailError.message);
       }
@@ -145,7 +151,9 @@ async function handler(req, res) {
         });
       }
 
-      console.log('✅ User modifié:', updatedUser.id);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ User modifié:', updatedUser.id);
+      }
 
       return res.status(200).json({
         success: true,
@@ -186,7 +194,9 @@ async function handler(req, res) {
           return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        console.log('🔴 User bloqué:', updatedUser.id);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔴 User bloqué:', updatedUser.id);
+        }
         return res.status(200).json({
           success: true,
           user: updatedUser,
@@ -207,7 +217,9 @@ async function handler(req, res) {
           return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        console.log('🟢 User débloqué:', updatedUser.id);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🟢 User débloqué:', updatedUser.id);
+        }
         return res.status(200).json({
           success: true,
           user: updatedUser,
@@ -228,7 +240,9 @@ async function handler(req, res) {
           return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        console.log('🔐 Changement de mot de passe forcé pour:', updatedUser.id);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔐 Changement de mot de passe forcé pour:', updatedUser.id);
+        }
         return res.status(200).json({
           success: true,
           user: updatedUser,

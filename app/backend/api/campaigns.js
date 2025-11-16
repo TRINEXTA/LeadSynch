@@ -140,7 +140,9 @@ router.post('/', authenticateToken, async (req, res) => {
       attachments, track_clicks, auto_distribute
     } = req.body;
 
-    console.log('📥 Données reçues:', req.body);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📥 Données reçues:', req.body);
+    }
 
     if (!name || !type || !database_id) {
       return res.status(400).json({ error: 'Champs requis: name, type, database_id' });

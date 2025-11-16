@@ -117,7 +117,7 @@ export default function Register() {
 
     try {
       // Appel à l'API backend qui utilise l'API gratuite du gouvernement
-      const response = await fetch('http://localhost:3000/api/verify-siret', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/verify-siret`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -171,7 +171,7 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/register', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -197,7 +197,7 @@ export default function Register() {
       if (response.ok) {
         alert(' Compte créé avec succès ! Vous allez être redirigé vers l\'application.');
         // Redirection vers l'app CRM
-        window.location.href = 'http://localhost:5173';
+        window.location.href = import.meta.env.VITE_APP_URL;
       } else {
         setErrors({ submit: data.error || 'Erreur lors de l\'inscription' });
       }
