@@ -187,10 +187,10 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
 
     console.log(`🎯 Besoin d'envoyer ${needed} nouveaux leads`);
 
-    // 5. Récupérer la campagne
+    // 5. Récupérer la campagne - ✅ SÉCURITÉ: Vérifier tenant_id
     const { rows: campRows } = await q(
-      `SELECT id, database_id FROM campaigns WHERE id = $1`,
-      [campaign_id]
+      `SELECT id, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2`,
+      [campaign_id, tenant_id]
     );
 
     if (!campRows.length) {
@@ -738,10 +738,11 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       if (coldCallCount < 50) {
         const needed = 50 - coldCallCount;
         console.log(`🚀 Auto-refill déclenché: besoin de ${needed} leads`);
-        
+
+        // ✅ SÉCURITÉ: Vérifier tenant_id
         const { rows: campRows } = await q(
-          `SELECT database_id FROM campaigns WHERE id = $1`,
-          [campaignId]
+          `SELECT database_id FROM campaigns WHERE id = $1 AND tenant_id = $2`,
+          [campaignId, tenantId]
         );
 
         if (campRows.length > 0) {
