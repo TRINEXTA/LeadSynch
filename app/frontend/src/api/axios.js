@@ -17,12 +17,13 @@ const api = axios.create({
 // Interceptor pour ajouter le token automatiquement
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    // Chercher le token dans localStorage (remember me) OU sessionStorage (session temporaire)
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
-  }, 
+  },
   (error) => {
     return Promise.reject(error);
   }
@@ -34,7 +35,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       console.warn('⚠️ Non autorisé (401) - Token invalide ou expiré');
+      // Supprimer le token des deux storages
       localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
     }
     return Promise.reject(error);
   }

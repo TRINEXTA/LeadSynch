@@ -30,6 +30,14 @@ export default function DashboardManager() {
 
   useEffect(() => {
     fetchDashboard();
+
+    // Auto-refresh toutes les 30 minutes
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refresh DashboardManager (30min)');
+      fetchDashboard();
+    }, 30 * 60 * 1000); // 30 minutes en millisecondes
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboard = async () => {
