@@ -81,9 +81,9 @@ export async function sendTemporaryPassword(email, firstName, tempPassword) {
 export async function sendPasswordResetEmail(email, firstName, resetToken) {
   try {
     const client = getGraphClient();
-    
+
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
-    
+
     const message = {
       subject: 'Réinitialisation de votre mot de passe LeadSynch',
       body: {
@@ -127,5 +127,42 @@ export async function sendPasswordResetEmail(email, firstName, resetToken) {
   } catch (error) {
     console.error('❌ Erreur Graph API (reset):', error.message);
     throw error;
+  }
+}
+
+/**
+ * Fonction générique d'envoi d'email
+ * @param {Object} options - { to: string, subject: string, html: string }
+ */
+export async function sendEmail({ to, subject, html }) {
+  try {
+    const client = getGraphClient();
+
+    const message = {
+      subject: subject,
+      body: {
+        contentType: 'HTML',
+        content: html
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: to
+          }
+        }
+      ]
+    };
+
+    await client
+      .api('/users/noreply@leadsynch.com/sendMail')
+      .post({ message });
+
+    console.log(`✅ Email envoyé à ${to} - ${subject}`);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Erreur envoi email:', error.message);
+    // Ne pas throw l'erreur pour éviter de bloquer le système
+    console.warn('⚠️ Email non envoyé mais processus continue');
+    return { success: false, error: error.message };
   }
 }
