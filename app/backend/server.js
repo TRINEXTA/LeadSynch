@@ -173,9 +173,13 @@ import leadPhonesRoute from './api/lead-phones.js';
 import leadOfficesRoute from './api/lead-offices.js';
 import leadNotesRoute from './api/lead-notes.js';
 import healthRoute from './api/health.js';
+import trainingRoute from './api/training.js';
 
 // Health check endpoints (test zone)
 app.use('/api/health', healthRoute);
+
+// Training system (formation par rôle)
+app.use('/api/training', trainingRoute);
 
 // ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
