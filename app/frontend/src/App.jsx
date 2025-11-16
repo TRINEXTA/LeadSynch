@@ -12,6 +12,7 @@ import Login from './pages/Login';
 // Pages principales
 import Dashboard from './pages/Dashboard';
 import DashboardUniversel from './pages/DashboardUniversel';
+import DashboardManager from './pages/DashboardManager';
 import Leads from './pages/Leads';
 import Users from './pages/Users';
 
@@ -96,6 +97,7 @@ function App() {
           <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
             <Route path="/dashboard" element={<DashboardUniversel />} />
             <Route path="/dashboard-classic" element={<Dashboard />} />
+            <Route path="/dashboard-manager" element={<DashboardManager />} />
             <Route path="/CommercialDashboard" element={<CommercialDashboard />} />
             
             <Route path="/leads" element={<Leads />} />
