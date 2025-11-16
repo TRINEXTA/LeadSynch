@@ -1,0 +1,373 @@
+{
+  "company": {
+    "name": "Trinexta",
+    "legal_name": "TrusTech IT Support",
+    "siret": "94202008200015",
+    "address": "13 Rue Georges Guynemer, 33290 Blanquefort",
+    "description": "Support informatique et téléphonie pour TPE/PME"
+  },
+  "offers": [
+    {
+      "id": "essentielle",
+      "name": "Offre Essentielle",
+      "tagline": "Le socle de votre infrastructure IT",
+      "target": "TPE cherchant un support de base fiable",
+      "pricing": {
+        "monthly": 149,
+        "annual": 1490,
+        "setup_fee": 0,
+        "currency": "EUR"
+      },
+      "engagement": {
+        "type": "sans_engagement",
+        "minimum_duration": 1,
+        "notice_period": 30,
+        "description": "Facturation mensuelle, résiliation possible avec préavis de 30 jours"
+      },
+      "features": [
+        {
+          "category": "Support Technique",
+          "items": [
+            "Hotline téléphonique 9h-18h (jours ouvrés)",
+            "Support par email avec réponse sous 24h",
+            "Assistance à distance illimitée",
+            "Gestion des incidents niveau 1 et 2"
+          ]
+        },
+        {
+          "category": "Infrastructure",
+          "items": [
+            "Supervision de base des serveurs",
+            "Monitoring réseau (1 site)",
+            "Alertes email en cas d'incident critique",
+            "Sauvegarde cloud 50 Go inclus"
+          ]
+        },
+        {
+          "category": "Services inclus",
+          "items": [
+            "1 intervention sur site par trimestre",
+            "Mise à jour logiciels et antivirus",
+            "Gestion des utilisateurs (jusqu'à 10 comptes)",
+            "Rapport mensuel d'activité"
+          ]
+        }
+      ],
+      "limitations": [
+        "Maximum 10 postes de travail",
+        "1 seul site géographique",
+        "Interventions sur site limitées (1/trimestre)",
+        "Support pendant heures ouvrées uniquement"
+      ],
+      "options": [
+        {
+          "id": "postes_supplementaires",
+          "name": "Postes supplémentaires",
+          "price": 15,
+          "unit": "poste/mois",
+          "description": "Au-delà de 10 postes"
+        },
+        {
+          "id": "intervention_site",
+          "name": "Intervention sur site supplémentaire",
+          "price": 120,
+          "unit": "intervention",
+          "description": "Demi-journée d'intervention"
+        },
+        {
+          "id": "stockage_cloud",
+          "name": "Stockage cloud supplémentaire",
+          "price": 10,
+          "unit": "50 Go/mois",
+          "description": "Extension de sauvegarde"
+        }
+      ]
+    },
+    {
+      "id": "serenite",
+      "name": "Offre Sérénité",
+      "tagline": "La tranquillité d'esprit totale",
+      "target": "PME nécessitant un support avancé et proactif",
+      "pricing": {
+        "monthly": 299,
+        "annual": 2990,
+        "setup_fee": 150,
+        "currency": "EUR"
+      },
+      "engagement": {
+        "type": "12_mois",
+        "minimum_duration": 12,
+        "notice_period": 60,
+        "description": "Engagement 12 mois, résiliation avec préavis de 2 mois"
+      },
+      "features": [
+        {
+          "category": "Support Technique Premium",
+          "items": [
+            "Hotline téléphonique 8h-20h (jours ouvrés)",
+            "Support par email avec réponse sous 4h",
+            "Assistance à distance illimitée prioritaire",
+            "Gestion des incidents niveau 1, 2 et 3",
+            "Accès portail client 24/7"
+          ]
+        },
+        {
+          "category": "Infrastructure Avancée",
+          "items": [
+            "Supervision complète serveurs et postes",
+            "Monitoring réseau multi-sites (jusqu'à 3 sites)",
+            "Alertes email et SMS en temps réel",
+            "Sauvegarde cloud 200 Go inclus",
+            "Plan de reprise d'activité (PRA) simplifié"
+          ]
+        },
+        {
+          "category": "Services Premium",
+          "items": [
+            "1 intervention sur site par mois incluse",
+            "Gestion proactive des mises à jour",
+            "Gestion des utilisateurs illimitée",
+            "Audit de sécurité trimestriel",
+            "Rapport mensuel détaillé + réunion trimestrielle",
+            "Conseil stratégique IT"
+          ]
+        },
+        {
+          "category": "Téléphonie Incluse",
+          "items": [
+            "Standard téléphonique virtuel",
+            "5 lignes SIP incluses",
+            "Configuration et assistance téléphonie"
+          ]
+        }
+      ],
+      "limitations": [
+        "Maximum 25 postes de travail",
+        "Jusqu'à 3 sites géographiques",
+        "Support étendu mais pas 24/7"
+      ],
+      "options": [
+        {
+          "id": "postes_supplementaires",
+          "name": "Postes supplémentaires",
+          "price": 12,
+          "unit": "poste/mois",
+          "description": "Au-delà de 25 postes"
+        },
+        {
+          "id": "intervention_site",
+          "name": "Intervention sur site supplémentaire",
+          "price": 100,
+          "unit": "intervention",
+          "description": "Demi-journée d'intervention"
+        },
+        {
+          "id": "stockage_cloud",
+          "name": "Stockage cloud supplémentaire",
+          "price": 8,
+          "unit": "100 Go/mois",
+          "description": "Extension de sauvegarde"
+        },
+        {
+          "id": "ligne_sip",
+          "name": "Ligne SIP supplémentaire",
+          "price": 15,
+          "unit": "ligne/mois",
+          "description": "Au-delà de 5 lignes"
+        },
+        {
+          "id": "support_24_7",
+          "name": "Support 24/7",
+          "price": 200,
+          "unit": "mois",
+          "description": "Astreinte téléphonique weekend et nuit"
+        }
+      ]
+    },
+    {
+      "id": "impulsion",
+      "name": "Offre Impulsion",
+      "tagline": "L'excellence IT pour votre croissance",
+      "target": "PME en croissance avec besoins IT critiques",
+      "pricing": {
+        "monthly": 599,
+        "annual": 5990,
+        "setup_fee": 500,
+        "currency": "EUR"
+      },
+      "engagement": {
+        "type": "24_mois",
+        "minimum_duration": 24,
+        "notice_period": 90,
+        "description": "Engagement 24 mois, résiliation avec préavis de 3 mois"
+      },
+      "features": [
+        {
+          "category": "Support Technique Excellence",
+          "items": [
+            "Hotline téléphonique 24/7 avec astreinte",
+            "Support par email avec réponse sous 2h",
+            "Assistance à distance illimitée VIP",
+            "Gestion des incidents tous niveaux",
+            "Accès portail client 24/7 avec ticketing avancé",
+            "Chef de projet IT dédié"
+          ]
+        },
+        {
+          "category": "Infrastructure Critique",
+          "items": [
+            "Supervision complète en temps réel",
+            "Monitoring réseau multi-sites illimité",
+            "Alertes multi-canaux (email, SMS, push)",
+            "Sauvegarde cloud 500 Go inclus",
+            "Plan de reprise d'activité (PRA) complet",
+            "Plan de continuité d'activité (PCA)",
+            "Redondance et haute disponibilité"
+          ]
+        },
+        {
+          "category": "Services Excellence",
+          "items": [
+            "2 interventions sur site par mois incluses",
+            "Gestion proactive et préventive",
+            "Gestion des utilisateurs et droits avancée",
+            "Audit de sécurité mensuel",
+            "Tests d'intrusion semestriels",
+            "Rapport hebdomadaire + réunion mensuelle stratégique",
+            "Roadmap IT et budget prévisionnel",
+            "Formation utilisateurs (2 sessions/an)"
+          ]
+        },
+        {
+          "category": "Téléphonie Premium",
+          "items": [
+            "Standard téléphonique virtuel avancé",
+            "15 lignes SIP incluses",
+            "Softphone mobile pour tous",
+            "Serveur vocal interactif (SVI)",
+            "Enregistrement des appels (conformité)",
+            "Analytics et reporting téléphonie"
+          ]
+        },
+        {
+          "category": "Développement & Innovation",
+          "items": [
+            "Conseil en transformation digitale",
+            "Veille technologique",
+            "POC (Proof of Concept) pour nouvelles solutions",
+            "Accompagnement conformité RGPD/ISO"
+          ]
+        }
+      ],
+      "limitations": [
+        "Aucune limitation de postes (forfait adapté)",
+        "Sites illimités",
+        "Bande passante garantie selon SLA"
+      ],
+      "options": [
+        {
+          "id": "postes_supplementaires",
+          "name": "Postes supplémentaires",
+          "price": 10,
+          "unit": "poste/mois",
+          "description": "Au-delà de 50 postes"
+        },
+        {
+          "id": "intervention_site",
+          "name": "Intervention sur site supplémentaire",
+          "price": 80,
+          "unit": "intervention",
+          "description": "Demi-journée d'intervention"
+        },
+        {
+          "id": "stockage_cloud",
+          "name": "Stockage cloud supplémentaire",
+          "price": 5,
+          "unit": "200 Go/mois",
+          "description": "Extension de sauvegarde"
+        },
+        {
+          "id": "ligne_sip",
+          "name": "Ligne SIP supplémentaire",
+          "price": 12,
+          "unit": "ligne/mois",
+          "description": "Au-delà de 15 lignes"
+        },
+        {
+          "id": "developpement_specifique",
+          "name": "Développement spécifique",
+          "price": 800,
+          "unit": "jour",
+          "description": "Développement sur mesure"
+        },
+        {
+          "id": "formation_supplementaire",
+          "name": "Formation supplémentaire",
+          "price": 400,
+          "unit": "demi-journée",
+          "description": "Formation utilisateurs ou admins"
+        }
+      ],
+      "sla": {
+        "availability": "99.9%",
+        "response_time_critical": "15 minutes",
+        "response_time_high": "2 heures",
+        "response_time_medium": "4 heures",
+        "response_time_low": "24 heures",
+        "penalties": "Crédit de 5% par heure d'indisponibilité au-delà du SLA"
+      }
+    }
+  ],
+  "common_terms": {
+    "payment_terms": "Paiement mensuel par prélèvement automatique ou virement",
+    "billing_cycle": "Mensuel, facture émise le 1er de chaque mois",
+    "late_payment_penalty": "3 fois le taux d'intérêt légal",
+    "fixed_indemnity": "40 euros",
+    "trial_period": "30 jours satisfait ou remboursé",
+    "data_retention": "Conservation des données 6 mois après résiliation",
+    "support_languages": ["Français"],
+    "support_channels": ["Téléphone", "Email", "Portail client", "Ticketing"]
+  },
+  "add_ons_catalog": [
+    {
+      "id": "microsoft_365",
+      "category": "Licences",
+      "name": "Microsoft 365 Business",
+      "price": 12,
+      "unit": "licence/mois",
+      "description": "Suite Office complète + Teams"
+    },
+    {
+      "id": "antivirus_pro",
+      "category": "Sécurité",
+      "name": "Antivirus Pro Entreprise",
+      "price": 5,
+      "unit": "poste/mois",
+      "description": "Protection avancée endpoint"
+    },
+    {
+      "id": "vpn_pro",
+      "category": "Sécurité",
+      "name": "VPN Professionnel",
+      "price": 50,
+      "unit": "mois",
+      "description": "Accès distant sécurisé"
+    },
+    {
+      "id": "firewall_gere",
+      "category": "Sécurité",
+      "name": "Firewall géré",
+      "price": 150,
+      "unit": "mois",
+      "description": "Pare-feu professionnel avec gestion"
+    },
+    {
+      "id": "formation_cybersecurite",
+      "category": "Formation",
+      "name": "Formation Cybersécurité",
+      "price": 600,
+      "unit": "session",
+      "description": "Sensibilisation équipe (demi-journée)"
+    }
+  ]
+}

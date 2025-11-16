@@ -1,54 +1,22 @@
-import React, { useState } from 'react';
-import { X, FileCheck, Save, Send, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, FileCheck, Save, Send, AlertCircle, Plus, Minus } from 'lucide-react';
 import api from '../../api/axios';
+import trinextaOffersData from '../../data/trinexta_offers.json';
 
-const TRINEXTA_OFFERS = [
-  {
-    id: 'essentielle',
-    name: 'Offre Essentielle',
-    description: 'Assistance utilisateur illimitée + Sécurité de base + Maintenance proactive',
-    prices: {
-      sans_engagement: 149,
-      avec_engagement_mensuel: 129,
-      avec_engagement_annuel: 119
-    },
-    services: [
-      'Assistance Utilisateur Illimitée (téléphone, email, prise en main à distance)',
-      'Sécurité de Base (antivirus + surveillance)',
-      'Maintenance Proactive (mises à jour système et logicielles)',
-      'Garantie de Réactivité (prise en charge sous 4h)',
-      'Prêt de Matériel (ordinateur portable de prêt)',
-      'Système de Ticketing'
-    ],
-    url: 'https://trinexta.com/offre-essentielle/'
-  },
-  {
-    id: 'serenite',
-    name: 'Offre Sérénité',
-    description: 'Tout Essentielle + Sécurité avancée + Supervision réseau + Comité de pilotage',
-    price: 299,
-    services: [
-      'Tous les services de l\'Offre Essentielle',
-      'Sécurité Avancée (protection serveurs et messagerie)',
-      'Supervision Réseau (routeurs, switchs)',
-      'Comité de Pilotage IT trimestriel sur site'
-    ],
-    url: 'https://trinexta.com/offre-serenite/'
-  },
-  {
-    id: 'impulsion',
-    name: 'Offre Impulsion',
-    description: 'Mise à disposition de techniciens qualifiés',
-    price: null,
-    services: [
-      'Mise à disposition de techniciens IT qualifiés',
-      'Support technique sur site ou à distance',
-      'Gestion de projets informatiques',
-      'Maintenance et assistance personnalisée'
-    ],
-    url: 'https://trinexta.com/offre-impulsion/'
-  }
-];
+// Utiliser les vraies données Trinexta
+const TRINEXTA_OFFERS = trinextaOffersData.offers.map(offer => ({
+  id: offer.id,
+  name: offer.name,
+  tagline: offer.tagline,
+  description: offer.tagline,
+  pricing: offer.pricing,
+  engagement: offer.engagement,
+  features: offer.features,
+  options: offer.options || [],
+  limitations: offer.limitations || [],
+  sla: offer.sla || null,
+  url: `https://trinexta.com/offre-${offer.id}/`
+}));
 
 const CONTRACT_TYPES = [
   { id: 'sans_engagement', label: 'Sans engagement', description: 'Résiliation à tout moment' },
@@ -70,6 +38,8 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
     return date.toISOString().split('T')[0];
   });
   const [notes, setNotes] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState([]);
+  const [customCGV, setCustomCGV] = useState('');
   const [saving, setSaving] = useState(false);
 
   const getSelectedOfferDetails = () => {
@@ -80,15 +50,27 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
     const offer = getSelectedOfferDetails();
     if (!offer) return 0;
 
-    if (offer.id === 'impulsion') return 'Sur devis';
+    // Prix de base selon l'engagement
+    let basePrice = paymentFrequency === 'annuel' ? offer.pricing.annual / 12 : offer.pricing.monthly;
 
-    if (offer.id === 'essentielle') {
-      const engagement = contractType === 'sans_engagement' ? 'sans_engagement' : 
-                        paymentFrequency === 'annuel' ? 'avec_engagement_annuel' : 'avec_engagement_mensuel';
-      return offer.prices[engagement];
+    // Ajouter le prix des options sélectionnées
+    let optionsPrice = 0;
+    selectedOptions.forEach(optionId => {
+      const option = offer.options?.find(opt => opt.id === optionId);
+      if (option) {
+        optionsPrice += option.price;
+      }
+    });
+
+    return basePrice + optionsPrice;
+  };
+
+  const toggleOption = (optionId) => {
+    if (selectedOptions.includes(optionId)) {
+      setSelectedOptions(selectedOptions.filter(id => id !== optionId));
+    } else {
+      setSelectedOptions([...selectedOptions, optionId]);
     }
-
-    return offer.price;
   };
 
   const handleSave = async (sendForSignature = false) => {
