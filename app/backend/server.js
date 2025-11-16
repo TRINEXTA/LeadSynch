@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -24,6 +26,38 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 app.set('trust proxy', 1);
+
+// ========== 🛡️ HELMET - SECURITY HEADERS ==========
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false, // Désactivé pour compatibilité
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Permet CORS
+  hsts: {
+    maxAge: 31536000, // 1 an
+    includeSubDomains: true,
+    preload: true
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  noSniff: true,
+  xssFilter: true,
+  hidePoweredBy: true
+}));
+
+if (process.env.NODE_ENV !== 'production') {
+  console.log('🛡️ Helmet.js activé avec headers de sécurité');
+}
 
 // ========= ?? CORS FIX COMPLET =========
 const allowedOrigins = [
@@ -55,15 +89,47 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
+// ========== ⏱️ RATE LIMITING ==========
+// Limite générale pour toutes les requêtes API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Max 100 requêtes par IP
+  message: 'Trop de requêtes depuis cette IP, réessayez dans 15 minutes',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Limite stricte pour les endpoints d'authentification (prévention brute-force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Max 5 tentatives de login
+  message: 'Trop de tentatives de connexion, réessayez dans 15 minutes',
+  skipSuccessfulRequests: true, // Ne compte que les échecs
+});
+
+// Limite pour les uploads de fichiers
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Max 20 uploads
+  message: 'Trop d\'uploads, réessayez dans 15 minutes',
+});
+
+// Appliquer le rate limiter général sur toutes les routes /api
+app.use('/api/', apiLimiter);
+
+if (process.env.NODE_ENV !== 'production') {
+  console.log('⏱️ Rate limiting activé: 100 req/15min (API), 5 req/15min (Auth), 20 req/15min (Upload)');
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
   console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
-  
+
   res.on('finish', () => {
     const duration = Date.now() - start;
     console.log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
   });
-  
+
   next();
 });
 
@@ -82,10 +148,11 @@ import changePasswordRoute from './api/auth/change-password.js';
 import resetPassword from './api/auth/reset-password.js';
 import authLogout from './api/auth/logout.js';
 
-app.all('/api/auth/login', authLogin);
+// ✅ SÉCURITÉ: Rate limiting sur endpoints sensibles
+app.all('/api/auth/login', authLimiter, authLogin); // Max 5 tentatives/15min
 app.all('/api/auth/me', authMe);
 app.all('/api/auth/change-password', changePasswordRoute);
-app.all('/api/auth/reset-password', resetPassword);
+app.all('/api/auth/reset-password', authLimiter, resetPassword); // Max 5 tentatives/15min
 if (authLogout) app.all('/api/auth/logout', authLogout);
 
 // ========== ?? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
@@ -159,7 +226,7 @@ app.use('/api/chatbot', chatbotRoute);
 app.use('/api/verify-siret', verifySiretRoute);
 app.use('/api/send-campaign-emails', sendCampaignEmailsRoute);
 app.use('/api/leads/count', leadsCountRoute);
-app.use('/api/upload-attachment', uploadAttachmentRoute);
+app.use('/api/upload-attachment', uploadLimiter, uploadAttachmentRoute); // ✅ Max 20 uploads/15min
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
@@ -208,7 +275,7 @@ app.get('/api/tracking/lead/:lead_id/events', authMiddleware, emailTrackingContr
 app.get('/api/tracking/campaign/:campaign_id/stats', authMiddleware, emailTrackingController.getCampaignStats);
 
 import * as imageUploadController from './controllers/imageUploadController.js';
-app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage);
+app.post('/api/images/upload', authMiddleware, uploadLimiter, imageUploadController.uploadImage); // ✅ Max 20 uploads/15min
 app.get('/api/images', authMiddleware, imageUploadController.getImages);
 app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
 
