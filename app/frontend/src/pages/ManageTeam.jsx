@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit2, Trash2, UserPlus, Crown, X, UserMinus } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function ManageTeam() {
   const [teams, setTeams] = useState([]);
@@ -56,32 +57,41 @@ export default function ManageTeam() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      if (editingTeam) {
-        await api.put(`/teams/${editingTeam.id}`, formData);
-        alert('Equipe modifiee !');
-      } else {
-        await api.post('/teams', formData);
-        alert('Equipe creee !');
-      }
+
+    let promise;
+    let successMessage;
+
+    if (editingTeam) {
+      promise = api.put(`/teams/${editingTeam.id}`, formData);
+      successMessage = 'Équipe modifiée avec succès !';
+    } else {
+      promise = api.post('/teams', formData);
+      successMessage = 'Équipe créée avec succès !';
+    }
+
+    promise = promise.then(() => {
       setShowModal(false);
       setEditingTeam(null);
       setFormData({ name: '', description: '', manager_id: '' });
       loadTeams();
-    } catch (error) {
-      alert('Erreur lors de la sauvegarde');
-    }
+    });
+
+    toast.promise(promise, {
+      loading: editingTeam ? 'Modification...' : 'Création...',
+      success: successMessage,
+      error: 'Erreur lors de la sauvegarde'
+    });
   };
 
   const handleDelete = async (teamId) => {
-    if (!confirm('Supprimer cette equipe ?')) return;
-    try {
-      await api.delete(`/teams/${teamId}`);
-      alert('Equipe supprimee !');
-      loadTeams();
-    } catch (error) {
-      alert('Erreur');
-    }
+    const promise = api.delete(`/teams/${teamId}`)
+      .then(() => loadTeams());
+
+    toast.promise(promise, {
+      loading: 'Suppression...',
+      success: 'Équipe supprimée avec succès !',
+      error: 'Erreur lors de la suppression'
+    });
   };
 
   const openMembersModal = async (team) => {
@@ -91,26 +101,31 @@ export default function ManageTeam() {
   };
 
   const handleAddMember = async (userId) => {
-    try {
-      await api.post(`/teams/${selectedTeam.id}/members`, { user_id: userId });
-      await loadTeamMembers(selectedTeam.id);
-      await loadTeams();
-      alert('Membre ajouté !');
-    } catch (error) {
-      alert(error.response?.data?.message || 'Erreur lors de l\'ajout');
-    }
+    const promise = api.post(`/teams/${selectedTeam.id}/members`, { user_id: userId })
+      .then(async () => {
+        await loadTeamMembers(selectedTeam.id);
+        await loadTeams();
+      });
+
+    toast.promise(promise, {
+      loading: 'Ajout...',
+      success: 'Membre ajouté à l\'équipe !',
+      error: (err) => err.response?.data?.message || 'Erreur lors de l\'ajout'
+    });
   };
 
   const handleRemoveMember = async (userId) => {
-    if (!confirm('Retirer ce membre de l\'équipe ?')) return;
-    try {
-      await api.delete(`/teams/${selectedTeam.id}/members/${userId}`);
-      await loadTeamMembers(selectedTeam.id);
-      await loadTeams();
-      alert('Membre retiré !');
-    } catch (error) {
-      alert('Erreur lors du retrait');
-    }
+    const promise = api.delete(`/teams/${selectedTeam.id}/members/${userId}`)
+      .then(async () => {
+        await loadTeamMembers(selectedTeam.id);
+        await loadTeams();
+      });
+
+    toast.promise(promise, {
+      loading: 'Retrait...',
+      success: 'Membre retiré de l\'équipe !',
+      error: 'Erreur lors du retrait'
+    });
   };
 
   const colors = ['from-blue-500 to-blue-700', 'from-green-500 to-green-700', 'from-purple-500 to-purple-700'];

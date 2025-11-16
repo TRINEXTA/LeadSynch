@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { Tag, Edit2, Trash2, GitMerge, Plus, Search, TrendingUp, AlertCircle } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function TaxonomieSecteurs() {
   const [sectors, setSectors] = useState([]);
@@ -23,7 +24,7 @@ export default function TaxonomieSecteurs() {
       setSectors(response.data.sectors || []);
     } catch (error) {
       console.error('Erreur sectors:', error);
-      alert('Erreur lors du chargement des secteurs');
+      toast.error('Erreur lors du chargement des secteurs');
     } finally {
       setLoading(false);
     }
@@ -31,62 +32,64 @@ export default function TaxonomieSecteurs() {
 
   const handleRename = async (oldName) => {
     if (!newName.trim()) {
-      alert('Nouveau nom requis');
+      toast.error('Nouveau nom requis');
       return;
     }
 
-    try {
-      await api.put('/sectors', {
-        old_name: oldName,
-        new_name: newName.trim()
-      });
-      alert('Secteur renomme !');
+    const promise = api.put('/sectors', {
+      old_name: oldName,
+      new_name: newName.trim()
+    }).then(() => {
       setEditingSector(null);
       setNewName('');
       loadSectors();
-    } catch (error) {
-      alert('Erreur lors du renommage');
-    }
+    });
+
+    toast.promise(promise, {
+      loading: 'Renommage...',
+      success: 'Secteur renommé avec succès !',
+      error: 'Erreur lors du renommage'
+    });
   };
 
   const handleDelete = async (sector) => {
-    if (!confirm(`Supprimer le secteur "${sector}" ? Les leads seront sans secteur.`)) {
-      return;
-    }
+    const promise = api.delete(`/sectors?sector=${encodeURIComponent(sector)}`)
+      .then(() => loadSectors());
 
-    try {
-      await api.delete(`/sectors?sector=${encodeURIComponent(sector)}`);
-      alert('Secteur supprime !');
-      loadSectors();
-    } catch (error) {
-      alert('Erreur lors de la suppression');
-    }
+    toast.promise(promise, {
+      loading: 'Suppression...',
+      success: 'Secteur supprimé ! (Les leads sont maintenant sans secteur)',
+      error: 'Erreur lors de la suppression'
+    });
   };
 
   const handleMerge = async () => {
     if (selectedSectors.length === 0) {
-      alert('Selectionnez au moins un secteur a fusionner');
+      toast.error('Sélectionnez au moins un secteur à fusionner');
       return;
     }
 
     if (!mergeTarget.trim()) {
-      alert('Nom du secteur cible requis');
+      toast.error('Nom du secteur cible requis');
       return;
     }
 
-    try {
-      await api.post('/sectors', {
-        sectors_to_merge: selectedSectors,
-        target_sector: mergeTarget.trim()
-      });
-      alert(`${selectedSectors.length} secteur(s) fusionne(s) !`);
+    const count = selectedSectors.length;
+    const promise = api.post('/sectors', {
+      sectors_to_merge: selectedSectors,
+      target_sector: mergeTarget.trim()
+    }).then(() => {
       setSelectedSectors([]);
       setMergeTarget('');
       setShowMergeModal(false);
       loadSectors();
-    } catch (error) {
-      alert('Erreur lors de la fusion');
-    }
+    });
+
+    toast.promise(promise, {
+      loading: 'Fusion en cours...',
+      success: `${count} secteur(s) fusionné(s) avec succès !`,
+      error: 'Erreur lors de la fusion'
+    });
   };
 
   const toggleSelectSector = (sector) => {
