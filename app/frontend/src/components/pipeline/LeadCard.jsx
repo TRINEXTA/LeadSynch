@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History } from 'lucide-react';
+import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, AlertCircle, UserCheck, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const STAGE_CONFIG = {
@@ -28,7 +28,7 @@ const CONTRACT_STATUS = {
   rejected: { label: 'Refusé', color: 'text-red-600', icon: '❌', bg: 'bg-red-50' }
 };
 
-export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalClick, onContractClick, onEditClick, onViewHistory }) {
+export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalClick, onContractClick, onEditClick, onViewHistory, onManagerHelp, onManagerValidation, onProspectShow }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -168,54 +168,87 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
         </div>
 
         {/* Actions Rapides */}
-        <div className="grid grid-cols-5 gap-1.5">
-          <button
-            onClick={() => onEmailClick && onEmailClick(lead)}
-            className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-lg transition-all group"
-            title="Envoyer email"
-          >
-            <Mail className="w-4 h-4 text-blue-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-blue-700">Email</span>
-          </button>
-          
-          <button
-            onClick={() => onCallClick && onCallClick(lead)}
-            className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 rounded-lg transition-all group"
-            title="Logger appel"
-          >
-            <Phone className="w-4 h-4 text-green-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-green-700">Appel</span>
-          </button>
-          
-          <button
-            onClick={() => onProposalClick && onProposalClick(lead)}
-            className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-lg transition-all group"
-            title="Créer devis"
-          >
-            <FileText className="w-4 h-4 text-purple-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-purple-700">Devis</span>
-          </button>
-          
-          <button
-            onClick={() => onContractClick && onContractClick(lead)}
-            className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 rounded-lg transition-all group"
-            title="Créer contrat"
-          >
-            <FileCheck className="w-4 h-4 text-orange-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-orange-700">Contrat</span>
-          </button>
+        <div className="space-y-1.5">
+          {/* Rangée 1: Actions commerciales */}
+          <div className="grid grid-cols-4 gap-1.5">
+            <button
+              onClick={() => onEmailClick && onEmailClick(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-lg transition-all group"
+              title="Envoyer email"
+            >
+              <Mail className="w-4 h-4 text-blue-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-blue-700">Email</span>
+            </button>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewHistory && onViewHistory(lead);
-            }}
-            className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all group"
-            title="Voir l'historique"
-          >
-            <History className="w-4 h-4 text-gray-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-gray-700">Histo</span>
-          </button>
+            <button
+              onClick={() => onCallClick && onCallClick(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 rounded-lg transition-all group"
+              title="Logger appel"
+            >
+              <Phone className="w-4 h-4 text-green-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-green-700">Appel</span>
+            </button>
+
+            <button
+              onClick={() => onProposalClick && onProposalClick(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-lg transition-all group"
+              title="Créer devis"
+            >
+              <FileText className="w-4 h-4 text-purple-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-purple-700">Devis</span>
+            </button>
+
+            <button
+              onClick={() => onContractClick && onContractClick(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 rounded-lg transition-all group"
+              title="Créer contrat"
+            >
+              <FileCheck className="w-4 h-4 text-orange-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-orange-700">Contrat</span>
+            </button>
+          </div>
+
+          {/* Rangée 2: Actions Manager */}
+          <div className="grid grid-cols-4 gap-1.5">
+            <button
+              onClick={() => onManagerHelp && onManagerHelp(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 rounded-lg transition-all group border border-orange-200"
+              title="Demander aide manager"
+            >
+              <AlertCircle className="w-4 h-4 text-orange-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-orange-700">Aide</span>
+            </button>
+
+            <button
+              onClick={() => onManagerValidation && onManagerValidation(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-lg transition-all group border border-blue-200"
+              title="Demander validation manager"
+            >
+              <UserCheck className="w-4 h-4 text-blue-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-blue-700">Valid.</span>
+            </button>
+
+            <button
+              onClick={() => onProspectShow && onProspectShow(lead)}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-lg transition-all group border border-purple-200"
+              title="Marquer comme prioritaire"
+            >
+              <Star className="w-4 h-4 text-purple-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-purple-700">Prior.</span>
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewHistory && onViewHistory(lead);
+              }}
+              className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all group"
+              title="Voir l'historique"
+            >
+              <History className="w-4 h-4 text-gray-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-gray-700">Histo</span>
+            </button>
+          </div>
         </div>
       </div>
 

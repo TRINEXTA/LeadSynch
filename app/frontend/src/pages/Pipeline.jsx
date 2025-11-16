@@ -10,6 +10,7 @@ import QuickCallModal from '../components/pipeline/QuickCallModal';
 import QuickProposalModal from '../components/pipeline/QuickProposalModal';
 import QuickContractModal from '../components/pipeline/QuickContractModal';
 import HistoryModal from '../components/pipeline/HistoryModal';
+import ManagerRequestModal from '../components/pipeline/ManagerRequestModal';
 
 const STAGES = [
   { id: 'cold_call', name: 'Cold Call', color: 'bg-indigo-500', textColor: 'text-indigo-700', bgLight: 'bg-indigo-50' },
@@ -45,6 +46,10 @@ export default function Pipeline() {
   const [showContractModal, setShowContractModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
+
+  // Manager Requests Modals
+  const [showManagerRequestModal, setShowManagerRequestModal] = useState(false);
+  const [managerRequestType, setManagerRequestType] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -162,6 +167,24 @@ export default function Pipeline() {
   const handleViewHistory = (lead) => {
     setSelectedLead(lead);
     setShowHistoryModal(true);
+  };
+
+  const handleManagerHelp = (lead) => {
+    setSelectedLead(lead);
+    setManagerRequestType('help');
+    setShowManagerRequestModal(true);
+  };
+
+  const handleManagerValidation = (lead) => {
+    setSelectedLead(lead);
+    setManagerRequestType('validation');
+    setShowManagerRequestModal(true);
+  };
+
+  const handleProspectShow = (lead) => {
+    setSelectedLead(lead);
+    setManagerRequestType('show');
+    setShowManagerRequestModal(true);
   };
 
   const handleCreateLead = (stageId) => {
@@ -385,6 +408,9 @@ export default function Pipeline() {
                                     onContractClick={handleContractClick}
                                     onEditClick={handleEditClick}
                                     onViewHistory={handleViewHistory}
+                                    onManagerHelp={handleManagerHelp}
+                                    onManagerValidation={handleManagerValidation}
+                                    onProspectShow={handleProspectShow}
                                   />
                                 </div>
                               )}
@@ -467,6 +493,19 @@ export default function Pipeline() {
             setShowHistoryModal(false);
             setSelectedLead(null);
           }}
+        />
+      )}
+
+      {showManagerRequestModal && selectedLead && managerRequestType && (
+        <ManagerRequestModal
+          lead={selectedLead}
+          requestType={managerRequestType}
+          onClose={() => {
+            setShowManagerRequestModal(false);
+            setSelectedLead(null);
+            setManagerRequestType(null);
+          }}
+          onSuccess={handleModalSuccess}
         />
       )}
     </div>
