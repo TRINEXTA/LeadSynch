@@ -65,6 +65,9 @@ import ManageSectorTaxonomy from './pages/ManageSectorTaxonomy';
 import TestTracking from './pages/TestTracking';
 import TestZone from './pages/TestZone';
 
+// Formation
+import Formation from './pages/Formation';
+
 // Signature de contrats
 import SignContract from './pages/SignContract';
 
@@ -139,6 +142,7 @@ function App() {
             <Route path="/ManageSectorTaxonomy" element={<ManageSectorTaxonomy />} />
             <Route path="/TestTracking" element={<TestTracking />} />
             <Route path="/TestZone" element={<TestZone />} />
+            <Route path="/Formation" element={<Formation />} />
 
             <Route path="/billing" element={<Billing />} />
             <Route path="/lead-credits" element={<LeadCredits />} />

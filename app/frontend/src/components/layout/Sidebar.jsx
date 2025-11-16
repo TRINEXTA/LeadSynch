@@ -22,7 +22,8 @@ import {
   Megaphone,
   CreditCard,
   DollarSign,
-  Copy
+  Copy,
+  GraduationCap
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -127,7 +128,8 @@ export default function Sidebar() {
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users },
         { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen },
         { name: 'Migration Leads', href: '/MigrateLeads', icon: Database },
-        { name: 'Zone de Test', href: '/TestZone', icon: TestTube }
+        { name: 'Zone de Test', href: '/TestZone', icon: TestTube },
+        { name: 'Formation', href: '/Formation', icon: GraduationCap }
       ]
     }
   }
