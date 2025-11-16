@@ -1,5 +1,20 @@
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne, execute } from '../lib/db.js';
+import { z } from 'zod';
+
+// Validation UUID
+const uuidSchema = z.string().uuid('ID invalide');
+
+// Helper pour extraire et valider un UUID depuis l'URL
+function extractAndValidateUuid(url, position) {
+  const parts = url.split('/');
+  const id = parts[position];
+  try {
+    return uuidSchema.parse(id);
+  } catch (error) {
+    throw new Error(`ID invalide à la position ${position}`);
+  }
+}
 
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
@@ -25,8 +40,8 @@ async function handler(req, res) {
 
     // GET - Membres d'une équipe
     if (req.method === 'GET' && req.url.includes('/members')) {
-      const teamId = req.url.split('/')[1];
-      
+      const teamId = extractAndValidateUuid(req.url, 1);
+
       const members = await queryAll(
         `SELECT tm.*, u.first_name, u.last_name, u.email, u.role as user_role
          FROM team_members tm
@@ -58,7 +73,7 @@ async function handler(req, res) {
 
     // POST - Ajouter un membre à une équipe
     if (req.method === 'POST' && req.url.includes('/members')) {
-      const teamId = req.url.split('/')[1];
+      const teamId = extractAndValidateUuid(req.url, 1);
       const { user_id, role } = req.body;
 
       if (!user_id) {
@@ -77,7 +92,7 @@ async function handler(req, res) {
 
     // PUT - Modifier une équipe
     if (req.method === 'PUT') {
-      const teamId = req.url.split('/')[1];
+      const teamId = extractAndValidateUuid(req.url, 1);
       const { name, description, manager_id } = req.body;
 
       await execute(
@@ -92,7 +107,7 @@ async function handler(req, res) {
 
     // DELETE - Supprimer une équipe
     if (req.method === 'DELETE' && !req.url.includes('/members')) {
-      const teamId = req.url.split('/')[1];
+      const teamId = extractAndValidateUuid(req.url, 1);
 
       // Supprimer d'abord les membres
       await execute('DELETE FROM team_members WHERE team_id = $1', [teamId]);
@@ -105,9 +120,8 @@ async function handler(req, res) {
 
     // DELETE - Retirer un membre d'une équipe
     if (req.method === 'DELETE' && req.url.includes('/members')) {
-      const parts = req.url.split('/');
-      const teamId = parts[1];
-      const userId = parts[3];
+      const teamId = extractAndValidateUuid(req.url, 1);
+      const userId = extractAndValidateUuid(req.url, 3);
 
       await execute(
         'DELETE FROM team_members WHERE team_id = $1 AND user_id = $2',
