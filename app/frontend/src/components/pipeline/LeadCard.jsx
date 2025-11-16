@@ -115,24 +115,6 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
                       <History className="w-4 h-4" />
                       Historique
                     </button>
-
-                    <div className="border-t border-gray-200 my-1" />
-
-                    <button
-                      onClick={() => { onRequestValidation && onRequestValidation(lead); setShowActions(false); }}
-                      className="w-full px-3 py-2 text-left hover:bg-green-50 text-sm flex items-center gap-2 text-green-700"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Demande validation
-                    </button>
-
-                    <button
-                      onClick={() => { onRequestHelp && onRequestHelp(lead); setShowActions(false); }}
-                      className="w-full px-3 py-2 text-left hover:bg-blue-50 text-sm flex items-center gap-2 text-blue-700"
-                    >
-                      <HelpCircle className="w-4 h-4" />
-                      Demande d'aide
-                    </button>
                   </div>
                 </>
               )}
@@ -185,8 +167,8 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
           </div>
         </div>
 
-        {/* Actions Rapides */}
-        <div className="grid grid-cols-5 gap-1.5">
+        {/* Actions Rapides - Ligne 1 */}
+        <div className="grid grid-cols-5 gap-1.5 mb-2">
           <button
             onClick={() => onEmailClick && onEmailClick(lead)}
             className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-lg transition-all group"
@@ -195,7 +177,7 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
             <Mail className="w-4 h-4 text-blue-600 mb-1 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-bold text-blue-700">Email</span>
           </button>
-          
+
           <button
             onClick={() => onCallClick && onCallClick(lead)}
             className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 rounded-lg transition-all group"
@@ -204,7 +186,7 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
             <Phone className="w-4 h-4 text-green-600 mb-1 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-bold text-green-700">Appel</span>
           </button>
-          
+
           <button
             onClick={() => onProposalClick && onProposalClick(lead)}
             className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-lg transition-all group"
@@ -213,7 +195,7 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
             <FileText className="w-4 h-4 text-purple-600 mb-1 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-bold text-purple-700">Devis</span>
           </button>
-          
+
           <button
             onClick={() => onContractClick && onContractClick(lead)}
             className="flex flex-col items-center justify-center p-2 bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 rounded-lg transition-all group"
@@ -233,6 +215,27 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
           >
             <History className="w-4 h-4 text-gray-600 mb-1 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-bold text-gray-700">Histo</span>
+          </button>
+        </div>
+
+        {/* Actions Rapides - Ligne 2 : Demandes */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            onClick={() => onRequestValidation && onRequestValidation(lead)}
+            className="flex items-center justify-center gap-1 p-2 bg-gradient-to-br from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 rounded-lg transition-all"
+            title="Demander validation"
+          >
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="text-xs font-bold text-emerald-700">Validation</span>
+          </button>
+
+          <button
+            onClick={() => onRequestHelp && onRequestHelp(lead)}
+            className="flex items-center justify-center gap-1 p-2 bg-gradient-to-br from-cyan-50 to-cyan-100 hover:from-cyan-100 hover:to-cyan-200 rounded-lg transition-all"
+            title="Demander de l'aide"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-cyan-600" />
+            <span className="text-xs font-bold text-cyan-700">Aide</span>
           </button>
         </div>
       </div>
