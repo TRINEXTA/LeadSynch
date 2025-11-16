@@ -2,16 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  Users, Briefcase, Phone, Mail, TrendingUp, Calendar, Target, DollarSign,
+  Users, Phone, Mail, TrendingUp, Calendar, Target, DollarSign,
   Activity, Eye, MousePointer, Send, CheckCircle, Award, Zap, AlertCircle,
-  Clock, Bell, FileText, UserCheck, TrendingDown, ArrowRight, Sparkles,
-  BarChart3, PlayCircle, PauseCircle, MessageSquare, ThumbsUp, ThumbsDown
+  Clock, Bell, FileText, UserCheck, ArrowRight, Sparkles,
+  BarChart3, PlayCircle, MessageSquare, ThumbsUp, ThumbsDown, MapPin
 } from 'lucide-react';
 import api from '../api/axios';
 
 export default function DashboardUniversel() {
   const [stats, setStats] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [campaigns, setCampaigns] = useState([]);
+  const [topCommercials, setTopCommercials] = useState([]);
+  const [pendingValidations, setPendingValidations] = useState([]);
+  const [urgentAlerts, setUrgentAlerts] = useState([]);
+  const [todayAppointments, setTodayAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
@@ -20,12 +25,46 @@ export default function DashboardUniversel() {
   const fetchDashboard = async () => {
     try {
       setRefreshing(true);
-      const [statsRes, dashRes] = await Promise.all([
+
+      // Appels API RÉELS
+      const [statsRes, dashRes, campaignsRes, followUpsRes] = await Promise.all([
         api.get('/stats'),
-        api.get('/stats/dashboard')
+        api.get('/stats/dashboard'),
+        api.get('/campaigns').catch(() => ({ data: { campaigns: [] } })),
+        api.get('/follow-ups').catch(() => ({ data: { followups: [] } }))
       ]);
+
       setStats(statsRes.data.stats);
       setDashboardData(dashRes.data);
+
+      // Top 5 campagnes réelles
+      const allCampaigns = campaignsRes.data.campaigns || [];
+      const activeCampaigns = allCampaigns
+        .filter(c => c.status === 'active' || c.status === 'running')
+        .sort((a, b) => (b.sent_count || 0) - (a.sent_count || 0))
+        .slice(0, 5);
+      setCampaigns(activeCampaigns);
+
+      // Rendez-vous du jour RÉELS
+      const today = new Date().toISOString().split('T')[0];
+      const todayFollowUps = (followUpsRes.data.followups || [])
+        .filter(f => f.scheduled_date && f.scheduled_date.startsWith(today) && !f.completed)
+        .slice(0, 5);
+      setTodayAppointments(todayFollowUps);
+
+      // Charger les alertes urgentes RÉELLES
+      await loadUrgentAlerts();
+
+      // Charger les validations en attente RÉELLES (si Manager)
+      if (user?.role === 'manager' || user?.role === 'admin') {
+        await loadPendingValidations();
+      }
+
+      // Charger top commerciaux RÉELS (si Admin/Manager)
+      if (user?.role === 'admin' || user?.role === 'manager') {
+        await loadTopCommercials();
+      }
+
     } catch (error) {
       console.error('Erreur dashboard:', error?.response?.data || error.message);
     } finally {
@@ -34,11 +73,75 @@ export default function DashboardUniversel() {
     }
   };
 
+  const loadUrgentAlerts = async () => {
+    try {
+      // Leads chauds sans activité depuis 48h
+      const hoursAgo48 = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+      const alerts = [];
+
+      // Alert 1: Leads chauds inactifs
+      const leadsRes = await api.get(`/leads?status=hot&updated_before=${hoursAgo48}&limit=1`).catch(() => ({ data: { total: 0 } }));
+      if (leadsRes.data.total > 0) {
+        alerts.push({
+          type: 'lead',
+          text: `${leadsRes.data.total} leads chauds sans activité depuis 48h`,
+          icon: TrendingUp,
+          color: 'red',
+          action: () => navigate('/leads?status=hot&inactive=48h')
+        });
+      }
+
+      // Alert 2: Campagnes avec faible taux d'ouverture
+      const lowOpenCampaigns = campaigns.filter(c => {
+        const openRate = c.sent_count > 0 ? ((c.opened_count || 0) / c.sent_count) * 100 : 0;
+        return openRate < 15 && c.sent_count > 50;
+      });
+      if (lowOpenCampaigns.length > 0) {
+        alerts.push({
+          type: 'campaign',
+          text: `${lowOpenCampaigns.length} campagne(s) avec taux d'ouverture < 15%`,
+          icon: Mail,
+          color: 'yellow',
+          action: () => navigate('/campaigns')
+        });
+      }
+
+      setUrgentAlerts(alerts);
+    } catch (error) {
+      console.error('Erreur alerts:', error);
+    }
+  };
+
+  const loadPendingValidations = async () => {
+    try {
+      // TODO: Créer endpoint /api/validations
+      // Pour l'instant, simuler avec données vides
+      setPendingValidations([]);
+    } catch (error) {
+      console.error('Erreur validations:', error);
+    }
+  };
+
+  const loadTopCommercials = async () => {
+    try {
+      // Charger stats des utilisateurs RÉELLES
+      const usersRes = await api.get('/users').catch(() => ({ data: { users: [] } }));
+      const commercials = (usersRes.data.users || [])
+        .filter(u => u.role === 'commercial' || u.role === 'manager')
+        .slice(0, 5);
+
+      setTopCommercials(commercials);
+    } catch (error) {
+      console.error('Erreur top commercials:', error);
+    }
+  };
+
   useEffect(() => {
     fetchDashboard();
     const interval = setInterval(fetchDashboard, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
@@ -108,7 +211,7 @@ export default function DashboardUniversel() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6">
       <div className="max-w-[1800px] mx-auto">
 
-        {/* Header avec gradient */}
+        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -138,7 +241,7 @@ export default function DashboardUniversel() {
           </div>
         </div>
 
-        {/* KPIs principaux en glassmorphism */}
+        {/* KPIs principaux - VRAIES DONNÉES */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <GlassWidget
             title="Prospects Actifs"
@@ -183,8 +286,8 @@ export default function DashboardUniversel() {
           {/* Colonne gauche - Large */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Alertes urgentes */}
-            {(isAdmin || isManager) && (
+            {/* Alertes urgentes - VRAIES DONNÉES */}
+            {(isAdmin || isManager) && urgentAlerts.length > 0 && (
               <div className="backdrop-blur-md bg-gradient-to-br from-red-50/80 to-orange-50/80 border-2 border-red-200 rounded-2xl p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -197,15 +300,12 @@ export default function DashboardUniversel() {
                 </div>
 
                 <div className="space-y-3">
-                  {[
-                    { type: 'validation', text: '3 devis en attente de validation', icon: FileText, color: 'orange' },
-                    { type: 'lead', text: '12 leads chauds sans activité depuis 48h', icon: TrendingUp, color: 'red' },
-                    { type: 'campaign', text: 'Campagne "IT Services" - Taux ouverture faible (12%)', icon: Mail, color: 'yellow' }
-                  ].map((alert, idx) => {
+                  {urgentAlerts.map((alert, idx) => {
                     const AlertIcon = alert.icon;
                     return (
                       <div
                         key={idx}
+                        onClick={alert.action}
                         className="flex items-center gap-3 bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
                       >
                         <div className={`p-2 bg-${alert.color}-100 rounded-lg`}>
@@ -220,237 +320,85 @@ export default function DashboardUniversel() {
               </div>
             )}
 
-            {/* Validations Manager */}
-            {isManager && (
+            {/* Top 5 Campagnes - VRAIES DONNÉES */}
+            {campaigns.length > 0 && (
               <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
-                      <CheckCircle className="w-6 h-6 text-white" />
+                    <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+                      <Zap className="w-6 h-6 text-white" />
                     </div>
-                    Validations en attente
+                    Top Campagnes Actives
                   </h2>
-                  <span className="px-4 py-2 bg-red-500 text-white rounded-full font-bold text-sm">3</span>
-                </div>
-
-                <div className="space-y-4">
-                  {[
-                    { type: 'Devis', client: 'Entreprise ABC', amount: '15 000 €', commercial: 'Jean Dupont', urgent: true },
-                    { type: 'Contrat', client: 'Société XYZ', amount: '25 000 €', commercial: 'Marie Martin', urgent: false },
-                    { type: 'Devis', client: 'SARL Tech', amount: '8 500 €', commercial: 'Pierre Durand', urgent: true }
-                  ].map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-white/60 backdrop-blur-sm p-5 rounded-xl border border-white/60 hover:shadow-xl transition-all"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            item.type === 'Devis' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                          }`}>
-                            {item.type}
-                          </span>
-                          {item.urgent && (
-                            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold animate-pulse">
-                              URGENT
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xl font-bold text-gray-900">{item.amount}</span>
-                      </div>
-
-                      <div className="mb-4">
-                        <p className="font-bold text-gray-900 text-lg">{item.client}</p>
-                        <p className="text-sm text-gray-600">Par {item.commercial}</p>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <button className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                          <ThumbsUp className="w-4 h-4" />
-                          Approuver
-                        </button>
-                        <button className="flex-1 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                          <ThumbsDown className="w-4 h-4" />
-                          Refuser
-                        </button>
-                        <button className="px-4 py-2 bg-white/60 border border-gray-300 rounded-lg font-semibold hover:bg-white/80 transition-all">
-                          Détails
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Top 5 Campagnes */}
-            <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
-                    <Zap className="w-6 h-6 text-white" />
-                  </div>
-                  Top 5 Campagnes Actives
-                </h2>
-                <button
-                  onClick={() => navigate('/campaigns')}
-                  className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
-                >
-                  Voir tout
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  { name: 'IT Services - Paris', sent: 1250, opened: 520, clicked: 95, rate: 41.6, status: 'active' },
-                  { name: 'Juridique - Lyon', sent: 850, opened: 380, clicked: 72, rate: 44.7, status: 'active' },
-                  { name: 'Marketing - Bordeaux', sent: 650, opened: 195, clicked: 38, rate: 30.0, status: 'active' },
-                  { name: 'Finance - Toulouse', sent: 420, opened: 168, clicked: 31, rate: 40.0, status: 'paused' },
-                  { name: 'RH - Lille', sent: 380, opened: 145, clicked: 25, rate: 38.2, status: 'active' }
-                ].map((campaign, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
+                  <button
                     onClick={() => navigate('/campaigns')}
+                    className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 text-white font-bold text-sm">
-                          {idx + 1}
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-900">{campaign.name}</p>
-                          <p className="text-xs text-gray-600">{campaign.sent} envoyés</p>
-                        </div>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        campaign.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {campaign.status === 'active' ? 'Active' : 'Pause'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <div className="text-xs text-gray-600">Ouvertures</div>
-                        <div className="text-lg font-bold text-green-600">{campaign.opened}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-600">Clics</div>
-                        <div className="text-lg font-bold text-blue-600">{campaign.clicked}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-600">Taux</div>
-                        <div className="text-lg font-bold text-purple-600">{campaign.rate}%</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Top 5 Commerciaux */}
-            {(isAdmin || isManager) && (
-              <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg">
-                      <Award className="w-6 h-6 text-white" />
-                    </div>
-                    Top 5 Commerciaux du Mois
-                  </h2>
+                    Voir tout
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
 
                 <div className="space-y-3">
-                  {[
-                    { name: 'Jean Dupont', deals: 12, revenue: 145000, conversion: 42 },
-                    { name: 'Marie Martin', deals: 10, revenue: 128000, conversion: 38 },
-                    { name: 'Pierre Durand', deals: 9, revenue: 98000, conversion: 35 },
-                    { name: 'Sophie Bernard', deals: 8, revenue: 87000, conversion: 32 },
-                    { name: 'Luc Moreau', deals: 7, revenue: 76000, conversion: 30 }
-                  ].map((commercial, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold text-white ${
-                            idx === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600 text-lg' :
-                            idx === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
-                            idx === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
-                            'bg-gradient-to-br from-blue-400 to-blue-600'
+                  {campaigns.map((campaign, idx) => {
+                    const openRate = campaign.sent_count > 0
+                      ? ((campaign.opened_count || 0) / campaign.sent_count * 100).toFixed(1)
+                      : 0;
+                    const clickRate = campaign.sent_count > 0
+                      ? ((campaign.clicked_count || 0) / campaign.sent_count * 100).toFixed(1)
+                      : 0;
+
+                    return (
+                      <div
+                        key={campaign.id}
+                        className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
+                        onClick={() => navigate(`/CampaignDetails?id=${campaign.id}`)}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 text-white font-bold text-sm">
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900">{campaign.name}</p>
+                              <p className="text-xs text-gray-600">{campaign.sent_count || 0} envoyés</p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            campaign.status === 'active' || campaign.status === 'running'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-orange-100 text-orange-700'
                           }`}>
-                            {idx + 1}
+                            {campaign.status === 'running' ? 'En cours' : campaign.status}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div>
+                            <div className="text-xs text-gray-600">Ouvertures</div>
+                            <div className="text-lg font-bold text-green-600">{campaign.opened_count || 0}</div>
+                            <div className="text-xs text-gray-500">{openRate}%</div>
                           </div>
                           <div>
-                            <p className="font-bold text-gray-900">{commercial.name}</p>
-                            <p className="text-sm text-gray-600">{commercial.deals} deals • {commercial.conversion}% conversion</p>
+                            <div className="text-xs text-gray-600">Clics</div>
+                            <div className="text-lg font-bold text-blue-600">{campaign.clicked_count || 0}</div>
+                            <div className="text-xs text-gray-500">{clickRate}%</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-600">Type</div>
+                            <div className="text-sm font-bold text-purple-600">
+                              {campaign.type === 'email' ? 'Email' : 'Appel'}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-green-600">{formatCurrency(commercial.revenue)}</p>
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Colonne droite - Sidebar */}
-          <div className="space-y-6">
-
-            {/* Agenda du jour */}
-            <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg">
-                  <Calendar className="w-6 h-6 text-white" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">Agenda du Jour</h2>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  { time: '10:00', type: 'RDV', title: 'Entreprise ABC', icon: Phone, color: 'blue' },
-                  { time: '14:30', type: 'Appel', title: 'Société XYZ - Relance', icon: Phone, color: 'green' },
-                  { time: '16:00', type: 'RDV', title: 'SARL Tech - Signature', icon: FileText, color: 'purple' }
-                ].map((event, idx) => {
-                  const EventIcon = event.icon;
-                  return (
-                    <div
-                      key={idx}
-                      className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 bg-${event.color}-100 rounded-lg`}>
-                          <EventIcon className={`w-5 h-5 text-${event.color}-600`} />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Clock className="w-4 h-4 text-gray-600" />
-                            <span className="font-bold text-gray-900">{event.time}</span>
-                          </div>
-                          <p className="text-sm font-medium text-gray-700">{event.title}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => navigate('/FollowUps')}
-                className="w-full mt-4 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2"
-              >
-                <Calendar className="w-5 h-5" />
-                Voir tous les rappels
-              </button>
-            </div>
-
-            {/* Performances 7 jours */}
+            {/* Performance 7 jours - VRAIES DONNÉES */}
             <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
@@ -463,43 +411,114 @@ export default function DashboardUniversel() {
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Leads générés</span>
-                    <span className="text-sm font-bold text-gray-900">+156</span>
+                    <span className="text-sm font-bold text-gray-900">{dashboardData?.prospects?.count || 0}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full" style={{width: '78%'}} />
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                      style={{width: `${Math.min(100, (dashboardData?.prospects?.count || 0) / 100)}%`}}
+                    />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Emails envoyés</span>
-                    <span className="text-sm font-bold text-gray-900">2,340</span>
+                    <span className="text-sm font-bold text-gray-900">{dashboardData?.prospects?.sent || 0}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-3 rounded-full" style={{width: '92%'}} />
+                    <div
+                      className="bg-gradient-to-r from-purple-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+                      style={{width: `${Math.min(100, (dashboardData?.prospects?.sent || 0) / 50)}%`}}
+                    />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Conversions</span>
-                    <span className="text-sm font-bold text-gray-900">23</span>
+                    <span className="text-sm font-bold text-gray-900">{dashboardData?.leads?.won || 0}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full" style={{width: '45%'}} />
+                    <div
+                      className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500"
+                      style={{width: `${Math.min(100, (dashboardData?.leads?.won || 0) * 10)}%`}}
+                    />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Revenue</span>
-                    <span className="text-sm font-bold text-green-600">{formatCurrency(128500)}</span>
+                    <span className="text-sm font-bold text-green-600">{formatCurrency(dashboardData?.revenue?.actual || 0)}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-yellow-500 to-orange-600 h-3 rounded-full" style={{width: '65%'}} />
+                    <div
+                      className="bg-gradient-to-r from-yellow-500 to-orange-600 h-3 rounded-full transition-all duration-500"
+                      style={{width: `${Math.min(100, ((dashboardData?.revenue?.actual || 0) / (dashboardData?.revenue?.target || 1)) * 100)}%`}}
+                    />
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Colonne droite - Sidebar */}
+          <div className="space-y-6">
+
+            {/* Agenda du jour - VRAIES DONNÉES */}
+            <div className="backdrop-blur-md bg-white/40 border border-white/60 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg">
+                  <Calendar className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Agenda du Jour</h2>
+              </div>
+
+              {todayAppointments.length > 0 ? (
+                <div className="space-y-3">
+                  {todayAppointments.map((event, idx) => (
+                    <div
+                      key={event.id}
+                      className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/60 hover:shadow-lg transition-all cursor-pointer"
+                      onClick={() => navigate('/FollowUps')}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 ${
+                          event.type === 'meeting' ? 'bg-purple-100' :
+                          event.type === 'call' ? 'bg-blue-100' : 'bg-green-100'
+                        } rounded-lg`}>
+                          {event.type === 'meeting' ? <FileText className="w-5 h-5 text-purple-600" /> :
+                           event.type === 'call' ? <Phone className="w-5 h-5 text-blue-600" /> :
+                           <CheckCircle className="w-5 h-5 text-green-600" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Clock className="w-4 h-4 text-gray-600" />
+                            <span className="font-bold text-gray-900">
+                              {new Date(event.scheduled_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-700">{event.title || event.company_name || 'RDV'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>Aucun rendez-vous aujourd'hui</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => navigate('/FollowUps')}
+                className="w-full mt-4 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2"
+              >
+                <Calendar className="w-5 h-5" />
+                Voir tous les rappels
+              </button>
             </div>
 
             {/* Asefi Assistant */}
@@ -518,7 +537,10 @@ export default function DashboardUniversel() {
                 Besoin d'aide ? Posez-moi vos questions sur vos leads, campagnes ou statistiques.
               </p>
 
-              <button className="w-full px-4 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={() => navigate('/chatbot')}
+                className="w-full px-4 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+              >
                 <MessageSquare className="w-5 h-5" />
                 Discuter avec Asefi
               </button>
