@@ -51,8 +51,10 @@ router.get('/', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const tenant_id = req.user.tenant_id;
-    const user_id = req.user.id;
-    const { lead_id, type, priority, title, notes, scheduled_date } = req.body;
+    const { lead_id, user_id, type, priority, title, notes, scheduled_date } = req.body;
+
+    // Utiliser user_id du body (attribution) OU req.user.id (auto-assignation)
+    const assigned_user_id = user_id || req.user.id;
 
     if (!lead_id || !scheduled_date) {
       return res.status(400).json({ error: 'lead_id et scheduled_date requis' });
@@ -66,7 +68,7 @@ router.post('/', authenticateToken, async (req, res) => {
       [
         tenant_id,
         lead_id,
-        user_id,
+        assigned_user_id,
         type || 'call',
         priority || 'medium',
         title || null,
