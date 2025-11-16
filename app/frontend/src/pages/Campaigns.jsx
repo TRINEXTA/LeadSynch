@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { Plus, Mail, Phone, MessageSquare, Send, Play, Pause, StopCircle, RefreshCw, Edit, Trash2, Archive, Clock, TrendingUp, Users, Target, Calendar, Filter, Search, Eye, MoreVertical, AlertCircle, CheckCircle, XCircle, BarChart3, X } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -84,109 +85,77 @@ export default function Campaigns() {
   };
 
   const handleStart = async (campaignId) => {
-    try {
-      console.log('▶️ Démarrage campagne:', campaignId);
-      await api.post(`/campaigns/${campaignId}/start`);
-      loadCampaigns();
-      alert('✅ Campagne demarree');
-    } catch (error) {
-      console.error('❌ Erreur start:', error);
-      alert('❌ Erreur demarrage campagne');
-    }
+    const promise = api.post(`/campaigns/${campaignId}/start`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Démarrage en cours...',
+      success: 'Campagne démarrée avec succès',
+      error: 'Erreur lors du démarrage',
+    });
   };
 
   const handlePause = async (campaignId) => {
-    if (confirm('Mettre en pause cette campagne ?')) {
-      try {
-        console.log('⏸️ Pause campagne:', campaignId);
-        await api.post(`/campaigns/${campaignId}/pause`);
-        loadCampaigns();
-        alert('✅ Campagne mise en pause');
-      } catch (error) {
-        console.error('❌ Erreur pause:', error);
-        alert('❌ Erreur pause campagne');
-      }
-    }
+    const promise = api.post(`/campaigns/${campaignId}/pause`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Mise en pause...',
+      success: 'Campagne mise en pause',
+      error: 'Erreur lors de la pause',
+    });
   };
 
   const handleResume = async (campaignId) => {
-    try {
-      console.log('▶️ Reprise campagne:', campaignId);
-      await api.post(`/campaigns/${campaignId}/resume`);
-      loadCampaigns();
-      alert('✅ Campagne relancee');
-    } catch (error) {
-      console.error('❌ Erreur resume:', error);
-      alert('❌ Erreur relance campagne');
-    }
+    const promise = api.post(`/campaigns/${campaignId}/resume`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Reprise en cours...',
+      success: 'Campagne relancée avec succès',
+      error: 'Erreur lors de la reprise',
+    });
   };
 
   const handleStop = async (campaignId) => {
-    if (confirm('ATTENTION: Arrêter définitivement cette campagne ? Elle ne pourra plus être relancée.')) {
-      try {
-        console.log('⏹️ Arrêt campagne:', campaignId);
-        await api.post(`/campaigns/${campaignId}/stop`);
-        loadCampaigns();
-        alert('✅ Campagne arretee');
-      } catch (error) {
-        console.error('❌ Erreur stop:', error);
-        alert('❌ Erreur arrêt campagne');
-      }
-    }
+    const promise = api.post(`/campaigns/${campaignId}/stop`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Arrêt en cours...',
+      success: 'Campagne arrêtée définitivement',
+      error: 'Erreur lors de l\'arrêt',
+    });
   };
 
   const handleArchive = async (campaignId) => {
-    if (confirm('Archiver cette campagne ?')) {
-      try {
-        console.log('📦 Archivage campagne:', campaignId);
-        await api.post(`/campaigns/${campaignId}/archive`);
-        loadCampaigns();
-        alert('✅ Campagne archivee');
-      } catch (error) {
-        console.error('❌ Erreur archive:', error);
-        alert('❌ Erreur archivage');
-      }
-    }
+    const promise = api.post(`/campaigns/${campaignId}/archive`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Archivage en cours...',
+      success: 'Campagne archivée',
+      error: 'Erreur lors de l\'archivage',
+    });
   };
 
   const handleUnarchive = async (campaignId) => {
-    try {
-      console.log('📤 Désarchivage campagne:', campaignId);
-      await api.post(`/campaigns/${campaignId}/unarchive`);
-      loadCampaigns();
-      alert('✅ Campagne desarchivee');
-    } catch (error) {
-      console.error('❌ Erreur unarchive:', error);
-      alert('❌ Erreur désarchivage');
-    }
+    const promise = api.post(`/campaigns/${campaignId}/unarchive`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Désarchivage en cours...',
+      success: 'Campagne désarchivée',
+      error: 'Erreur lors du désarchivage',
+    });
   };
 
   const handleDelete = async (campaignId) => {
-    if (confirm('⚠️ ATTENTION: Supprimer définitivement cette campagne ? Cette action est irréversible !')) {
-      if (confirm('Êtes-vous vraiment sûr ? Toutes les données seront perdues.')) {
-        try {
-          console.log('🗑️ Suppression campagne:', campaignId);
-          await api.delete(`/campaigns/${campaignId}`);
-          loadCampaigns();
-          alert('✅ Campagne supprimee');
-        } catch (error) {
-          console.error('❌ Erreur suppression:', error);
-          alert('❌ Erreur suppression');
-        }
-      }
-    }
+    const promise = api.delete(`/campaigns/${campaignId}`).then(() => loadCampaigns());
+    toast.promise(promise, {
+      loading: 'Suppression en cours...',
+      success: 'Campagne supprimée définitivement',
+      error: 'Erreur lors de la suppression',
+    });
   };
 
   const handleDuplicate = async (campaignId) => {
     try {
-      console.log('📋 Duplication campagne:', campaignId);
       const response = await api.post(`/campaigns/${campaignId}/duplicate`);
       loadCampaigns();
-      alert('✅ Campagne dupliquee');
+      toast.success('Campagne dupliquée avec succès');
       navigate(`/CampaignsManager?edit=${response.data.campaign.id}`);
     } catch (error) {
-      console.error('❌ Erreur duplication:', error);
-      alert('❌ Erreur duplication');
+      console.error('Erreur duplication:', error);
+      toast.error('Erreur lors de la duplication');
     }
   };
 

@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Mail, Sparkles, Code, Edit, Trash2, X, Wand2, Crown, Lock } from 'lucide-react';
 import api from '../api/axios';
 import EmailTemplateEditor from '../components/EmailTemplateEditor';
@@ -80,7 +81,9 @@ export default function EmailTemplates() {
   const handleCreateClick = (mode) => {
     if (mode === 'ai') {
       if (!currentPlan.asefi) {
-        alert('Asefi IA n\'est pas disponible sur le plan FREE.\n\nPassez au plan BASIC (49EUR/mois) pour debloquer cette fonctionnalite !');
+        toast.error('Asefi IA n\'est pas disponible sur le plan FREE.\n\nPassez au plan BASIC (49EUR/mois) pour débloquer cette fonctionnalité !', {
+          duration: 6000
+        });
         return;
       }
       setAsefiForm({ name: '', subject: '', prompt: '', tone: 'professional', target: 'B2B' });
@@ -96,25 +99,23 @@ export default function EmailTemplates() {
 
   const handleGenerateWithAsefi = async () => {
     if (!asefiForm.name || !asefiForm.subject || !asefiForm.prompt) {
-      alert('Veuillez remplir tous les champs');
+      toast.error('Veuillez remplir tous les champs');
       return;
     }
 
     if (asefiForm.prompt.length > currentPlan.characterLimit) {
-      alert(`Votre description depasse la limite de ${currentPlan.characterLimit} caracteres pour le plan ${currentPlan.name}`);
+      toast.error(`Votre description dépasse la limite de ${currentPlan.characterLimit} caractères pour le plan ${currentPlan.name}`);
       return;
     }
 
     setGeneratingAsefi(true);
 
-    try {
-      const response = await api.post('/asefi/generate-email-template', {
-        prompt: asefiForm.prompt,
-        tone: asefiForm.tone,
-        target: asefiForm.target,
-        subject: asefiForm.subject
-      });
-
+    const promise = api.post('/asefi/generate-email-template', {
+      prompt: asefiForm.prompt,
+      tone: asefiForm.tone,
+      target: asefiForm.target,
+      subject: asefiForm.subject
+    }).then(async (response) => {
       if (response.data.success) {
         await api.post('/email-templates', {
           name: asefiForm.name,
@@ -125,21 +126,21 @@ export default function EmailTemplates() {
           metadata: { generated_by: 'asefi', tone: asefiForm.tone }
         });
 
-        alert('Template genere par Asefi !');
         setShowAsefiModal(false);
         loadTemplates();
       }
-    } catch (error) {
-      console.error('Erreur generation Asefi:', error);
-      alert('Erreur lors de la generation');
-    } finally {
-      setGeneratingAsefi(false);
-    }
+    }).finally(() => setGeneratingAsefi(false));
+
+    toast.promise(promise, {
+      loading: 'Génération par Asefi en cours...',
+      success: 'Template généré par Asefi avec succès !',
+      error: 'Erreur lors de la génération'
+    });
   };
 
   const handleSaveManual = async () => {
     if (!manualForm.name || !manualForm.subject || !manualForm.content) {
-      alert('Veuillez remplir tous les champs');
+      toast.error('Veuillez remplir tous les champs');
       return;
     }
 
@@ -164,7 +165,7 @@ export default function EmailTemplates() {
           template_type: 'email',
           is_active: true
         });
-        alert('Template mis a jour !');
+        toast.success('Template mis à jour avec succès !');
       } else {
         // Mode création
         await api.post('/email-templates', {
@@ -174,7 +175,7 @@ export default function EmailTemplates() {
           template_type: 'email',
           is_active: true
         });
-        alert('Template cree !');
+        toast.success('Template créé avec succès !');
       }
 
       setShowManualModal(false);
@@ -182,7 +183,7 @@ export default function EmailTemplates() {
       loadTemplates();
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Erreur');
+      toast.error('Erreur lors de l\'enregistrement');
     }
   };
 
@@ -205,32 +206,30 @@ export default function EmailTemplates() {
     try {
       if (editingTemplate) {
         await api.put(`/email-templates/${editingTemplate.id}`, templateData);
-        alert('Template mis a jour !');
+        toast.success('Template mis à jour avec succès !');
       } else {
         await api.post('/email-templates', templateData);
-        alert('Template cree !');
+        toast.success('Template créé avec succès !');
       }
-      
+
       setShowEditor(false);
       setEditingTemplate(null);
       loadTemplates();
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Erreur');
+      toast.error('Erreur lors de l\'enregistrement');
       throw error;
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer ce template ?')) return;
-    
-    try {
-      await api.delete(`/email-templates/${id}`);
-      loadTemplates();
-      alert('Template supprime !');
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
+    const promise = api.delete(`/email-templates/${id}`).then(() => loadTemplates());
+
+    toast.promise(promise, {
+      loading: 'Suppression en cours...',
+      success: 'Template supprimé avec succès !',
+      error: 'Erreur lors de la suppression'
+    });
   };
 
   if (loading) {

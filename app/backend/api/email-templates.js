@@ -1,4 +1,5 @@
 ﻿import express from 'express';
+import { z } from 'zod';
 import pkg from 'pg';
 import { authMiddleware } from '../middleware/auth.js';
 const { Pool } = pkg;
@@ -6,6 +7,16 @@ const router = express.Router();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
   ssl: { rejectUnauthorized: false }
+});
+
+// ==================== VALIDATION SCHEMA ====================
+const createTemplateSchema = z.object({
+  name: z.string().min(1, 'Nom requis').max(255).trim(),
+  subject: z.string().min(1, 'Sujet requis').max(500).trim(),
+  html_body: z.string().min(1, 'Corps HTML requis'),
+  template_type: z.enum(['email', 'sms']).optional().default('email'),
+  is_active: z.boolean().optional().default(true),
+  metadata: z.record(z.any()).optional().nullable()
 });
 
 async function getTemplatesHandler(req, res) {
@@ -45,15 +56,25 @@ async function getTemplateByIdHandler(req, res) {
 
 async function createTemplateHandler(req, res) {
   try {
-    const { name, subject, html_body, template_type, is_active, metadata } = req.body;
     const tenantId = req.user.tenant_id;
     const userId = req.user.id;
-    if (!name || !subject || !html_body) {
-      return res.status(400).json({ error: 'Nom, sujet et corps requis' });
+
+    // ✅ VALIDATION ZOD
+    let validatedData;
+    try {
+      validatedData = createTemplateSchema.parse(req.body);
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Données invalides',
+        details: error.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+      });
     }
+
+    const { name, subject, html_body, template_type, is_active, metadata } = validatedData;
+
     const result = await pool.query(
       'INSERT INTO email_templates (tenant_id, name, subject, html_body, template_type, is_active, metadata, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8) RETURNING *',
-      [tenantId, name, subject, html_body, template_type || 'email', is_active !== false, metadata ? JSON.stringify(metadata) : null, userId]
+      [tenantId, name, subject, html_body, template_type, is_active, metadata ? JSON.stringify(metadata) : null, userId]
     );
     res.status(201).json({ message: 'Template créé', template: result.rows[0] });
   } catch (error) {

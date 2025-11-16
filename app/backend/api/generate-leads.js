@@ -1,8 +1,17 @@
-﻿import { authMiddleware } from '../middleware/auth.js';
+﻿import { z } from 'zod';
+import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 import { Client } from '@googlemaps/google-maps-services-js';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+
+// ==================== VALIDATION SCHEMA ====================
+const generateLeadsSchema = z.object({
+  sector: z.string().min(1, 'Secteur requis'),
+  city: z.string().min(1, 'Ville requise'),
+  radius: z.number().min(1).max(50).optional().default(10),
+  quantity: z.number().min(1).max(200).optional().default(50)
+});
 
 const googleMapsClient = new Client({});
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
@@ -200,11 +209,18 @@ async function handler(req, res) {
 
   try {
     if (req.method === 'POST' && req.url.includes('/generate-leads')) {
-      const { sector, city, radius = 10, quantity = 50 } = req.body;
-
-      if (!sector || !city) {
-        return res.status(400).json({ error: 'Secteur et ville requis' });
+      // ✅ VALIDATION ZOD
+      let validatedData;
+      try {
+        validatedData = generateLeadsSchema.parse(req.body);
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Données invalides',
+          details: error.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+        });
       }
+
+      const { sector, city, radius, quantity } = validatedData;
 
       console.log(`🔍 Recherche intelligente: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 

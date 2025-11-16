@@ -1,11 +1,12 @@
 ﻿import React, { useState, useEffect } from "react";
+import toast from 'react-hot-toast';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Plus, Mail, Phone, MapPin, Star, X, Building2, 
-  User, Globe, Calendar, Edit, Save, Trash2, 
+import {
+  Plus, Mail, Phone, MapPin, Star, X, Building2,
+  User, Globe, Calendar, Edit, Save, Trash2,
   TrendingUp, DollarSign, Hash, FileText, CheckCircle,
   Clock, AlertCircle, Briefcase, MessageSquare
 } from "lucide-react";
@@ -49,25 +50,33 @@ export default function Leads() {
         setLeads(leads.map(l => l.id === selectedLead.id ? response.data.lead : l));
         setSelectedLead(response.data.lead);
         setEditMode(false);
-        alert('Lead mis à jour avec succès');
+        toast.success('Lead mis à jour avec succès');
       }
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Erreur lors de la mise à jour');
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
   const handleDelete = async (leadId) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce lead ?')) return;
-    
-    try {
-      await api.delete(`/leads/${leadId}`);
-      setLeads(leads.filter(l => l.id !== leadId));
-      setShowDetailsModal(false);
-      alert('Lead supprimé');
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
+    // ✅ Remplacer confirm() par toast.promise
+    const deletePromise = new Promise(async (resolve, reject) => {
+      try {
+        await api.delete(`/leads/${leadId}`);
+        setLeads(leads.filter(l => l.id !== leadId));
+        setShowDetailsModal(false);
+        resolve();
+      } catch (error) {
+        console.error('Erreur:', error);
+        reject(error);
+      }
+    });
+
+    toast.promise(deletePromise, {
+      loading: 'Suppression en cours...',
+      success: 'Lead supprimé avec succès',
+      error: 'Erreur lors de la suppression',
+    });
   };
 
   const getStatusBadge = (status) => {
