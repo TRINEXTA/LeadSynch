@@ -23,7 +23,8 @@ import {
   CreditCard,
   DollarSign,
   Copy,
-  GraduationCap
+  GraduationCap,
+  MapPin
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -127,6 +128,7 @@ export default function Sidebar() {
         { name: 'Équipes', href: '/teams', icon: Users },
         { name: 'Utilisateurs', href: '/users', icon: UserCircle },
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users },
+        { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin },
         { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen },
         { name: 'Migration Leads', href: '/MigrateLeads', icon: Database },
         { name: 'Zone de Test', href: '/TestZone', icon: TestTube },

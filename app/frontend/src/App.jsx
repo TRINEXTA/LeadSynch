@@ -70,6 +70,9 @@ import TestZone from './pages/TestZone';
 // Formation
 import Formation from './pages/Formation';
 
+// Secteurs géographiques
+import GeographicSectors from './pages/GeographicSectors';
+
 // Signature de contrats
 import SignContract from './pages/SignContract';
 
@@ -147,6 +150,7 @@ function App() {
             <Route path="/TestTracking" element={<TestTracking />} />
             <Route path="/TestZone" element={<TestZone />} />
             <Route path="/Formation" element={<Formation />} />
+            <Route path="/geographic-sectors" element={<GeographicSectors />} />
 
             <Route path="/billing" element={<Billing />} />
             <Route path="/lead-credits" element={<LeadCredits />} />
