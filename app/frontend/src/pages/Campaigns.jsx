@@ -264,9 +264,19 @@ export default function Campaigns() {
                 {/* ✅ CORRECTION 3/3 : Titre adapté au rôle */}
                 {isCommercial ? 'Mes Campagnes' : 'Gestion des Campagnes'}
               </h1>
-              <p className="text-gray-600 ml-15">
-                {isCommercial ? 'Campagnes qui vous sont assignées' : 'Pilotez toutes vos campagnes en temps reel'}
-              </p>
+              <div className="flex items-center gap-3 ml-15">
+                <p className="text-gray-600">
+                  {isCommercial ? 'Campagnes qui vous sont assignées' : 'Pilotez toutes vos campagnes en temps reel'}
+                </p>
+                {/* Indicateur temps réel */}
+                <div className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+                  <div className="relative">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                    <div className="absolute top-0 left-0 w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
+                  </div>
+                  <span className="font-semibold">30s</span>
+                </div>
+              </div>
             </div>
             {/* Bouton visible seulement pour admin */}
             {isAdmin && (

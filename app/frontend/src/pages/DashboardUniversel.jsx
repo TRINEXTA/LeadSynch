@@ -5,10 +5,11 @@ import {
   Users, Phone, Mail, TrendingUp, Calendar, Target, DollarSign,
   Activity, Eye, MousePointer, Send, CheckCircle, Award, Zap, AlertCircle,
   Clock, Bell, FileText, UserCheck, ArrowRight, Sparkles,
-  BarChart3, PlayCircle, MessageSquare, ThumbsUp, ThumbsDown, MapPin
+  BarChart3, PlayCircle, MessageSquare, ThumbsUp, ThumbsDown, MapPin, RefreshCw
 } from 'lucide-react';
 import api from '../api/axios';
 import ChatbotAsefi from '../components/ChatbotAsefi';
+import { useRealTimePollingWithVisibility } from '../hooks/useRealTimePolling';
 
 export default function DashboardUniversel() {
   const [stats, setStats] = useState(null);
@@ -157,10 +158,15 @@ export default function DashboardUniversel() {
     }
   };
 
+  // Polling automatique temps réel: 30 secondes
   useEffect(() => {
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 60000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchDashboard, 30000); // 30s au lieu de 60s
+    console.log('🔄 [POLLING DASHBOARD] Activé - Refresh toutes les 30s');
+    return () => {
+      clearInterval(interval);
+      console.log('⏹️ [POLLING DASHBOARD] Désactivé');
+    };
   }, [user]);
 
   if (loading) {
@@ -244,6 +250,15 @@ export default function DashboardUniversel() {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* Indicateur temps réel */}
+              <div className="flex items-center gap-2 text-xs text-gray-600 bg-green-50 border border-green-200 px-3 py-2 rounded-lg">
+                <div className="relative">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <div className="absolute top-0 left-0 w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
+                </div>
+                <span className="font-medium">Temps réel (30s)</span>
+              </div>
+
               {refreshing && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/60">
                   <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-indigo-600"></div>
@@ -253,9 +268,9 @@ export default function DashboardUniversel() {
               <button
                 onClick={fetchDashboard}
                 className="p-3 hover:bg-white/60 backdrop-blur-sm rounded-xl transition-all shadow-lg border border-white/60"
-                title="Rafraîchir"
+                title="Rafraîchir manuellement"
               >
-                <Activity className="w-6 h-6 text-gray-700" />
+                <RefreshCw className="w-6 h-6 text-gray-700" />
               </button>
             </div>
           </div>
