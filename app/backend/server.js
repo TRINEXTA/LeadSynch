@@ -63,19 +63,19 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// Rate limiter global (100 requêtes / 15 min)
+// Rate limiter global
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Plus permissif en dev
   message: 'Trop de requêtes, veuillez réessayer plus tard',
   standardHeaders: true,
   legacyHeaders: false
 });
 
-// Rate limiter strict pour auth (5 tentatives / 15 min)
+// Rate limiter pour auth - PLUS PERMISSIF EN DÉVELOPPEMENT
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: process.env.NODE_ENV === 'production' ? 5 : 50, // 50 en dev, 5 en prod
   skipSuccessfulRequests: true,
   message: 'Trop de tentatives de connexion, réessayez dans 15 minutes'
 });
@@ -83,6 +83,8 @@ const authLimiter = rateLimit({
 app.use('/api/', globalLimiter);
 
 console.log('🔒 Sécurité activée: Helmet + Rate Limiting');
+console.log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
+console.log(`   Auth: ${process.env.NODE_ENV === 'production' ? '5' : '50'} req/15min`);
 
 app.use((req, res, next) => {
   const start = Date.now();
