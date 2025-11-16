@@ -8,8 +8,9 @@ export default function MailingSettings() {
   const [showPassword, setShowPassword] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [settings, setSettings] = useState({
-    // 4 CHAMPS ESSENTIELS
+    // 5 CHAMPS ESSENTIELS
     from_email: '',
+    from_name: '',
     reply_to_email: '',
     company_name: '',
     company_address: '',
@@ -42,9 +43,9 @@ export default function MailingSettings() {
   };
 
   const handleSave = async () => {
-    // Validation des 4 champs essentiels
-    if (!settings.from_email || !settings.reply_to_email || !settings.company_name || !settings.company_address) {
-      alert('❌ Tous les champs sont obligatoires !\n\n- Email expéditeur\n- Email de réponse\n- Nom de l\'entreprise\n- Adresse de l\'entreprise');
+    // Validation des 5 champs essentiels
+    if (!settings.from_email || !settings.from_name || !settings.reply_to_email || !settings.company_name || !settings.company_address) {
+      alert('❌ Tous les champs sont obligatoires !\n\n- Email expéditeur\n- Nom expéditeur\n- Email de réponse\n- Nom de l\'entreprise\n- Adresse de l\'entreprise');
       return;
     }
 
@@ -135,6 +136,25 @@ export default function MailingSettings() {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   L'email qui apparaîtra comme expéditeur de vos campagnes
+                </p>
+              </div>
+
+              {/* Nom expéditeur */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <User className="w-4 h-4 inline mr-1" />
+                  Nom de l'expéditeur <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={settings.from_name}
+                  onChange={(e) => setSettings({...settings, from_name: e.target.value})}
+                  placeholder="Équipe Commerciale"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Le nom qui apparaîtra comme expéditeur (ex: "Jean Dupont", "Service Commercial")
                 </p>
               </div>
 
