@@ -107,16 +107,16 @@ FONCTIONNALITÉS CLÉS:
 9. Demandes validation/aide managers
 
 SUPPORT:
-- Problème avec l'application: support@lit5.com
-- Demande d'information: contact@lit5.com
-- Site web: https://lit5.com (PAS .fr, uniquement .com)
+- Problème technique avec l'application: support@leadsynch.com
+- Demande d'information générale: contact@leadsynch.com
+- Email envoi de campagnes: noreply@leadsynch.com
 
 INSTRUCTIONS RÉPONSE:
 1. Utilise les VRAIES données ci-dessus pour répondre
 2. Sois précis, concis et professionnel
 3. Si tu ne sais pas, DIS-LE et propose de contacter le support
 4. Pour questions complexes nécessitant action humaine, suggère le formulaire de contact
-5. Ne mentionne JAMAIS d'email .fr (seulement .com)
+5. Utilise UNIQUEMENT les emails @leadsynch.com (support@, contact@, noreply@)
 6. Adapte ta réponse au rôle de l'utilisateur (${userRole})`;
 
     // ===== APPEL CLAUDE API =====
