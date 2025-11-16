@@ -1,9 +1,17 @@
 import express from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { parse } from 'csv-parse/sync';
 
 const router = express.Router();
+
+// ==================== VALIDATION SCHEMA ====================
+const importCsvSchema = z.object({
+  database_id: z.string().uuid('ID base de données invalide'),
+  csv_content: z.string().min(1, 'Contenu CSV requis'),
+  sector: z.string().optional()
+});
 
 // POST /api/import-csv - Import et classification automatique
 router.post('/', authMiddleware, async (req, res) => {
@@ -11,14 +19,19 @@ router.post('/', authMiddleware, async (req, res) => {
   const user_id = req.user.id;
 
   try {
-    const { database_id, csv_content, sector } = req.body;
-
-    if (!database_id || !csv_content) {
-      return res.status(400).json({ 
+    // ✅ VALIDATION ZOD
+    let validatedData;
+    try {
+      validatedData = importCsvSchema.parse(req.body);
+    } catch (error) {
+      return res.status(400).json({
         success: false,
-        error: 'database_id et csv_content requis' 
+        error: 'Données invalides',
+        details: error.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
       });
     }
+
+    const { database_id, csv_content, sector } = validatedData;
 
     console.log(`📊 [IMPORT CSV] Début pour base ${database_id} - Tenant ${tenant_id}`);
 

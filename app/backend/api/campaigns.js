@@ -1,8 +1,35 @@
 ﻿import express from 'express';
+import { z } from 'zod';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
 
 const router = express.Router();
+
+// ==================== VALIDATION SCHEMAS ====================
+const createCampaignSchema = z.object({
+  name: z.string().min(1, 'Nom requis').max(255),
+  type: z.enum(['email', 'phone'], { errorMap: () => ({ message: 'Type invalide: email ou phone' }) }),
+  database_id: z.string().uuid('ID base de données invalide'),
+  objective: z.string().optional(),
+  subject: z.string().max(500).optional(),
+  goal_description: z.string().optional(),
+  message: z.string().optional(),
+  link: z.string().url().optional().nullable(),
+  template_id: z.string().uuid().optional().nullable(),
+  assigned_users: z.array(z.string().uuid()).optional(),
+  send_days: z.array(z.number().min(1).max(7)).optional(),
+  send_time_start: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+  send_time_end: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+  start_date: z.string().optional().nullable(),
+  start_time: z.string().optional(),
+  emails_per_cycle: z.number().min(1).max(1000).optional(),
+  cycle_interval_minutes: z.number().min(1).optional(),
+  status: z.enum(['draft', 'active', 'paused', 'stopped', 'archived']).optional(),
+  sectors: z.record(z.array(z.string())).optional(),
+  attachments: z.array(z.any()).optional(),
+  track_clicks: z.boolean().optional(),
+  auto_distribute: z.boolean().optional()
+});
 
 // ==================== HELPERS ====================
 const queryOne = async (query, params = []) => {
@@ -132,19 +159,27 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const userId = req.user?.id;
+
+    // ✅ VALIDATION ZOD
+    let validatedData;
+    try {
+      validatedData = createCampaignSchema.parse(req.body);
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Données invalides',
+        details: error.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+      });
+    }
+
     const {
       name, type, objective, subject, goal_description, message, link,
       database_id, template_id, assigned_users, send_days,
       send_time_start, send_time_end, start_date, start_time,
       emails_per_cycle, cycle_interval_minutes, status, sectors,
       attachments, track_clicks, auto_distribute
-    } = req.body;
+    } = validatedData;
 
-    console.log('📥 Données reçues:', req.body);
-
-    if (!name || !type || !database_id) {
-      return res.status(400).json({ error: 'Champs requis: name, type, database_id' });
-    }
+    console.log('📥 Données validées:', { name, type, database_id });
 
     let leads = [];
     

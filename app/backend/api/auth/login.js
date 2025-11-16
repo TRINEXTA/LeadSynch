@@ -7,7 +7,7 @@ async function handler(req, res) {
   console.log('Method:', req.method);
   console.log('Origin:', req.headers.origin);
   console.log('Content-Type:', req.headers['content-type']);
-  console.log('Body:', JSON.stringify(req.body, null, 2));
+  // ⚠️ SÉCURITÉ: Ne jamais logger le body complet (contient le mot de passe)
   
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

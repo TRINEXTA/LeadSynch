@@ -15,11 +15,8 @@ async function resetPassword() {
 
     console.log('✅ Mot de passe réinitialisé !');
     console.log(`📧 Email: vprince@trinexta.fr`);
-    // ⚠️ SÉCURITÉ: Ne jamais logger les mots de passe en production
-    // Ce script est uniquement pour le développement local
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`🔐 Nouveau mot de passe: ${newPassword}`);
-    }
+    // ⚠️ SÉCURITÉ: Mot de passe réinitialisé à: password123
+    // Le mot de passe n'est jamais loggé pour des raisons de sécurité
 
     process.exit(0);
   } catch (error) {
