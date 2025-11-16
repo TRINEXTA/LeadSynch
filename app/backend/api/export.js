@@ -8,6 +8,28 @@ const router = express.Router();
 router.use(authMiddleware);
 
 /**
+ * ✅ SÉCURITÉ: Sanitize CSV formula injection
+ * Prévient l'exécution de formules Excel malicieuses
+ * @param {string} value - Valeur à sanitizer
+ * @returns {string} - Valeur sécurisée
+ */
+function sanitizeCSVValue(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  // Caractères dangereux pouvant déclencher des formules Excel
+  const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
+
+  // Si la valeur commence par un caractère dangereux, préfixer avec '
+  if (dangerousChars.some(char => value.startsWith(char))) {
+    return "'" + value;
+  }
+
+  return value;
+}
+
+/**
  * Convertit des données en format CSV
  * @param {array} data - Tableau d'objets
  * @param {array} columns - Colonnes à inclure
@@ -26,14 +48,16 @@ function convertToCSV(data, columns) {
     return columns.map(col => {
       let value = item[col.key] || '';
 
-      // Échapper les guillemets
-      if (typeof value === 'string') {
-        value = value.replace(/"/g, '""');
-      }
-
       // Formater les dates
       if (value instanceof Date || col.type === 'date') {
         value = new Date(value).toLocaleDateString('fr-FR');
+      }
+
+      // ✅ SÉCURITÉ: Sanitize formula injection
+      if (typeof value === 'string') {
+        value = sanitizeCSVValue(value);
+        // Échapper les guillemets
+        value = value.replace(/"/g, '""');
       }
 
       return `"${value}"`;
