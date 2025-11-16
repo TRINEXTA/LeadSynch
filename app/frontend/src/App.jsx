@@ -11,6 +11,7 @@ import Login from './pages/Login';
 
 // Pages principales
 import Dashboard from './pages/Dashboard';
+import DashboardUniversel from './pages/DashboardUniversel';
 import Leads from './pages/Leads';
 import Users from './pages/Users';
 
@@ -93,7 +94,8 @@ function App() {
           
           {/* Routes prot�g�es */}
           <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<DashboardUniversel />} />
+            <Route path="/dashboard-classic" element={<Dashboard />} />
             <Route path="/CommercialDashboard" element={<CommercialDashboard />} />
             
             <Route path="/leads" element={<Leads />} />
