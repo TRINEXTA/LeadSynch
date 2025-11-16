@@ -56,7 +56,7 @@ export default function Sidebar() {
   const navigation = {
     main: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
-      { name: 'Dashboard Manager', href: '/dashboard-manager', icon: BarChart3, roles: ['manager'] },
+      { name: 'Dashboard Manager', href: '/dashboard-manager', icon: BarChart3, roles: ['manager', 'admin'] },
       { name: 'Mon Dashboard', href: '/CommercialDashboard', icon: Target, roles: ['commercial'] }
     ],
     
