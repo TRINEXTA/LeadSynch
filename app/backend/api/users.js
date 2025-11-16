@@ -242,9 +242,10 @@ async function handler(req, res) {
       });
     }
 
-    // DELETE - Delete user
+    // DELETE - Delete user (avec dispatch des leads)
     if (method === 'DELETE') {
       const userId = req.url.split('/').pop();
+      const { reassign_to } = req.body; // ID du commercial qui récupère les leads, ou null pour admin
 
       if (req.user.role !== 'admin') {
         return res.status(403).json({
@@ -258,6 +259,101 @@ async function handler(req, res) {
         });
       }
 
+      // Vérifier que l'utilisateur existe
+      const userToDelete = await queryOne(
+        'SELECT id, email, first_name, last_name FROM users WHERE id = $1 AND tenant_id = $2',
+        [userId, req.user.tenant_id]
+      );
+
+      if (!userToDelete) {
+        return res.status(404).json({
+          error: 'Utilisateur non trouvé'
+        });
+      }
+
+      // Compter les leads assignés
+      const leadsCount = await queryOne(
+        'SELECT COUNT(*) as count FROM leads WHERE assigned_to = $1 AND tenant_id = $2',
+        [userId, req.user.tenant_id]
+      );
+
+      const totalLeads = parseInt(leadsCount.count);
+
+      console.log(`🔄 Suppression utilisateur ${userToDelete.email}: ${totalLeads} leads à dispatcher`);
+
+      // DISPATCHER LES LEADS
+      if (totalLeads > 0) {
+        if (reassign_to) {
+          // Vérifier que le commercial de réassignation existe
+          const targetUser = await queryOne(
+            'SELECT id, role FROM users WHERE id = $1 AND tenant_id = $2',
+            [reassign_to, req.user.tenant_id]
+          );
+
+          if (!targetUser) {
+            return res.status(400).json({
+              error: 'Utilisateur de réassignation introuvable'
+            });
+          }
+
+          // Dispatcher vers un commercial spécifique
+          await execute(
+            `UPDATE leads
+             SET assigned_to = $1, updated_at = NOW()
+             WHERE assigned_to = $2 AND tenant_id = $3`,
+            [reassign_to, userId, req.user.tenant_id]
+          );
+
+          console.log(`✅ ${totalLeads} leads transférés vers ${targetUser.id}`);
+        } else {
+          // Dispatcher vers les managers/admins du tenant
+          const managers = await queryAll(
+            `SELECT id FROM users
+             WHERE tenant_id = $1
+             AND role IN ('admin', 'manager')
+             AND is_active = true
+             AND id != $2
+             ORDER BY RANDOM()
+             LIMIT 1`,
+            [req.user.tenant_id, userId]
+          );
+
+          if (managers.length > 0) {
+            await execute(
+              `UPDATE leads
+               SET assigned_to = $1, updated_at = NOW()
+               WHERE assigned_to = $2 AND tenant_id = $3`,
+              [managers[0].id, userId, req.user.tenant_id]
+            );
+
+            console.log(`✅ ${totalLeads} leads transférés vers manager ${managers[0].id}`);
+          } else {
+            // Aucun manager → désassigner les leads
+            await execute(
+              `UPDATE leads
+               SET assigned_to = NULL, updated_at = NOW()
+               WHERE assigned_to = $1 AND tenant_id = $2`,
+              [userId, req.user.tenant_id]
+            );
+
+            console.log(`⚠️ ${totalLeads} leads désassignés (aucun manager disponible)`);
+          }
+        }
+      }
+
+      // Retirer des campaign_assignments
+      await execute(
+        'DELETE FROM campaign_assignments WHERE user_id = $1',
+        [userId]
+      );
+
+      // Retirer des team_members
+      await execute(
+        'DELETE FROM team_members WHERE user_id = $1',
+        [userId]
+      );
+
+      // Supprimer l'utilisateur
       await execute(
         'DELETE FROM users WHERE id = $1 AND tenant_id = $2',
         [userId, req.user.tenant_id]
@@ -265,7 +361,8 @@ async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        message: 'Utilisateur supprimé'
+        message: 'Utilisateur supprimé',
+        leads_dispatched: totalLeads
       });
     }
 

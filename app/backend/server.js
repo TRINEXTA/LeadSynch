@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -55,6 +57,33 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
+// ========= 🔒 SÉCURITÉ - Helmet + Rate Limiting =========
+app.use(helmet({
+  contentSecurityPolicy: false, // Désactivé pour éviter conflit avec frontend
+  crossOriginEmbedderPolicy: false
+}));
+
+// Rate limiter global (100 requêtes / 15 min)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  message: 'Trop de requêtes, veuillez réessayer plus tard',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Rate limiter strict pour auth (5 tentatives / 15 min)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  skipSuccessfulRequests: true,
+  message: 'Trop de tentatives de connexion, réessayez dans 15 minutes'
+});
+
+app.use('/api/', globalLimiter);
+
+console.log('🔒 Sécurité activée: Helmet + Rate Limiting');
+
 app.use((req, res, next) => {
   const start = Date.now();
   console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
@@ -82,10 +111,10 @@ import changePasswordRoute from './api/auth/change-password.js';
 import resetPassword from './api/auth/reset-password.js';
 import authLogout from './api/auth/logout.js';
 
-app.all('/api/auth/login', authLogin);
+app.all('/api/auth/login', authLimiter, authLogin); // Rate limit strict sur login
 app.all('/api/auth/me', authMe);
 app.all('/api/auth/change-password', changePasswordRoute);
-app.all('/api/auth/reset-password', resetPassword);
+app.all('/api/auth/reset-password', authLimiter, resetPassword); // Rate limit sur reset password
 if (authLogout) app.all('/api/auth/logout', authLogout);
 
 // ========== ?? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
@@ -188,6 +217,23 @@ app.use('/api/lead-credits', leadCreditsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/subscriptions', subscriptionsRoutes);
 
+// ========== 🔒 ROUTES RGPD & BLACKLIST ==========
+import checkBlacklistRoute from './api/check-blacklist.js';
+import rgpdController from './controllers/rgpdController.js';
+import unsubscribeController from './controllers/unsubscribeController.js';
+
+app.use('/api/check-blacklist', checkBlacklistRoute);
+app.post('/api/rgpd/check-blacklist', authMiddleware, rgpdController.checkBlacklist);
+app.get('/api/rgpd/violations', authMiddleware, rgpdController.getViolationStats);
+app.get('/api/unsubscribes', authMiddleware, unsubscribeController.getUnsubscribedEmails);
+app.get('/api/unsubscribes/stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
+
+// Routes publiques unsubscribe (sans auth)
+app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
+app.post('/api/unsubscribe/:lead_id', unsubscribeController.processUnsubscribe);
+
+console.log('✅ Routes RGPD configurées');
+
 // ========== ?? ROUTES LEAD MANAGEMENT AVANC� ==========
 app.use('/api/leads', leadContactsRoute);
 app.use('/api/leads', leadPhonesRoute);
@@ -195,8 +241,6 @@ app.use('/api/leads', leadOfficesRoute);
 app.use('/api/leads', leadNotesRoute);
 
 // ========== ROUTES TRACKING ==========
-import * as unsubscribeController from './controllers/unsubscribeController.js';
-app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
 app.post('/api/unsubscribe/:lead_id', authMiddleware, unsubscribeController.processUnsubscribe);
 app.post('/api/resubscribe/:lead_id', authMiddleware, unsubscribeController.resubscribe);
 app.get('/api/unsubscribe-stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
