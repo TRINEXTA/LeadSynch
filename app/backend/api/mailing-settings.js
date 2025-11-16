@@ -19,7 +19,9 @@ export async function getMailingSettings(req, res) {
         settings: {
           from_email: '',
           from_name: '',
-          reply_to: '',
+          reply_to_email: '',
+          company_name: '',
+          company_address: '',
           provider: 'elasticemail', // Par défaut
           api_key: '',
           configured: false
@@ -38,7 +40,9 @@ export async function getMailingSettings(req, res) {
       settings: {
         from_email: settings.from_email,
         from_name: settings.from_name,
-        reply_to: settings.reply_to,
+        reply_to_email: settings.reply_to_email,
+        company_name: settings.company_name,
+        company_address: settings.company_address,
         provider: settings.provider,
         api_key: maskedApiKey,
         configured: settings.configured,
@@ -62,7 +66,7 @@ export async function getMailingSettings(req, res) {
 export async function updateMailingSettings(req, res) {
   try {
     const { tenant_id: tenantId } = req.user;
-    const { from_email, from_name, reply_to, provider, api_key } = req.body;
+    const { from_email, from_name, reply_to_email, company_name, company_address, provider, api_key } = req.body;
 
     // Validation
     if (!from_email || !from_name) {
@@ -92,8 +96,18 @@ export async function updateMailingSettings(req, res) {
       updateFields.push(`from_name = $${paramCount++}`);
       values.push(from_name);
 
-      updateFields.push(`reply_to = $${paramCount++}`);
-      values.push(reply_to || from_email);
+      updateFields.push(`reply_to_email = $${paramCount++}`);
+      values.push(reply_to_email || from_email);
+
+      if (company_name !== undefined) {
+        updateFields.push(`company_name = $${paramCount++}`);
+        values.push(company_name);
+      }
+
+      if (company_address !== undefined) {
+        updateFields.push(`company_address = $${paramCount++}`);
+        values.push(company_address);
+      }
 
       updateFields.push(`provider = $${paramCount++}`);
       values.push(provider || 'elasticemail');
@@ -123,14 +137,16 @@ export async function updateMailingSettings(req, res) {
       // Création
       const { rows } = await q(
         `INSERT INTO mailing_settings (
-          tenant_id, from_email, from_name, reply_to, provider, api_key, configured
-        ) VALUES ($1, $2, $3, $4, $5, $6, true)
+          tenant_id, from_email, from_name, reply_to_email, company_name, company_address, provider, api_key, configured
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
         RETURNING *`,
         [
           tenantId,
           from_email,
           from_name,
-          reply_to || from_email,
+          reply_to_email || from_email,
+          company_name || '',
+          company_address || '',
           provider || 'elasticemail',
           api_key || ''
         ]
@@ -144,7 +160,9 @@ export async function updateMailingSettings(req, res) {
       settings: {
         from_email: result.from_email,
         from_name: result.from_name,
-        reply_to: result.reply_to,
+        reply_to_email: result.reply_to_email,
+        company_name: result.company_name,
+        company_address: result.company_address,
         provider: result.provider,
         configured: result.configured
       }

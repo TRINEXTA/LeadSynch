@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     // Stats basiques campagne
     const campaign = await queryOne(
       `SELECT id, name, type, status, sent_count, opened_count, clicked_count,
-              replied_count, bounced_count, created_at
+              reply_count, bounced_count, created_at
        FROM campaigns
        WHERE id = $1`,
       [campaign_id]
@@ -84,7 +84,7 @@ export default async function handler(req, res) {
           ? ((campaign.clicked_count || 0) / campaign.sent_count * 100).toFixed(1)
           : 0,
         reply_rate: campaign.sent_count > 0
-          ? ((campaign.replied_count || 0) / campaign.sent_count * 100).toFixed(1)
+          ? ((campaign.reply_count || 0) / campaign.sent_count * 100).toFixed(1)
           : 0
       }
     };

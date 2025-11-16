@@ -60,15 +60,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const recentLeads = recentLeadsQuery.rows || [];
 
-    // Plan utilisateur (à adapter selon votre système)
-    const userPlanQuery = await queryOne(
-      `SELECT plan_type, email_quota
-      FROM tenants
-      WHERE id = $1`,
-      [tenantId]
-    );
-
-    const userPlan = userPlanQuery || { plan_type: 'FREE', email_quota: 30 };
+    // Plan utilisateur (valeurs par défaut - pas de colonnes plan_type/email_quota dans DB)
+    const userPlan = { plan_type: 'FREE', email_quota: 30 };
 
     // ===== CONSTRUIRE LE CONTEXTE DYNAMIQUE =====
 
