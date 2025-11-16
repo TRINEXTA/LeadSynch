@@ -13,11 +13,13 @@ export default function GeographicSectors() {
 
   const [loading, setLoading] = useState(true);
   const [sectors, setSectors] = useState([]);
+  const [sectorStats, setSectorStats] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
+  const [reassigning, setReassigning] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -53,6 +55,10 @@ export default function GeographicSectors() {
       const sectorsRes = await api.get('/geographic-sectors');
       setSectors(sectorsRes.data.sectors || []);
 
+      // Charger les stats par secteur
+      const statsRes = await api.get('/lead-sector-assignment/stats').catch(() => ({ data: { stats: [] } }));
+      setSectorStats(statsRes.data.stats || []);
+
       // Charger les membres de l'équipe (commerciaux)
       const usersRes = await api.get('/users').catch(() => ({ data: { users: [] } }));
       const commercials = (usersRes.data.users || []).filter(
@@ -65,6 +71,24 @@ export default function GeographicSectors() {
       alert('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReassignAll = async () => {
+    if (!confirm('Réassigner TOUS les leads aux secteurs selon leur code postal?\n\nCette opération peut prendre du temps.')) {
+      return;
+    }
+
+    try {
+      setReassigning(true);
+      const response = await api.post('/lead-sector-assignment/reassign-all');
+      alert(`✅ ${response.data.count} leads réassignés avec succès!`);
+      fetchData(); // Recharger les stats
+    } catch (error) {
+      console.error('Erreur réassignation:', error);
+      alert('Erreur lors de la réassignation');
+    } finally {
+      setReassigning(false);
     }
   };
 
@@ -245,6 +269,14 @@ export default function GeographicSectors() {
               <span className="font-medium">Actualiser</span>
             </button>
             <button
+              onClick={handleReassignAll}
+              disabled={reassigning}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <MapPinned className="w-5 h-5" />
+              <span className="font-medium">{reassigning ? 'Réassignation...' : 'Réassigner Leads'}</span>
+            </button>
+            <button
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
@@ -270,7 +302,10 @@ export default function GeographicSectors() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sectors.map((sector) => (
+          {sectors.map((sector) => {
+            const stats = sectorStats.find(s => s.id === sector.id) || {};
+
+            return (
             <div
               key={sector.id}
               className="bg-white/60 backdrop-blur-md border border-white/60 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300"
@@ -312,6 +347,26 @@ export default function GeographicSectors() {
                 </div>
               </div>
 
+              {/* Stats Leads */}
+              {stats.total_leads > 0 && (
+                <div className="mb-4 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-600">Leads assignés</span>
+                    <span className="text-xl font-bold text-blue-600">{stats.total_leads || 0}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-gray-600">Actifs:</span>
+                      <span className="ml-1 font-semibold text-green-600">{stats.active_leads || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Qualifiés:</span>
+                      <span className="ml-1 font-semibold text-purple-600">{stats.qualified_leads || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {sector.description && (
                 <p className="text-sm text-gray-600 mb-4 line-clamp-2">{sector.description}</p>
               )}
@@ -338,7 +393,8 @@ export default function GeographicSectors() {
                 </button>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
