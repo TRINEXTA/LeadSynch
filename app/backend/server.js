@@ -180,6 +180,7 @@ import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 import managerRequestsRoute from './api/manager-requests.js';
+import doNotContactRoute from './api/do-not-contact.js';
 import signaturesRoute from './api/signatures.js';
 import { getMailingSettings, updateMailingSettings, testMailingSettings } from './api/mailing-settings.js';
 import billingRoutes from './api/billing.js';
@@ -232,6 +233,7 @@ app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
 app.use('/api/manager-requests', authMiddleware, managerRequestsRoute);
+app.use('/api/do-not-contact', authMiddleware, doNotContactRoute);
 
 // ========== ?? ROUTES SIGNATURES CONTRATS ==========
 app.use('/api/sign', signaturesRoute);

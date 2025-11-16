@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, AlertCircle, UserCheck, Star } from 'lucide-react';
+import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, AlertCircle, UserCheck, Star, Ban } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const STAGE_CONFIG = {
@@ -28,7 +28,7 @@ const CONTRACT_STATUS = {
   rejected: { label: 'Refusé', color: 'text-red-600', icon: '❌', bg: 'bg-red-50' }
 };
 
-export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalClick, onContractClick, onEditClick, onViewHistory, onManagerHelp, onManagerValidation, onProspectShow }) {
+export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalClick, onContractClick, onEditClick, onViewHistory, onManagerHelp, onManagerValidation, onProspectShow, onDoNotContact }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -114,6 +114,14 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
                     >
                       <History className="w-4 h-4" />
                       Historique
+                    </button>
+                    <div className="border-t border-gray-200 my-1"></div>
+                    <button
+                      onClick={() => { onDoNotContact && onDoNotContact(lead); setShowActions(false); }}
+                      className="w-full px-3 py-2 text-left hover:bg-red-50 text-sm flex items-center gap-2 text-red-600 font-semibold"
+                    >
+                      <Ban className="w-4 h-4" />
+                      Ne pas contacter
                     </button>
                   </div>
                 </>

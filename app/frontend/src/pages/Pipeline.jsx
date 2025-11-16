@@ -11,6 +11,7 @@ import QuickProposalModal from '../components/pipeline/QuickProposalModal';
 import QuickContractModal from '../components/pipeline/QuickContractModal';
 import HistoryModal from '../components/pipeline/HistoryModal';
 import ManagerRequestModal from '../components/pipeline/ManagerRequestModal';
+import DoNotContactModal from '../components/pipeline/DoNotContactModal';
 
 const STAGES = [
   { id: 'cold_call', name: 'Cold Call', color: 'bg-indigo-500', textColor: 'text-indigo-700', bgLight: 'bg-indigo-50' },
@@ -50,6 +51,9 @@ export default function Pipeline() {
   // Manager Requests Modals
   const [showManagerRequestModal, setShowManagerRequestModal] = useState(false);
   const [managerRequestType, setManagerRequestType] = useState(null);
+
+  // Do Not Contact Modal
+  const [showDoNotContactModal, setShowDoNotContactModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -185,6 +189,11 @@ export default function Pipeline() {
     setSelectedLead(lead);
     setManagerRequestType('show');
     setShowManagerRequestModal(true);
+  };
+
+  const handleDoNotContact = (lead) => {
+    setSelectedLead(lead);
+    setShowDoNotContactModal(true);
   };
 
   const handleCreateLead = (stageId) => {
@@ -411,6 +420,7 @@ export default function Pipeline() {
                                     onManagerHelp={handleManagerHelp}
                                     onManagerValidation={handleManagerValidation}
                                     onProspectShow={handleProspectShow}
+                                    onDoNotContact={handleDoNotContact}
                                   />
                                 </div>
                               )}
@@ -504,6 +514,17 @@ export default function Pipeline() {
             setShowManagerRequestModal(false);
             setSelectedLead(null);
             setManagerRequestType(null);
+          }}
+          onSuccess={handleModalSuccess}
+        />
+      )}
+
+      {showDoNotContactModal && selectedLead && (
+        <DoNotContactModal
+          lead={selectedLead}
+          onClose={() => {
+            setShowDoNotContactModal(false);
+            setSelectedLead(null);
           }}
           onSuccess={handleModalSuccess}
         />
