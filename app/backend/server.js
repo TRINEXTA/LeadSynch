@@ -150,6 +150,9 @@ import leadCreditsRoutes from './api/lead-credits.js';
 import servicesRoutes from './api/services.js';
 import subscriptionsRoutes from './api/subscriptions.js';
 
+// ========== API Gouv - Génération leads légaux ==========
+import apiGouvLeadsRoute from './api/api-gouv-leads.js';
+
 // ========== ?? NOUVELLES ROUTES LEAD MANAGEMENT ==========
 import leadContactsRoute from './api/lead-contacts.js';
 import leadPhonesRoute from './api/lead-phones.js';
@@ -192,6 +195,7 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
+app.use('/api/api-gouv', apiGouvLeadsRoute);
 
 // ========== ?? ROUTES SIGNATURES CONTRATS ==========
 app.use('/api/sign', signaturesRoute);
