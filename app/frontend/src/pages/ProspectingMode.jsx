@@ -1,6 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare } from 'lucide-react';
+import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle, UserPlus, Send } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
 
 const QUICK_QUALIFICATIONS = [
   { id: 'tres_qualifie', label: '🔥 Très Chaud', color: 'bg-green-500', stage: 'tres_qualifie' },
@@ -11,6 +13,7 @@ const QUICK_QUALIFICATIONS = [
 ];
 
 export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
+  const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [notes, setNotes] = useState('');
   const [processed, setProcessed] = useState(0);
@@ -19,6 +22,10 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   const [leadStartTime, setLeadStartTime] = useState(Date.now());
   const [leadDuration, setLeadDuration] = useState(0);
   const [generating, setGenerating] = useState(false);
+
+  // Modals state
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationRequestType, setValidationRequestType] = useState('validation');
 
   // Protection contre leads undefined ou vide
   const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
@@ -134,6 +141,32 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
 
   const skipLead = () => {
     nextLead();
+  };
+
+  const handleViewDetails = () => {
+    if (currentLead) {
+      navigate(`/LeadDetails?id=${currentLead.lead_id}`);
+    }
+  };
+
+  const handleRequestValidation = () => {
+    setValidationRequestType('validation');
+    setShowValidationModal(true);
+  };
+
+  const handleRequestHelp = () => {
+    setValidationRequestType('help');
+    setShowValidationModal(true);
+  };
+
+  const handleAssignTask = async () => {
+    // TODO: Implémenter attribution de tâche
+    alert('Attribution de tâche - Fonctionnalité à venir');
+  };
+
+  const handleSendTask = async () => {
+    // TODO: Implémenter tâche d'envoi
+    alert('Tâche d\'envoi - Fonctionnalité à venir');
   };
 
   const formatDuration = (seconds) => {
@@ -322,33 +355,82 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
             </div>
 
             {/* Actions rapides */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <button
-                onClick={handleCall}
-                disabled={!currentLead.phone}
-                className="bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-green-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <Phone className="w-6 h-6" />
-                Appeler
-              </button>
+            <div className="space-y-3 mb-6">
+              {/* Ligne 1 : Appeler et Email */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleCall}
+                  disabled={!currentLead.phone}
+                  className="bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-green-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Phone className="w-6 h-6" />
+                  Appeler
+                </button>
 
-              <button
-                onClick={handleEmail}
-                disabled={!currentLead.email || generating}
-                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {generating ? (
-                  <>
-                    <Sparkles className="w-6 h-6 animate-spin" />
-                    Génération...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="w-6 h-6" />
-                    Email IA
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={handleEmail}
+                  disabled={!currentLead.email || generating}
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {generating ? (
+                    <>
+                      <Sparkles className="w-6 h-6 animate-spin" />
+                      Génération...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-6 h-6" />
+                      Email IA
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Ligne 2 : Demandes et Actions */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={handleRequestValidation}
+                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Demande Validation
+                </button>
+
+                <button
+                  onClick={handleRequestHelp}
+                  className="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white py-3 rounded-xl font-semibold hover:from-cyan-600 hover:to-cyan-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
+                >
+                  <HelpCircle className="w-5 h-5" />
+                  Demande Aide
+                </button>
+
+                <button
+                  onClick={handleViewDetails}
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-purple-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
+                >
+                  <Eye className="w-5 h-5" />
+                  Lead Show
+                </button>
+              </div>
+
+              {/* Ligne 3 : Tâches */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleAssignTask}
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
+                >
+                  <UserPlus className="w-5 h-5" />
+                  Attribution Tâches
+                </button>
+
+                <button
+                  onClick={handleSendTask}
+                  className="bg-gradient-to-r from-pink-500 to-pink-600 text-white py-3 rounded-xl font-semibold hover:from-pink-600 hover:to-pink-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
+                >
+                  <Send className="w-5 h-5" />
+                  Tâches Envoi
+                </button>
+              </div>
             </div>
 
             {/* Notes */}
@@ -392,6 +474,16 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
           </div>
         </div>
       </div>
+
+      {/* Validation Request Modal */}
+      {showValidationModal && currentLead && (
+        <ValidationRequestModal
+          isOpen={showValidationModal}
+          onClose={() => setShowValidationModal(false)}
+          lead={currentLead}
+          type={validationRequestType}
+        />
+      )}
     </div>
   );
 }

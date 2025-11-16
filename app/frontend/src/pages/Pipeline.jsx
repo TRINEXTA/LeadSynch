@@ -354,12 +354,12 @@ export default function Pipeline() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="bg-white bg-opacity-30 px-2.5 py-1 rounded-full font-bold text-sm">
+                      <span className="bg-white px-2.5 py-1 rounded-full font-bold text-sm text-gray-900">
                         {stats[stage.id]?.count || 0}
                       </span>
                       <button
                         onClick={() => handleCreateLead(stage.id)}
-                        className="bg-white bg-opacity-30 hover:bg-opacity-50 p-1.5 rounded-lg transition-all"
+                        className="bg-white hover:bg-gray-100 p-1.5 rounded-lg transition-all text-gray-700"
                         title="Créer un lead"
                       >
                         <Plus className="w-4 h-4" />
