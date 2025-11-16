@@ -151,31 +151,76 @@ router.get("/", async (req, res) => {
       WHERE tenant_id = $1
     `;
 
-    const [leadsStats, statusDist, topSectors, campaignsStats] = await Promise.all([
+    // Statistiques emails (tracking)
+    const emailStatsQuery = `
+      SELECT
+        COUNT(CASE WHEN event_type = 'sent' THEN 1 END)::int as total_sent,
+        COUNT(CASE WHEN event_type = 'opened' THEN 1 END)::int as total_opened,
+        COUNT(CASE WHEN event_type = 'clicked' THEN 1 END)::int as total_clicked
+      FROM email_tracking
+      WHERE tenant_id = $1
+    `;
+
+    // Statistiques d'activité (derniers 30 jours)
+    const activityStatsQuery = `
+      SELECT
+        COUNT(*)::int as total_actions
+      FROM email_tracking
+      WHERE tenant_id = $1
+        AND created_at >= NOW() - INTERVAL '30 days'
+    `;
+
+    const [leadsStats, statusDist, topSectors, campaignsStats, emailStats, activityStats] = await Promise.all([
       query(leadsStatsQuery, [tenantId]),
       query(statusDistQuery, [tenantId]),
       query(topSectorsQuery, [tenantId]),
-      query(campaignsQuery, [tenantId])
+      query(campaignsQuery, [tenantId]),
+      query(emailStatsQuery, [tenantId]),
+      query(activityStatsQuery, [tenantId])
     ]);
 
     const total = leadsStats.rows[0]?.total_leads || 0;
     const converted = leadsStats.rows[0]?.converted || 0;
 
+    const totalSent = emailStats.rows[0]?.total_sent || 0;
+    const totalOpened = emailStats.rows[0]?.total_opened || 0;
+    const totalClicked = emailStats.rows[0]?.total_clicked || 0;
+
+    const openRate = totalSent > 0 ? ((totalOpened / totalSent) * 100).toFixed(1) : 0;
+    const clickRate = totalSent > 0 ? ((totalClicked / totalSent) * 100).toFixed(1) : 0;
+
+    const totalActions = activityStats.rows[0]?.total_actions || 0;
+    const dailyActions = Math.round(totalActions / 30);
+
+    // Score d'activité basé sur actions/jour (0-100)
+    const activityScore = Math.min(100, Math.round((dailyActions / 10) * 100));
+
     res.json({
       ok: true,
-      stats: {
-        total: total,
-        converted: converted,
-        qualified: leadsStats.rows[0]?.qualified || 0,
-        contacted: leadsStats.rows[0]?.contacted || 0,
-        conversion_rate: total > 0 ? ((converted / total) * 100).toFixed(1) : 0,
-        byStatus: statusDist.rows,
-        topSectors: topSectors.rows,
-        campaigns: {
-          total: campaignsStats.rows[0]?.total || 0,
-          active: campaignsStats.rows[0]?.active || 0
-        }
-      }
+      total: total,
+      converted: converted,
+      qualified: leadsStats.rows[0]?.qualified || 0,
+      contacted: leadsStats.rows[0]?.contacted || 0,
+      conversion_rate: total > 0 ? ((converted / total) * 100).toFixed(1) : 0,
+      byStatus: statusDist.rows,
+      topSectors: topSectors.rows,
+      campaigns: {
+        total: campaignsStats.rows[0]?.total || 0,
+        active: campaignsStats.rows[0]?.active || 0
+      },
+      email_stats: {
+        total_sent: totalSent,
+        total_opened: totalOpened,
+        total_clicked: totalClicked,
+        open_rate: openRate,
+        click_rate: clickRate
+      },
+      call_stats: {
+        total_calls: 0, // À implémenter quand le système d'appels sera en place
+        avg_duration: 0
+      },
+      activity_score: activityScore,
+      daily_actions: dailyActions
     });
   } catch (err) {
     console.error('❌ Erreur stats:', err);
