@@ -172,6 +172,10 @@ import leadContactsRoute from './api/lead-contacts.js';
 import leadPhonesRoute from './api/lead-phones.js';
 import leadOfficesRoute from './api/lead-offices.js';
 import leadNotesRoute from './api/lead-notes.js';
+import healthRoute from './api/health.js';
+
+// Health check endpoints (test zone)
+app.use('/api/health', healthRoute);
 
 // ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
