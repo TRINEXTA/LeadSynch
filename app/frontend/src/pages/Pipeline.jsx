@@ -10,6 +10,7 @@ import QuickCallModal from '../components/pipeline/QuickCallModal';
 import QuickProposalModal from '../components/pipeline/QuickProposalModal';
 import QuickContractModal from '../components/pipeline/QuickContractModal';
 import HistoryModal from '../components/pipeline/HistoryModal';
+import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
 
 const STAGES = [
   { id: 'cold_call', name: 'Cold Call', color: 'bg-indigo-500', textColor: 'text-indigo-700', bgLight: 'bg-indigo-50' },
@@ -44,6 +45,8 @@ export default function Pipeline() {
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationRequestType, setValidationRequestType] = useState('validation'); // 'validation' ou 'help'
   const [selectedLead, setSelectedLead] = useState(null);
 
   useEffect(() => {
@@ -162,6 +165,18 @@ export default function Pipeline() {
   const handleViewHistory = (lead) => {
     setSelectedLead(lead);
     setShowHistoryModal(true);
+  };
+
+  const handleRequestValidation = (lead) => {
+    setSelectedLead(lead);
+    setValidationRequestType('validation');
+    setShowValidationModal(true);
+  };
+
+  const handleRequestHelp = (lead) => {
+    setSelectedLead(lead);
+    setValidationRequestType('help');
+    setShowValidationModal(true);
   };
 
   const handleCreateLead = (stageId) => {
@@ -385,6 +400,8 @@ export default function Pipeline() {
                                     onContractClick={handleContractClick}
                                     onEditClick={handleEditClick}
                                     onViewHistory={handleViewHistory}
+                                    onRequestValidation={handleRequestValidation}
+                                    onRequestHelp={handleRequestHelp}
                                   />
                                 </div>
                               )}
@@ -467,6 +484,18 @@ export default function Pipeline() {
             setShowHistoryModal(false);
             setSelectedLead(null);
           }}
+        />
+      )}
+
+      {showValidationModal && selectedLead && (
+        <ValidationRequestModal
+          isOpen={showValidationModal}
+          onClose={() => {
+            setShowValidationModal(false);
+            setSelectedLead(null);
+          }}
+          lead={selectedLead}
+          type={validationRequestType}
         />
       )}
     </div>

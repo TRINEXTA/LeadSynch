@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History } from 'lucide-react';
+import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, CheckCircle, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const STAGE_CONFIG = {
@@ -28,7 +28,7 @@ const CONTRACT_STATUS = {
   rejected: { label: 'Refusé', color: 'text-red-600', icon: '❌', bg: 'bg-red-50' }
 };
 
-export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalClick, onContractClick, onEditClick, onViewHistory }) {
+export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalClick, onContractClick, onEditClick, onViewHistory, onRequestValidation, onRequestHelp }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -114,6 +114,24 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
                     >
                       <History className="w-4 h-4" />
                       Historique
+                    </button>
+
+                    <div className="border-t border-gray-200 my-1" />
+
+                    <button
+                      onClick={() => { onRequestValidation && onRequestValidation(lead); setShowActions(false); }}
+                      className="w-full px-3 py-2 text-left hover:bg-green-50 text-sm flex items-center gap-2 text-green-700"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Demande validation
+                    </button>
+
+                    <button
+                      onClick={() => { onRequestHelp && onRequestHelp(lead); setShowActions(false); }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 text-sm flex items-center gap-2 text-blue-700"
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                      Demande d'aide
                     </button>
                   </div>
                 </>

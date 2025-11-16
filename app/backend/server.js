@@ -145,6 +145,7 @@ import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 import signaturesRoute from './api/signatures.js';
 import campaignDetailedStatsRoute from './api/campaign-detailed-stats.js';
+import validationRequestsRoute from './api/validation-requests.js';
 import { getMailingSettings, updateMailingSettings, testMailingSettings } from './api/mailing-settings.js';
 import billingRoutes from './api/billing.js';
 import duplicatesRoutes from './api/duplicates.js';
@@ -178,6 +179,9 @@ app.use('/api/teams', teamsRoute);
 // ? CAMPAIGNS : Routes sp�cifiques AVANT la route g�n�rique
 app.use('/api/campaigns', campaignsRoute);
 app.use('/api/campaign-detailed-stats', campaignDetailedStatsRoute);
+
+// Demandes de validation et d'aide
+app.use('/api/validation-requests', validationRequestsRoute);
 
 app.use('/api/stats', statsRoute);
 app.use('/api/templates', templatesRoute);

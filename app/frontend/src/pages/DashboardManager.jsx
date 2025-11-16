@@ -62,10 +62,10 @@ export default function DashboardManager() {
       const followUpsRes = await api.get('/follow-ups?limit=10').catch(() => ({ data: { followups: [] } }));
       setRecentActivities((followUpsRes.data.followups || []).slice(0, 5));
 
-      // TODO: Charger les validations en attente depuis une vraie API quand elle sera créée
-      // Pour l'instant, on charge depuis les campagnes qui pourraient nécessiter validation
-      const needValidation = activeCampaigns.filter(c => c.status === 'draft' || c.requires_approval);
-      setPendingValidations(needValidation);
+      // Charger les demandes de validation et d'aide en attente
+      const validationsRes = await api.get('/validation-requests?status=pending&assigned_to_me=true')
+        .catch(() => ({ data: { requests: [] } }));
+      setPendingValidations(validationsRes.data.requests || []);
 
     } catch (error) {
       console.error('Erreur chargement dashboard manager:', error);
@@ -75,11 +75,13 @@ export default function DashboardManager() {
     }
   };
 
-  const handleApprove = async (validationId) => {
+  const handleApprove = async (requestId) => {
     try {
-      // TODO: Implémenter l'endpoint d'approbation
-      await api.post(`/validations/${validationId}/approve`);
-      alert('Validation approuvée avec succès');
+      await api.patch(`/validation-requests/${requestId}`, {
+        status: 'approved',
+        manager_response: 'Demande approuvée'
+      });
+      alert('Demande approuvée avec succès');
       fetchDashboard();
     } catch (error) {
       console.error('Erreur approbation:', error);
@@ -87,18 +89,38 @@ export default function DashboardManager() {
     }
   };
 
-  const handleReject = async (validationId) => {
+  const handleReject = async (requestId) => {
     const reason = prompt('Raison du refus:');
     if (!reason) return;
 
     try {
-      // TODO: Implémenter l'endpoint de rejet
-      await api.post(`/validations/${validationId}/reject`, { reason });
-      alert('Validation rejetée');
+      await api.patch(`/validation-requests/${requestId}`, {
+        status: 'rejected',
+        manager_response: reason
+      });
+      alert('Demande rejetée');
       fetchDashboard();
     } catch (error) {
       console.error('Erreur rejet:', error);
       alert('Erreur lors du rejet');
+    }
+  };
+
+  const handleRespond = async (requestId) => {
+    const response = prompt('Votre réponse à la demande d\'aide:');
+    if (!response) return;
+
+    try {
+      await api.patch(`/validation-requests/${requestId}`, {
+        status: 'resolved',
+        manager_response: response,
+        resolution_notes: response
+      });
+      alert('Réponse envoyée avec succès');
+      fetchDashboard();
+    } catch (error) {
+      console.error('Erreur réponse:', error);
+      alert('Erreur lors de l\'envoi de la réponse');
     }
   };
 
@@ -210,52 +232,116 @@ export default function DashboardManager() {
           {pendingValidations.length === 0 ? (
             <div className="text-center py-12">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <p className="text-gray-600 font-medium">Aucune validation en attente</p>
+              <p className="text-gray-600 font-medium">Aucune demande en attente</p>
               <p className="text-sm text-gray-500 mt-2">Toutes les demandes ont été traitées</p>
             </div>
           ) : (
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {pendingValidations.map((validation) => (
-                <div key={validation.id} className="bg-white/80 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all">
+              {pendingValidations.map((request) => (
+                <div key={request.id} className="bg-white/80 rounded-xl p-5 border border-gray-200 hover:shadow-lg transition-all">
+                  {/* En-tête */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <FileText className="w-4 h-4 text-purple-600" />
-                        <span className="font-semibold text-gray-900">{validation.name}</span>
-                        <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
-                          {validation.status || 'EN ATTENTE'}
+                        {request.type === 'validation' ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <MessageSquare className="w-5 h-5 text-blue-600" />
+                        )}
+                        <span className="font-bold text-gray-900 text-lg">{request.subject}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          request.type === 'validation'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {request.type === 'validation' ? '✅ Demande de validation' : '💬 Demande d\'aide'}
+                        </span>
+
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          request.priority === 'urgent' ? 'bg-red-100 text-red-700 animate-pulse' :
+                          request.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                          request.priority === 'normal' ? 'bg-gray-100 text-gray-700' :
+                          'bg-gray-50 text-gray-600'
+                        }`}>
+                          {request.priority === 'urgent' ? '🔥 Urgent' :
+                           request.priority === 'high' ? '⚡ Prioritaire' :
+                           request.priority === 'normal' ? '📌 Normal' : '📋 Bas'}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">
-                        Type: {validation.type === 'email' ? 'Email' : 'Téléphone'}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Créée le {new Date(validation.created_at).toLocaleDateString('fr-FR')}
-                      </p>
+
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>
+                          <span className="font-semibold">De:</span> {request.requester_first_name} {request.requester_last_name}
+                        </p>
+                        {request.company_name && (
+                          <p>
+                            <span className="font-semibold">Lead:</span> {request.company_name}
+                            {request.contact_name && ` (${request.contact_name})`}
+                          </p>
+                        )}
+                        {request.campaign_name && (
+                          <p>
+                            <span className="font-semibold">Campagne:</span> {request.campaign_name}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      onClick={() => handleApprove(validation.id)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all font-medium shadow-md hover:shadow-lg"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Approuver
-                    </button>
-                    <button
-                      onClick={() => handleReject(validation.id)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all font-medium shadow-md hover:shadow-lg"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Refuser
-                    </button>
-                    <button
-                      onClick={() => navigate(`/CampaignDetails?id=${validation.id}`)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
-                    >
-                      Détails
-                    </button>
+                  {/* Message */}
+                  {request.message && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{request.message}</p>
+                    </div>
+                  )}
+
+                  {/* Métadonnées */}
+                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      <span>{new Date(request.created_at).toLocaleDateString('fr-FR')} à {new Date(request.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    {request.type === 'validation' ? (
+                      <>
+                        <button
+                          onClick={() => handleApprove(request.id)}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all font-semibold shadow-md hover:shadow-lg"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Approuver
+                        </button>
+                        <button
+                          onClick={() => handleReject(request.id)}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all font-semibold shadow-md hover:shadow-lg"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Refuser
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleRespond(request.id)}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all font-semibold shadow-md hover:shadow-lg"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        Répondre
+                      </button>
+                    )}
+                    {request.lead_id && (
+                      <button
+                        onClick={() => navigate(`/LeadDetails?id=${request.lead_id}`)}
+                        className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold"
+                      >
+                        Voir Lead
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
