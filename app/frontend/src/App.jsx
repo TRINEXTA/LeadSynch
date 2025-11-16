@@ -11,6 +11,8 @@ import Login from './pages/Login';
 
 // Pages principales
 import Dashboard from './pages/Dashboard';
+import DashboardUniversel from './pages/DashboardUniversel';
+import DashboardManager from './pages/DashboardManager';
 import Leads from './pages/Leads';
 import Users from './pages/Users';
 
@@ -65,6 +67,12 @@ import ManageSectorTaxonomy from './pages/ManageSectorTaxonomy';
 import TestTracking from './pages/TestTracking';
 import TestZone from './pages/TestZone';
 
+// Formation
+import Formation from './pages/Formation';
+
+// Secteurs géographiques
+import GeographicSectors from './pages/GeographicSectors';
+
 // Signature de contrats
 import SignContract from './pages/SignContract';
 
@@ -90,7 +98,9 @@ function App() {
           
           {/* Routes prot�g�es */}
           <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<DashboardUniversel />} />
+            <Route path="/dashboard-classic" element={<Dashboard />} />
+            <Route path="/dashboard-manager" element={<DashboardManager />} />
             <Route path="/CommercialDashboard" element={<CommercialDashboard />} />
             
             <Route path="/leads" element={<Leads />} />
@@ -139,6 +149,8 @@ function App() {
             <Route path="/ManageSectorTaxonomy" element={<ManageSectorTaxonomy />} />
             <Route path="/TestTracking" element={<TestTracking />} />
             <Route path="/TestZone" element={<TestZone />} />
+            <Route path="/Formation" element={<Formation />} />
+            <Route path="/geographic-sectors" element={<GeographicSectors />} />
 
             <Route path="/billing" element={<Billing />} />
             <Route path="/lead-credits" element={<LeadCredits />} />

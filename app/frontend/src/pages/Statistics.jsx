@@ -325,92 +325,102 @@ export default function Statistics() {
           </Card>
         </div>
 
-        {/* Stats globales */}
-        {stats.email_stats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Emails envoyés */}
-            <Card className="shadow-xl border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-600" />
-                  Emails
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-blue-600 mb-2">
-                  {stats.email_stats.total_sent || 0}
+        {/* Stats globales - Emails, Appels, Activité */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Emails envoyés */}
+          <Card className="shadow-xl border-2 border-gray-200 hover:shadow-2xl transition-all">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-blue-600" />
+                Emails
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {stats.email_stats?.total_sent || 0}
+              </div>
+              <div className="text-sm text-gray-600 mb-3">
+                Emails envoyés
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">📨 Ouverts</span>
+                  <span className="font-bold text-green-600">
+                    {stats.email_stats?.total_opened || 0} ({stats.email_stats?.open_rate || 0}%)
+                  </span>
                 </div>
-                <div className="text-sm text-gray-600">
-                  Emails envoyés
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">🖱️ Cliqués</span>
+                  <span className="font-bold text-purple-600">
+                    {stats.email_stats?.total_clicked || 0} ({stats.email_stats?.click_rate || 0}%)
+                  </span>
                 </div>
-                {stats.email_stats.open_rate && (
-                  <div className="mt-3 pt-3 border-t">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Taux d'ouverture</span>
-                      <span className="font-bold text-green-600">
-                        {stats.email_stats.open_rate}%
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Appels */}
-            <Card className="shadow-xl border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="w-5 h-5 text-green-600" />
-                  Appels
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-green-600 mb-2">
-                  {stats.call_stats?.total_calls || 0}
+          {/* Appels */}
+          <Card className="shadow-xl border-2 border-gray-200 hover:shadow-2xl transition-all">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 border-b">
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="w-5 h-5 text-green-600" />
+                Appels
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="text-3xl font-bold text-green-600 mb-2">
+                {stats.call_stats?.total_calls || 0}
+              </div>
+              <div className="text-sm text-gray-600 mb-3">
+                Appels effectués
+              </div>
+              {stats.call_stats?.total_calls > 0 && stats.call_stats?.avg_duration ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">⏱️ Durée moyenne</span>
+                  <span className="font-bold text-blue-600">
+                    {stats.call_stats.avg_duration} min
+                  </span>
                 </div>
-                <div className="text-sm text-gray-600">
-                  Appels effectués
+              ) : (
+                <div className="text-xs text-gray-500 italic">
+                  Système d'appels bientôt disponible
                 </div>
-                {stats.call_stats?.avg_duration && (
-                  <div className="mt-3 pt-3 border-t">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Durée moyenne</span>
-                      <span className="font-bold text-blue-600">
-                        {stats.call_stats.avg_duration} min
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Activité */}
-            <Card className="shadow-xl border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-orange-600" />
-                  Activité
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="text-3xl font-bold text-orange-600 mb-2">
-                  {stats.activity_score || 'N/A'}
+          {/* Activité */}
+          <Card className="shadow-xl border-2 border-gray-200 hover:shadow-2xl transition-all">
+            <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-orange-600" />
+                Activité
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="text-3xl font-bold text-orange-600 mb-2">
+                {stats.activity_score !== undefined ? stats.activity_score : 0}/100
+              </div>
+              <div className="text-sm text-gray-600 mb-3">
+                Score d'activité (30j)
+              </div>
+              <div className="space-y-2">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full transition-all"
+                    style={{ width: `${stats.activity_score || 0}%` }}
+                  />
                 </div>
-                <div className="text-sm text-gray-600">
-                  Score d'activité
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">⚡ Actions/jour</span>
+                  <span className="font-bold text-purple-600">
+                    {stats.daily_actions || 0}
+                  </span>
                 </div>
-                <div className="mt-3 pt-3 border-t">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Actions/jour</span>
-                    <span className="font-bold text-purple-600">
-                      {stats.daily_actions || 0}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

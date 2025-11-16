@@ -22,7 +22,9 @@ import {
   Megaphone,
   CreditCard,
   DollarSign,
-  Copy
+  Copy,
+  GraduationCap,
+  MapPin
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -54,6 +56,7 @@ export default function Sidebar() {
   const navigation = {
     main: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
+      { name: 'Dashboard Manager', href: '/dashboard-manager', icon: BarChart3, roles: ['manager', 'admin'] },
       { name: 'Mon Dashboard', href: '/CommercialDashboard', icon: Target, roles: ['commercial'] }
     ],
     
@@ -125,9 +128,11 @@ export default function Sidebar() {
         { name: 'Équipes', href: '/teams', icon: Users },
         { name: 'Utilisateurs', href: '/users', icon: UserCircle },
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users },
+        { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin },
         { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen },
         { name: 'Migration Leads', href: '/MigrateLeads', icon: Database },
-        { name: 'Zone de Test', href: '/TestZone', icon: TestTube }
+        { name: 'Zone de Test', href: '/TestZone', icon: TestTube },
+        { name: 'Formation', href: '/Formation', icon: GraduationCap }
       ]
     }
   }

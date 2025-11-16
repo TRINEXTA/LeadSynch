@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -19,6 +21,12 @@ if (!process.env.POSTGRES_URL) {
 
 if (!process.env.JWT_SECRET) {
   console.error('❌ ERREUR: JWT_SECRET manquant - La sécurité de l\'authentification nécessite cette variable');
+  process.exit(1);
+}
+
+if (!process.env.ELASTIC_EMAIL_API_KEY) {
+  console.error('❌ ERREUR: ELASTIC_EMAIL_API_KEY manquant - Requis pour l\'envoi d\'emails via Elastic Email');
+  console.error('   Configurez votre clé API dans le fichier .env (voir .env.example)');
   process.exit(1);
 }
 
@@ -55,6 +63,35 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
+// ========= 🔒 SÉCURITÉ - Helmet + Rate Limiting =========
+app.use(helmet({
+  contentSecurityPolicy: false, // Désactivé pour éviter conflit avec frontend
+  crossOriginEmbedderPolicy: false
+}));
+
+// Rate limiter global
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Plus permissif en dev
+  message: 'Trop de requêtes, veuillez réessayer plus tard',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Rate limiter pour auth - PLUS PERMISSIF EN DÉVELOPPEMENT
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 5 : 50, // 50 en dev, 5 en prod
+  skipSuccessfulRequests: true,
+  message: 'Trop de tentatives de connexion, réessayez dans 15 minutes'
+});
+
+app.use('/api/', globalLimiter);
+
+console.log('🔒 Sécurité activée: Helmet + Rate Limiting');
+console.log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
+console.log(`   Auth: ${process.env.NODE_ENV === 'production' ? '5' : '50'} req/15min`);
+
 app.use((req, res, next) => {
   const start = Date.now();
   console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
@@ -82,10 +119,10 @@ import changePasswordRoute from './api/auth/change-password.js';
 import resetPassword from './api/auth/reset-password.js';
 import authLogout from './api/auth/logout.js';
 
-app.all('/api/auth/login', authLogin);
+app.all('/api/auth/login', authLimiter, authLogin); // Rate limit strict sur login
 app.all('/api/auth/me', authMe);
 app.all('/api/auth/change-password', changePasswordRoute);
-app.all('/api/auth/reset-password', resetPassword);
+app.all('/api/auth/reset-password', authLimiter, resetPassword); // Rate limit sur reset password
 if (authLogout) app.all('/api/auth/logout', authLogout);
 
 // ========== ?? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
@@ -100,6 +137,7 @@ import generateLeadsStreamRoute from './api/generate-leads-stream.js';
 import followUpsRoute from './api/follow-ups.js';
 import quotasRoute from './api/quotas.js';
 import importCsvRoute from './api/import-csv.js';
+import asefiRoute from './api/asefi.js';
 import asefiGenerateRoute from './api/asefi-generate.js';
 import emailTemplatesRoute from './api/email-templates.js';
 import chatbotRoute from './routes/chatbot.js';
@@ -113,6 +151,9 @@ import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 import signaturesRoute from './api/signatures.js';
+import campaignDetailedStatsRoute from './api/campaign-detailed-stats.js';
+import validationRequestsRoute from './api/validation-requests.js';
+import leadSectorAssignmentRoute from './api/lead-sector-assignment.js';
 import { getMailingSettings, updateMailingSettings, testMailingSettings } from './api/mailing-settings.js';
 import billingRoutes from './api/billing.js';
 import duplicatesRoutes from './api/duplicates.js';
@@ -121,11 +162,25 @@ import leadCreditsRoutes from './api/lead-credits.js';
 import servicesRoutes from './api/services.js';
 import subscriptionsRoutes from './api/subscriptions.js';
 
+// ========== API Gouv - Génération leads légaux ==========
+import apiGouvLeadsRoute from './api/api-gouv-leads.js';
+
+// ========== Geographic Sectors - Gestion secteurs géographiques ==========
+import geographicSectorsRoute from './api/geographic-sectors.js';
+
 // ========== ?? NOUVELLES ROUTES LEAD MANAGEMENT ==========
 import leadContactsRoute from './api/lead-contacts.js';
 import leadPhonesRoute from './api/lead-phones.js';
 import leadOfficesRoute from './api/lead-offices.js';
 import leadNotesRoute from './api/lead-notes.js';
+import healthRoute from './api/health.js';
+import trainingRoute from './api/training.js';
+
+// Health check endpoints (test zone)
+app.use('/api/health', healthRoute);
+
+// Training system (formation par rôle)
+app.use('/api/training', trainingRoute);
 
 // ? CORRECTION CRITIQUE : Monter les routes dans le bon ordre
 app.use('/api/leads', leadsRoute);
@@ -139,6 +194,13 @@ app.use('/api/teams', teamsRoute);
 
 // ? CAMPAIGNS : Routes sp�cifiques AVANT la route g�n�rique
 app.use('/api/campaigns', campaignsRoute);
+app.use('/api/campaign-detailed-stats', campaignDetailedStatsRoute);
+
+// Demandes de validation et d'aide
+app.use('/api/validation-requests', validationRequestsRoute);
+
+// Assignation leads aux secteurs géographiques
+app.use('/api/lead-sector-assignment', leadSectorAssignmentRoute);
 
 app.use('/api/stats', statsRoute);
 app.use('/api/templates', templatesRoute);
@@ -153,6 +215,9 @@ app.use('/api/follow-ups', followUpsRoute);
 // ? FIX CRITIQUE : Utiliser app.use au lieu de app.all pour les routes Express
 app.use('/api/import-csv', importCsvRoute);
 
+// Asefi chatbot intelligent (s'alimente des vraies données)
+app.use('/api/asefi', asefiRoute);
+// Asefi génération de templates (endpoints spécifiques)
 app.use('/api/asefi', asefiGenerateRoute);
 app.use('/api/email-templates', emailTemplatesRoute);
 app.use('/api/chatbot', chatbotRoute);
@@ -163,6 +228,8 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
+app.use('/api/api-gouv', apiGouvLeadsRoute);
+app.use('/api/geographic-sectors', geographicSectorsRoute);
 
 // ========== ?? ROUTES SIGNATURES CONTRATS ==========
 app.use('/api/sign', signaturesRoute);
@@ -188,6 +255,23 @@ app.use('/api/lead-credits', leadCreditsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/subscriptions', subscriptionsRoutes);
 
+// ========== 🔒 ROUTES RGPD & BLACKLIST ==========
+import checkBlacklistRoute from './api/check-blacklist.js';
+import rgpdController from './controllers/rgpdController.js';
+import unsubscribeController from './controllers/unsubscribeController.js';
+
+app.use('/api/check-blacklist', checkBlacklistRoute);
+app.post('/api/rgpd/check-blacklist', authMiddleware, rgpdController.checkBlacklist);
+app.get('/api/rgpd/violations', authMiddleware, rgpdController.getViolationStats);
+app.get('/api/unsubscribes', authMiddleware, unsubscribeController.getUnsubscribedEmails);
+app.get('/api/unsubscribes/stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
+
+// Routes publiques unsubscribe (sans auth)
+app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
+app.post('/api/unsubscribe/:lead_id', unsubscribeController.processUnsubscribe);
+
+console.log('✅ Routes RGPD configurées');
+
 // ========== ?? ROUTES LEAD MANAGEMENT AVANC� ==========
 app.use('/api/leads', leadContactsRoute);
 app.use('/api/leads', leadPhonesRoute);
@@ -195,8 +279,6 @@ app.use('/api/leads', leadOfficesRoute);
 app.use('/api/leads', leadNotesRoute);
 
 // ========== ROUTES TRACKING ==========
-import * as unsubscribeController from './controllers/unsubscribeController.js';
-app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
 app.post('/api/unsubscribe/:lead_id', authMiddleware, unsubscribeController.processUnsubscribe);
 app.post('/api/resubscribe/:lead_id', authMiddleware, unsubscribeController.resubscribe);
 app.get('/api/unsubscribe-stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
@@ -239,6 +321,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('========================================');
   console.log('?? Port:', PORT);
   console.log('?? CORS:', allowedOrigins.join(', '));
+  console.log('📧 Elastic Email: Configuré ✅');
+  console.log('   Email expéditeur:' , process.env.EMAIL_FROM || 'b2b@trinexta.fr');
   console.log('?? Date:', new Date().toLocaleString('fr-FR'));
   console.log('========================================');
   console.log('');

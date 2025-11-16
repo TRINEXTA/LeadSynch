@@ -290,6 +290,130 @@ Vous souhaitez en profiter ? Répondez simplement à cet email !
 Cordialement,
 {{sender_name}}`,
     variables: ['contact_first_name', 'special_offer', 'offer_details', 'offer_expiry_date', 'sender_name']
+  },
+
+  // ===== FACTURATION =====
+  invoice: {
+    name: 'Envoi de facture',
+    subject: 'Facture N°{{invoice_number}} - {{company_name}}',
+    body: `Bonjour {{contact_first_name}},
+
+Veuillez trouver ci-joint votre facture N°{{invoice_number}}.
+
+📋 Détails :
+Montant HT : {{amount_ht}}€
+TVA ({{vat_rate}}%) : {{vat_amount}}€
+Montant TTC : {{amount_ttc}}€
+
+💳 Échéance : {{payment_due_date}}
+
+Pour tout règlement, merci d'utiliser les coordonnées bancaires indiquées sur la facture.
+
+Nous restons à votre disposition pour toute question.
+
+Cordialement,
+{{sender_name}}
+{{sender_company}}`,
+    variables: ['contact_first_name', 'company_name', 'invoice_number', 'amount_ht', 'vat_rate', 'vat_amount', 'amount_ttc', 'payment_due_date', 'sender_name', 'sender_company']
+  },
+
+  payment_reminder: {
+    name: 'Rappel de paiement',
+    subject: 'Rappel - Facture N°{{invoice_number}} échue',
+    body: `Bonjour {{contact_first_name}},
+
+Nous constatons que la facture N°{{invoice_number}} d'un montant de {{amount_ttc}}€ TTC, échue le {{payment_due_date}}, n'a pas encore été réglée.
+
+Il s'agit peut-être d'un oubli de votre part ?
+
+Pourriez-vous procéder au règlement dans les meilleurs délais ou nous tenir informés en cas de problème ?
+
+Merci de votre compréhension.
+
+Cordialement,
+{{sender_name}}
+{{sender_company}}
+{{sender_phone}}`,
+    variables: ['contact_first_name', 'invoice_number', 'amount_ttc', 'payment_due_date', 'sender_name', 'sender_company', 'sender_phone']
+  },
+
+  // ===== REMERCIEMENT =====
+  thank_you: {
+    name: 'Remerciement',
+    subject: 'Merci {{contact_first_name}} !',
+    body: `Bonjour {{contact_first_name}},
+
+Je tenais à vous remercier pour {{reason}}.
+
+{{custom_message}}
+
+C'est toujours un plaisir de travailler avec des partenaires comme vous !
+
+Bien cordialement,
+{{sender_name}}`,
+    variables: ['contact_first_name', 'reason', 'custom_message', 'sender_name']
+  },
+
+  referral_request: {
+    name: 'Demande de recommandation',
+    subject: 'Pouvez-vous nous recommander ?',
+    body: `Bonjour {{contact_first_name}},
+
+Nous sommes ravis de collaborer avec vous depuis {{collaboration_duration}}.
+
+Si vous êtes satisfait de nos services, accepteriez-vous de nous recommander à votre réseau ?
+
+Cela nous aiderait énormément ! En retour, nous vous offrons {{referral_reward}}.
+
+🔗 Lien de parrainage : {{referral_link}}
+
+Merci d'avance pour votre confiance !
+
+Cordialement,
+{{sender_name}}`,
+    variables: ['contact_first_name', 'collaboration_duration', 'referral_reward', 'referral_link', 'sender_name']
+  },
+
+  // ===== MISE À JOUR =====
+  product_update: {
+    name: 'Mise à jour produit',
+    subject: '🚀 Nouvelle fonctionnalité - {{product_name}}',
+    body: `Bonjour {{contact_first_name}},
+
+Excellente nouvelle ! Nous venons de lancer {{feature_name}} sur {{product_name}}.
+
+✨ Ce qui change pour vous :
+{{feature_benefit_1}}
+{{feature_benefit_2}}
+{{feature_benefit_3}}
+
+📚 Guide : {{documentation_link}}
+🎥 Vidéo démo : {{video_link}}
+
+Cette fonctionnalité est disponible dès maintenant dans votre espace.
+
+Bonne découverte !
+
+L'équipe {{sender_company}}`,
+    variables: ['contact_first_name', 'product_name', 'feature_name', 'feature_benefit_1', 'feature_benefit_2', 'feature_benefit_3', 'documentation_link', 'video_link', 'sender_company']
+  },
+
+  seasonal_greeting: {
+    name: 'Vœux saisonniers',
+    subject: '{{greeting_occasion}} - {{company_name}}',
+    body: `Bonjour {{contact_first_name}},
+
+À l'occasion de {{greeting_occasion}}, toute l'équipe de {{sender_company}} vous adresse ses meilleurs vœux !
+
+{{custom_greeting_message}}
+
+Nous vous souhaitons {{wishes}}.
+
+Merci pour votre confiance et à très bientôt !
+
+Chaleureusement,
+{{sender_name}} et toute l'équipe`,
+    variables: ['contact_first_name', 'company_name', 'greeting_occasion', 'sender_company', 'custom_greeting_message', 'wishes', 'sender_name']
   }
 };
 
@@ -334,6 +458,9 @@ export function getTemplatesByCategory() {
     customer_care: ['welcome', 'check_in'],
     events: ['event_invitation'],
     content: ['newsletter'],
-    retention: ['win_back']
+    retention: ['win_back'],
+    billing: ['invoice', 'payment_reminder'],
+    appreciation: ['thank_you', 'referral_request'],
+    updates: ['product_update', 'seasonal_greeting']
   };
 }
