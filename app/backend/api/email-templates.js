@@ -1,6 +1,7 @@
 ﻿import express from 'express';
 import pkg from 'pg';
 import { authMiddleware } from '../middleware/auth.js';
+import { sanitizeHTML } from '../lib/sanitizer.js';
 const { Pool } = pkg;
 const router = express.Router();
 const pool = new Pool({
@@ -51,9 +52,13 @@ async function createTemplateHandler(req, res) {
     if (!name || !subject || !html_body) {
       return res.status(400).json({ error: 'Nom, sujet et corps requis' });
     }
+
+    // ✅ SÉCURITÉ: Sanitize HTML pour prévenir XSS
+    const sanitizedHTML = sanitizeHTML(html_body);
+
     const result = await pool.query(
       'INSERT INTO email_templates (tenant_id, name, subject, html_body, template_type, is_active, metadata, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8) RETURNING *',
-      [tenantId, name, subject, html_body, template_type || 'email', is_active !== false, metadata ? JSON.stringify(metadata) : null, userId]
+      [tenantId, name, subject, sanitizedHTML, template_type || 'email', is_active !== false, metadata ? JSON.stringify(metadata) : null, userId]
     );
     res.status(201).json({ message: 'Template créé', template: result.rows[0] });
   } catch (error) {
