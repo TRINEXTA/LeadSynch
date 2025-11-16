@@ -186,7 +186,7 @@ export const resubscribe = async (req, res) => {
     }
 
     const lead = await queryOne(
-      'SELECT tenant_id FROM leads WHERE id = $1',
+      'SELECT tenant_id, email FROM leads WHERE id = $1',
       [lead_id]
     );
 
@@ -194,6 +194,45 @@ export const resubscribe = async (req, res) => {
       return res.status(404).json({ error: 'Lead non trouvé' });
     }
 
+    // ===== VÉRIFIER NOMBRE DE RÉABONNEMENTS =====
+    // Compter combien de fois ce lead a été désabonné et réabonné
+    const unsubscribeHistory = await queryOne(
+      `SELECT
+        COUNT(*) as total_unsubscribes,
+        MAX(unsubscribed_at) as last_unsubscribe
+       FROM email_unsubscribes
+       WHERE lead_id = $1 AND tenant_id = $2`,
+      [lead_id, lead.tenant_id]
+    );
+
+    const resubscribeCount = parseInt(unsubscribeHistory.total_unsubscribes) || 0;
+
+    // ===== RÈGLE ANTI-SPAM : BAN APRÈS 3 RÉABONNEMENTS =====
+    if (resubscribeCount >= 3) {
+      console.error(`🚨 TENTATIVE DE BAN AUTOMATIQUE - Tenant ${lead.tenant_id} a réabonné ${resubscribeCount} fois le lead ${lead.email}`);
+
+      // Bannir le tenant
+      await execute(
+        `UPDATE tenants
+         SET banned = true,
+             ban_reason = 'Réabonnement abusif après désabonnement (3+ fois) - Protection anti-spam',
+             banned_at = NOW()
+         WHERE id = $1`,
+        [lead.tenant_id]
+      );
+
+      console.error(`🚨 TENANT BANNI: ${lead.tenant_id} - Raison: Réabonnement abusif (${resubscribeCount} réabonnements du même lead)`);
+
+      // Notifier le super admin
+      await notifySuperAdminOfBan(lead.tenant_id, resubscribeCount, lead.email);
+
+      return res.status(403).json({
+        error: 'COMPTE BANNI AUTOMATIQUEMENT',
+        message: `Vous avez réabonné ce lead ${resubscribeCount} fois après désabonnement. Votre compte a été automatiquement banni pour protection anti-spam (RGPD). Contactez support@leadsynch.com pour un déblocage.`
+      });
+    }
+
+    // Continuer le réabonnement normal
     await execute(
       `UPDATE leads
        SET unsubscribed = false,
@@ -202,19 +241,88 @@ export const resubscribe = async (req, res) => {
       [lead_id]
     );
 
-    await execute(
-      'DELETE FROM email_unsubscribes WHERE lead_id = $1 AND tenant_id = $2',
-      [lead_id, lead.tenant_id]
-    );
+    // NE PAS supprimer l'historique - garder pour tracking
+    // await execute(
+    //   'DELETE FROM email_unsubscribes WHERE lead_id = $1 AND tenant_id = $2',
+    //   [lead_id, lead.tenant_id]
+    // );
 
-    console.log(`✅ Resubscribe: lead ${lead_id}`);
+    console.log(`⚠️ Resubscribe: lead ${lead_id} (${resubscribeCount + 1}ème réabonnement) - Attention: ${3 - resubscribeCount - 1} essais restants avant BAN`);
 
-    res.json({ message: 'Lead réabonné avec succès' });
+    res.json({
+      message: 'Lead réabonné avec succès',
+      warning: resubscribeCount >= 2 ? `⚠️ ATTENTION: C'est votre ${resubscribeCount + 1}ème réabonnement de ce lead. Au 3ème, votre compte sera automatiquement banni.` : null,
+      resubscribe_count: resubscribeCount + 1,
+      remaining_attempts: Math.max(0, 3 - resubscribeCount - 1)
+    });
   } catch (error) {
     console.error('Erreur resubscribe:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
+
+/**
+ * Notifier super admin d'un ban automatique
+ */
+async function notifySuperAdminOfBan(tenantId, resubscribeCount, leadEmail) {
+  try {
+    const tenant = await queryOne(
+      'SELECT name, email FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+
+    if (!tenant) return;
+
+    const subject = '🚨 BAN AUTOMATIQUE - Réabonnement abusif détecté';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #d32f2f; color: white; padding: 20px; text-align: center;">
+          <h1>🚨 BAN AUTOMATIQUE</h1>
+        </div>
+
+        <div style="padding: 30px; background: #f9f9f9;">
+          <h2>Protection Anti-Spam Activée</h2>
+
+          <p style="font-size: 16px; line-height: 1.6;">
+            Un tenant a été automatiquement banni pour réabonnement abusif :
+          </p>
+
+          <div style="background: white; border-left: 4px solid #d32f2f; padding: 15px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Tenant ID :</strong> ${tenantId}</p>
+            <p style="margin: 5px 0;"><strong>Nom :</strong> ${tenant.name}</p>
+            <p style="margin: 5px 0;"><strong>Email :</strong> ${tenant.email}</p>
+            <p style="margin: 5px 0;"><strong>Lead réabonné ${resubscribeCount} fois :</strong> ${leadEmail}</p>
+          </div>
+
+          <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #856404;">📋 Règle appliquée</h3>
+            <p style="color: #856404; margin: 0;">
+              Après 3 réabonnements du même lead désabonné, le compte est automatiquement banni pour protection anti-spam et conformité RGPD.
+            </p>
+          </div>
+
+          <p style="font-size: 14px; color: #999; margin-top: 30px;">
+            LeadSynch - Protection Anti-Spam Automatique<br>
+            Cet email est automatique.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Envoyer à support@leadsynch.com
+    await sendEmail({
+      to: 'support@leadsynch.com',
+      subject: subject,
+      html: html
+    });
+
+    console.log(`📧 Notification de ban envoyée à support@leadsynch.com`);
+
+  } catch (error) {
+    console.error('❌ Erreur notification ban:', error);
+  }
+}
 
 // Stats désabonnements (par tenant)
 export const getUnsubscribeStats = async (req, res) => {
