@@ -103,4 +103,50 @@ export function authMiddleware(handlerOrReq, res, next) {
   })();
 }
 
+/**
+ * Helper pour vérifier l'authentification dans les endpoints serverless
+ * Retourne { authenticated: true, userId, tenantId, role, user } ou { authenticated: false, error }
+ */
+export async function verifyAuth(req) {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { authenticated: false, error: 'Token manquant' };
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Charger les infos complètes de l'utilisateur depuis la DB
+    const { rows } = await db.query(
+      `SELECT id, email, first_name, last_name, role, tenant_id
+       FROM users
+       WHERE id = $1`,
+      [decoded.id]
+    );
+
+    if (rows.length === 0) {
+      return { authenticated: false, error: 'Utilisateur non trouvé' };
+    }
+
+    const user = rows[0];
+
+    return {
+      authenticated: true,
+      userId: user.id,
+      tenantId: user.tenant_id,
+      role: user.role,
+      user: user
+    };
+
+  } catch (error) {
+    console.error('❌ Auth error:', error.message);
+    return {
+      authenticated: false,
+      error: error.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide'
+    };
+  }
+}
+
 export default authMiddleware;
