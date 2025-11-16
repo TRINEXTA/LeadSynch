@@ -212,10 +212,13 @@ app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage
 app.get('/api/images', authMiddleware, imageUploadController.getImages);
 app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
 
-// ========== STATIC FILES ==========
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ========== PROTECTED FILE SERVING ==========
+// ✅ SÉCURITÉ: Route protégée avec authentification et vérification tenant_id
+import serveFileHandler from './api/serve-file.js';
+app.get('/api/serve-file/*', serveFileHandler);
+
+// ❌ SÉCURITÉ: Route publique désactivée - utiliser /api/serve-file à la place
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ========== ERROR HANDLER (DOIT �TRE EN DERNIER) ==========
 app.use(errorHandler);

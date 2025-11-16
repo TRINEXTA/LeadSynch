@@ -65,17 +65,28 @@ export default function ImageGallery({ onInsert }) {
     }
   };
 
+  // ✅ SÉCURITÉ: Transformer les anciennes URLs publiques vers l'endpoint protégé
+  const getSecureUrl = (fileUrl) => {
+    if (fileUrl.startsWith('/uploads/')) {
+      // Ancienne URL publique → Convertir vers endpoint protégé
+      return fileUrl.replace('/uploads/', '/api/serve-file/');
+    }
+    return fileUrl; // Déjà au bon format
+  };
+
   const handleCopyUrl = (url) => {
-    const fullUrl = `${window.location.origin}${url}`;
+    const secureUrl = getSecureUrl(url);
+    const fullUrl = `${window.location.origin}${secureUrl}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedId(url);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleInsertHtml = (image) => {
-    const fullUrl = `${window.location.origin}${image.file_url}`;
+    const secureUrl = getSecureUrl(image.file_url);
+    const fullUrl = `${window.location.origin}${secureUrl}`;
     const html = `<img src="${fullUrl}" alt="${image.original_name}" style="max-width: 100%; height: auto;" />`;
-    
+
     if (onInsert) {
       onInsert(html);
     } else {
@@ -124,7 +135,7 @@ export default function ImageGallery({ onInsert }) {
             <div key={image.id} className="border-2 border-gray-200 rounded-xl overflow-hidden hover:border-purple-300 transition-all group">
               <div className="relative aspect-video bg-gray-100">
                 <img
-                  src={`${window.location.origin}${image.file_url}`}
+                  src={`${window.location.origin}${getSecureUrl(image.file_url)}`}
                   alt={image.original_name}
                   className="w-full h-full object-cover"
                 />

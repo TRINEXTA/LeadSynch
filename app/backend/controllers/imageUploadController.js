@@ -54,7 +54,8 @@ export const uploadImage = async (req, res) => {
         .toFile(filePath);
 
       const stats = fs.statSync(filePath);
-      const fileUrl = `/uploads/images/${filename}`;
+      // ✅ SÉCURITÉ: Utiliser l'endpoint protégé
+      const fileUrl = `/api/serve-file/images/${filename}`;
 
       // Sauvegarder dans la DB
       await db.query(
