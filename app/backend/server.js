@@ -24,6 +24,12 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+if (!process.env.ELASTIC_EMAIL_API_KEY) {
+  console.error('❌ ERREUR: ELASTIC_EMAIL_API_KEY manquant - Requis pour l\'envoi d\'emails via Elastic Email');
+  console.error('   Configurez votre clé API dans le fichier .env (voir .env.example)');
+  process.exit(1);
+}
+
 const app = express();
 app.set('trust proxy', 1);
 
@@ -303,6 +309,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('========================================');
   console.log('?? Port:', PORT);
   console.log('?? CORS:', allowedOrigins.join(', '));
+  console.log('📧 Elastic Email: Configuré ✅');
+  console.log('   Email expéditeur:' , process.env.EMAIL_FROM || 'b2b@trinexta.fr');
   console.log('?? Date:', new Date().toLocaleString('fr-FR'));
   console.log('========================================');
   console.log('');
