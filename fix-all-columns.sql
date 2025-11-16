@@ -28,15 +28,15 @@ COMMENT ON COLUMN campaigns.bounced_count IS 'Nombre de bounces (emails rejetés
 
 -- 3. Table validation_requests (si n'existe pas, la créer)
 CREATE TABLE IF NOT EXISTS validation_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  lead_id UUID NOT NULL,
-  user_id UUID NOT NULL,
-  type VARCHAR(50) NOT NULL DEFAULT 'validation', -- 'validation' ou 'help'
-  status VARCHAR(50) NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  tenant_id VARCHAR(36) NOT NULL,
+  lead_id VARCHAR(36) NOT NULL,
+  requester_id VARCHAR(36) NOT NULL,
+  type VARCHAR(50) NOT NULL DEFAULT 'validation',
+  status VARCHAR(50) NOT NULL DEFAULT 'pending',
   message TEXT,
   response TEXT,
-  responded_by UUID,
+  responded_by VARCHAR(36),
   responded_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS validation_requests (
 
 CREATE INDEX IF NOT EXISTS idx_validation_requests_tenant ON validation_requests(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_validation_requests_lead ON validation_requests(lead_id);
-CREATE INDEX IF NOT EXISTS idx_validation_requests_user ON validation_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_validation_requests_requester ON validation_requests(requester_id);
 CREATE INDEX IF NOT EXISTS idx_validation_requests_status ON validation_requests(status);
 
 -- Vérifier que tout est OK
