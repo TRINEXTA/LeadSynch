@@ -2,67 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Mic, MicOff, Loader, Minimize2, Maximize2, FileText } from 'lucide-react';
 import api from '../api/axios';
 
-// BASE DE CONNAISSANCES LEADSYNCH
-const LEADSYNCH_KNOWLEDGE = `
-Tu es Asefi, l'assistant IA intelligent de LeadSynch - Plateforme CRM B2B.
-
-INFORMATIONS EXACTES SUR LEADSYNCH:
-
-PLANS TARIFAIRES:
-- Plan GRATUIT: 30 leads/mois (PAS 60!)
-- Plan STARTER: 27€/mois - 500 leads
-- Plan PRO: 67€/mois - 2000 leads
-- Plan BUSINESS: 147€/mois - 10000 leads
-- Plan ENTREPRISE: Sur mesure - leads illimités
-
-FONCTIONNALITÉS PRINCIPALES:
-1. Génération de leads via Google Maps API + web scraping
-2. Import CSV avec détection automatique secteur par IA (Claude)
-3. Campagnes email avec tracking (ouvertures, clics)
-4. Pipeline Kanban avec drag & drop
-5. Scoring automatique de leads
-6. Templates email IA générés par Claude
-7. Gestion multi-utilisateurs avec rôles (admin, manager, commercial)
-8. Chatbot IA (toi, Asefi!)
-9. Secteurs géographiques avec assignation automatique par code postal
-10. Système de demandes validation/aide pour managers
-
-SECTEURS SUPPORTÉS:
-Juridique, Comptabilité, Santé, Informatique/IT, BTP, Hôtellerie-Restauration,
-Immobilier, Logistique, Commerce, Éducation, Consulting, RH, Services, Industrie, Automobile
-
-INTÉGRATIONS:
-- Anthropic Claude API (génération templates + classification)
-- Elastic Email API (envoi emails en masse)
-- Google Maps API (génération leads)
-- PostgreSQL Neon (base de données)
-
-RÔLES UTILISATEURS:
-- Admin: Accès complet, gestion tenant
-- Manager: Supervision équipe, validation demandes
-- Commercial: Gestion leads, campagnes, pipeline
-
-RÈGLES DE RÉPONSE:
-1. Sois PRÉCIS et EXACT sur les chiffres (30 leads gratuit, pas 60!)
-2. Si question complexe nécessitant action, propose le formulaire de demande
-3. Reste concis, professionnel mais amical
-4. Utilise des emojis avec parcimonie
-5. Si tu ne sais pas, dis-le et propose le formulaire
-
-EXEMPLES DE QUESTIONS COMPLEXES (proposer formulaire):
-- Demande de personnalisation avancée
-- Problème technique spécifique
-- Demande de fonctionnalité custom
-- Questions sur intégrations complexes
-- Support technique avancé
-`;
-
 export default function ChatbotAsefi({ isOpen, onClose }) {
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: 'bot',
-      text: "👋 Bonjour ! Je suis Asefi, votre assistant IA LeadSynch.\n\nJe peux vous aider avec :\n• Vos campagnes et leads\n• Questions sur les plans tarifaires\n• Génération de templates email\n• Fonctionnalités du système\n\nComment puis-je vous aider ?",
+      text: "👋 Bonjour ! Je suis Asefi, votre assistant IA intelligent.\n\nJe m'alimente de VOS données en temps réel pour vous aider :\n• Statistiques de vos leads et campagnes\n• Conseils personnalisés selon votre activité\n• Réponses sur les fonctionnalités\n• Support et assistance\n\nQue puis-je faire pour vous aujourd'hui ?",
       timestamp: new Date()
     }
   ]);
@@ -155,10 +100,9 @@ export default function ChatbotAsefi({ isOpen, onClose }) {
     setIsLoading(true);
 
     try {
-      // Appel API optimisé avec système prompt contenant la base de connaissances
+      // Appel API - L'IA s'alimente automatiquement des vraies données
       const response = await api.post('/asefi', {
-        prompt: messageText,
-        context: LEADSYNCH_KNOWLEDGE
+        prompt: messageText
       });
 
       const botMessage = {

@@ -137,6 +137,7 @@ import generateLeadsStreamRoute from './api/generate-leads-stream.js';
 import followUpsRoute from './api/follow-ups.js';
 import quotasRoute from './api/quotas.js';
 import importCsvRoute from './api/import-csv.js';
+import asefiRoute from './api/asefi.js';
 import asefiGenerateRoute from './api/asefi-generate.js';
 import emailTemplatesRoute from './api/email-templates.js';
 import chatbotRoute from './routes/chatbot.js';
@@ -214,6 +215,9 @@ app.use('/api/follow-ups', followUpsRoute);
 // ? FIX CRITIQUE : Utiliser app.use au lieu de app.all pour les routes Express
 app.use('/api/import-csv', importCsvRoute);
 
+// Asefi chatbot intelligent (s'alimente des vraies données)
+app.use('/api/asefi', asefiRoute);
+// Asefi génération de templates (endpoints spécifiques)
 app.use('/api/asefi', asefiGenerateRoute);
 app.use('/api/email-templates', emailTemplatesRoute);
 app.use('/api/chatbot', chatbotRoute);
