@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -45,7 +46,7 @@ export default function Users() {
       setUsers(response.data.users || []);
     } catch (error) {
       console.error('❌ Erreur users:', error);
-      alert('Erreur lors du chargement des utilisateurs');
+      toast.error('Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
     }
@@ -62,10 +63,10 @@ export default function Users() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.email || !formData.first_name || !formData.last_name) {
-      alert('Veuillez remplir tous les champs obligatoires');
+      toast.error('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
@@ -79,13 +80,13 @@ export default function Users() {
           phone: formData.phone,
           team_id: formData.team_id || null
         });
-        alert('✅ Utilisateur modifié avec succès !');
+        toast.success('Utilisateur modifié avec succès !');
       } else {
         // Création
         await api.post('/users', formData);
-        alert('✅ Utilisateur créé avec succès ! Un email avec le mot de passe temporaire a été envoyé.');
+        toast.success('Utilisateur créé avec succès ! Un email avec le mot de passe temporaire a été envoyé.');
       }
-      
+
       setShowModal(false);
       setEditingUser(null);
       setFormData({
@@ -99,60 +100,48 @@ export default function Users() {
       loadUsers();
     } catch (error) {
       console.error('❌ Erreur:', error);
-      alert(error.response?.data?.error || 'Erreur lors de la sauvegarde');
+      toast.error(error.response?.data?.error || 'Erreur lors de la sauvegarde');
     }
   };
 
   const handleDelete = async (userId) => {
-    if (!confirm('⚠️ Supprimer définitivement cet utilisateur ? Cette action est irréversible.')) return;
+    const promise = api.delete(`/users/${userId}`).then(() => loadUsers());
 
-    try {
-      await api.delete(`/users/${userId}`);
-      alert('✅ Utilisateur supprimé');
-      loadUsers();
-    } catch (error) {
-      console.error('❌ Erreur:', error);
-      alert('Erreur lors de la suppression');
-    }
+    toast.promise(promise, {
+      loading: 'Suppression en cours...',
+      success: 'Utilisateur supprimé avec succès',
+      error: 'Erreur lors de la suppression'
+    });
   };
 
   const handleBlockUser = async (userId) => {
-    if (!confirm('⚠️ Bloquer cet utilisateur ? Il ne pourra plus se connecter.')) return;
+    const promise = api.patch(`/users/${userId}/block`).then(() => loadUsers());
 
-    try {
-      await api.patch(`/users/${userId}/block`);
-      alert('✅ Utilisateur bloqué');
-      loadUsers();
-    } catch (error) {
-      console.error('❌ Erreur:', error);
-      alert(error.response?.data?.error || 'Erreur lors du blocage');
-    }
+    toast.promise(promise, {
+      loading: 'Blocage en cours...',
+      success: 'Utilisateur bloqué avec succès',
+      error: (err) => err.response?.data?.error || 'Erreur lors du blocage'
+    });
   };
 
   const handleUnblockUser = async (userId) => {
-    if (!confirm('✅ Débloquer cet utilisateur ?')) return;
+    const promise = api.patch(`/users/${userId}/unblock`).then(() => loadUsers());
 
-    try {
-      await api.patch(`/users/${userId}/unblock`);
-      alert('✅ Utilisateur débloqué');
-      loadUsers();
-    } catch (error) {
-      console.error('❌ Erreur:', error);
-      alert(error.response?.data?.error || 'Erreur lors du déblocage');
-    }
+    toast.promise(promise, {
+      loading: 'Déblocage en cours...',
+      success: 'Utilisateur débloqué avec succès',
+      error: (err) => err.response?.data?.error || 'Erreur lors du déblocage'
+    });
   };
 
   const handleForcePasswordChange = async (userId) => {
-    if (!confirm('🔐 Forcer le changement de mot de passe ? L\'utilisateur devra le modifier à sa prochaine connexion.')) return;
+    const promise = api.patch(`/users/${userId}/force-password-change`).then(() => loadUsers());
 
-    try {
-      await api.patch(`/users/${userId}/force-password-change`);
-      alert('✅ Changement de mot de passe forcé');
-      loadUsers();
-    } catch (error) {
-      console.error('❌ Erreur:', error);
-      alert(error.response?.data?.error || 'Erreur lors de l\'opération');
-    }
+    toast.promise(promise, {
+      loading: 'Traitement en cours...',
+      success: 'Changement de mot de passe forcé avec succès',
+      error: (err) => err.response?.data?.error || 'Erreur lors de l\'opération'
+    });
   };
 
   const handleEdit = (user) => {

@@ -6,6 +6,7 @@ import {
   MapPin, Plus, Edit2, Trash2, Users, CheckCircle, XCircle,
   Save, X, UserPlus, UserMinus, Eye, RefreshCw, MapPinned
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function GeographicSectors() {
   const navigate = useNavigate();
@@ -68,113 +69,112 @@ export default function GeographicSectors() {
 
     } catch (error) {
       console.error('Erreur chargement données:', error);
-      alert('Erreur lors du chargement des données');
+      toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
     }
   };
 
   const handleReassignAll = async () => {
-    if (!confirm('Réassigner TOUS les leads aux secteurs selon leur code postal?\n\nCette opération peut prendre du temps.')) {
-      return;
-    }
+    setReassigning(true);
 
-    try {
-      setReassigning(true);
-      const response = await api.post('/lead-sector-assignment/reassign-all');
-      alert(`✅ ${response.data.count} leads réassignés avec succès!`);
-      fetchData(); // Recharger les stats
-    } catch (error) {
-      console.error('Erreur réassignation:', error);
-      alert('Erreur lors de la réassignation');
-    } finally {
-      setReassigning(false);
-    }
+    const promise = api.post('/lead-sector-assignment/reassign-all')
+      .then((response) => {
+        fetchData();
+        return response;
+      })
+      .finally(() => setReassigning(false));
+
+    toast.promise(promise, {
+      loading: 'Réassignation en cours (peut prendre du temps)...',
+      success: (response) => `${response.data.count} leads réassignés avec succès !`,
+      error: 'Erreur lors de la réassignation'
+    });
   };
 
   const handleCreateSector = async (e) => {
     e.preventDefault();
 
-    try {
-      const payload = {
-        ...formData,
-        postal_codes: formData.postal_codes.split(',').map(c => c.trim()).filter(Boolean),
-        cities: formData.cities.split(',').map(c => c.trim()).filter(Boolean)
-      };
+    const payload = {
+      ...formData,
+      postal_codes: formData.postal_codes.split(',').map(c => c.trim()).filter(Boolean),
+      cities: formData.cities.split(',').map(c => c.trim()).filter(Boolean)
+    };
 
-      await api.post('/geographic-sectors', payload);
-      alert('Secteur créé avec succès');
-      setShowCreateModal(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      console.error('Erreur création secteur:', error);
-      alert('Erreur lors de la création: ' + (error.response?.data?.error || error.message));
-    }
+    const promise = api.post('/geographic-sectors', payload)
+      .then(() => {
+        setShowCreateModal(false);
+        resetForm();
+        fetchData();
+      });
+
+    toast.promise(promise, {
+      loading: 'Création du secteur...',
+      success: 'Secteur créé avec succès !',
+      error: (err) => `Erreur création : ${err.response?.data?.error || err.message}`
+    });
   };
 
   const handleUpdateSector = async (e) => {
     e.preventDefault();
 
-    try {
-      const payload = {
-        ...formData,
-        postal_codes: formData.postal_codes.split(',').map(c => c.trim()).filter(Boolean),
-        cities: formData.cities.split(',').map(c => c.trim()).filter(Boolean)
-      };
+    const payload = {
+      ...formData,
+      postal_codes: formData.postal_codes.split(',').map(c => c.trim()).filter(Boolean),
+      cities: formData.cities.split(',').map(c => c.trim()).filter(Boolean)
+    };
 
-      await api.put(`/geographic-sectors/${selectedSector.id}`, payload);
-      alert('Secteur mis à jour avec succès');
-      setShowEditModal(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      console.error('Erreur mise à jour secteur:', error);
-      alert('Erreur lors de la mise à jour');
-    }
+    const promise = api.put(`/geographic-sectors/${selectedSector.id}`, payload)
+      .then(() => {
+        setShowEditModal(false);
+        resetForm();
+        fetchData();
+      });
+
+    toast.promise(promise, {
+      loading: 'Mise à jour...',
+      success: 'Secteur mis à jour avec succès !',
+      error: 'Erreur lors de la mise à jour'
+    });
   };
 
   const handleDeleteSector = async (sectorId) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce secteur ?')) return;
+    const promise = api.delete(`/geographic-sectors/${sectorId}`)
+      .then(() => fetchData());
 
-    try {
-      await api.delete(`/geographic-sectors/${sectorId}`);
-      alert('Secteur supprimé');
-      fetchData();
-    } catch (error) {
-      console.error('Erreur suppression secteur:', error);
-      alert('Erreur: ' + (error.response?.data?.error || error.message));
-    }
+    toast.promise(promise, {
+      loading: 'Suppression...',
+      success: 'Secteur supprimé avec succès !',
+      error: (err) => `Erreur : ${err.response?.data?.error || err.message}`
+    });
   };
 
   const handleAssignUser = async (userId) => {
-    try {
-      await api.post(`/geographic-sectors/${selectedSector.id}/assign`, {
-        user_id: userId,
-        assignment_role: 'commercial',
-        is_primary: false
-      });
-
-      alert('Commercial assigné au secteur');
+    const promise = api.post(`/geographic-sectors/${selectedSector.id}/assign`, {
+      user_id: userId,
+      assignment_role: 'commercial',
+      is_primary: false
+    }).then(() => {
       setShowAssignModal(false);
       fetchData();
-    } catch (error) {
-      console.error('Erreur assignation:', error);
-      alert('Erreur: ' + (error.response?.data?.error || error.message));
-    }
+    });
+
+    toast.promise(promise, {
+      loading: 'Assignation...',
+      success: 'Commercial assigné au secteur !',
+      error: (err) => `Erreur : ${err.response?.data?.error || err.message}`
+    });
   };
 
   const handleUnassignUser = async (userId) => {
-    if (!confirm('Retirer ce commercial du secteur ?')) return;
+    const promise = api.delete(`/geographic-sectors/${selectedSector.id}/assign/${userId}`)
+      .then(() => fetchData());
 
-    try {
-      await api.delete(`/geographic-sectors/${selectedSector.id}/assign/${userId}`);
-      alert('Commercial retiré du secteur');
-      fetchData();
-    } catch (error) {
-      console.error('Erreur retrait:', error);
-      alert('Erreur lors du retrait');
-    }
+    toast.promise(promise, {
+      loading: 'Retrait...',
+      success: 'Commercial retiré du secteur !',
+      error: 'Erreur lors du retrait'
+    });
   };
 
   const openEditModal = (sector) => {

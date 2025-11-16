@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Mail, Phone, MessageSquare, Send, ArrowRight, ArrowLeft, Database, Users, Calendar, Settings, Paperclip, X, Eye, TestTube, Check, Target, Clock, Zap, AlertCircle, Plus, Edit } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const CAMPAIGN_TYPES = [
   { id: 'email', name: 'Campagne Email', icon: Mail, color: 'from-blue-600 to-cyan-600', description: 'Envoi emails automatises' },
@@ -120,7 +121,7 @@ export default function CampaignsManager() {
       
     } catch (error) {
       console.error('Erreur chargement campagne:', error);
-      alert('Erreur lors du chargement de la campagne');
+      toast.error('Erreur lors du chargement de la campagne');
       navigate('/campaigns');
     } finally {
       setLoading(false);
@@ -264,7 +265,7 @@ const calculateLeadsCount = async () => {
 
     const maxSizeMB = 5;
     if (file.size > maxSizeMB * 1024 * 1024) {
-      alert(`Fichier trop volumineux. Maximum ${maxSizeMB}MB`);
+      toast.error(`Fichier trop volumineux. Maximum ${maxSizeMB}MB`);
       return;
     }
 
@@ -282,10 +283,10 @@ const calculateLeadsCount = async () => {
         size: (file.size / 1024).toFixed(2)
       };
       setAttachments([...attachments, newAttachment]);
-      alert('Fichier ajoute !');
+      toast.success('Fichier ajouté avec succès !');
     } catch (error) {
       console.error('Erreur upload:', error);
-      alert('Erreur upload fichier');
+      toast.error('Erreur lors de l\'upload du fichier');
     } finally {
       setUploadingFile(false);
     }
@@ -311,32 +312,32 @@ const calculateLeadsCount = async () => {
       setShowPreview(true);
     } catch (error) {
       console.error('Erreur preview:', error);
-      alert('Erreur previsualisation');
+      toast.error('Erreur lors de la prévisualisation');
     }
   };
 
   const handleSendTestEmail = async () => {
     const validEmails = testEmails.filter(e => e.trim());
     if (validEmails.length === 0) {
-      alert('Entrez au moins 1 email');
+      toast.error('Entrez au moins 1 email de test');
       return;
     }
     if (validEmails.length > 3) {
-      alert('Maximum 3 emails de test');
+      toast.error('Maximum 3 emails de test');
       return;
     }
 
-    try {
-      await api.post('/campaigns/test-emails', {
-        template_id: formData.template_id,
-        recipients: validEmails,
-        attachments: attachments.map(a => a.id)
-      });
-      alert('✅ Emails de test envoyes avec succes !');
-    } catch (error) {
-      console.error('❌ Erreur test:', error);
-      alert('❌ Erreur envoi test: ' + (error.response?.data?.error || error.message));
-    }
+    const promise = api.post('/campaigns/test-emails', {
+      template_id: formData.template_id,
+      recipients: validEmails,
+      attachments: attachments.map(a => a.id)
+    });
+
+    toast.promise(promise, {
+      loading: 'Envoi des emails de test...',
+      success: 'Emails de test envoyés avec succès !',
+      error: (err) => `Erreur envoi test : ${err.response?.data?.error || err.message}`
+    });
   };
 
   const addTestEmail = () => {
@@ -356,62 +357,51 @@ const calculateLeadsCount = async () => {
   };
 
   const handleSaveDraft = async () => {
-    try {
-      console.log('🟡 Sauvegarde brouillon, données envoyées:', {
-        ...formData,
-        database_id: selectedDatabases[0],
-        sectors: selectedSectors,
-        attachments: attachments.map(a => a.id)
-      });
+    const campaignData = {
+      ...formData,
+      database_id: selectedDatabases[0],
+      sectors: selectedSectors,
+      attachments: attachments.map(a => a.id),
+      status: 'draft'
+    };
 
-      const campaignData = {
-        ...formData,
-        database_id: selectedDatabases[0],
-        sectors: selectedSectors,
-        attachments: attachments.map(a => a.id),
-        status: 'draft'
-      };
+    const promise = api.post('/campaigns', campaignData)
+      .then(() => navigate('/campaigns'));
 
-      await api.post('/campaigns', campaignData);
-      alert('Campagne enregistree en brouillon !');
-      navigate('/campaigns');
-    } catch (error) {
-      console.error('❌ Erreur brouillon:', error);
-      alert('❌ Erreur sauvegarde brouillon: ' + (error.response?.data?.error || error.message));
-    }
+    toast.promise(promise, {
+      loading: 'Sauvegarde du brouillon...',
+      success: 'Campagne enregistrée en brouillon !',
+      error: (err) => `Erreur sauvegarde brouillon : ${err.response?.data?.error || err.message}`
+    });
   };
 
   const handleCreateCampaign = async (startNow = false) => {
-    try {
-      console.log('🚀 Création campagne, données envoyées:', {
-        ...formData,
-        database_id: selectedDatabases[0],
-        sectors: selectedSectors,
-        attachments: attachments.map(a => a.id),
-        status: startNow ? 'active' : 'scheduled'
-      });
+    const campaignData = {
+      ...formData,
+      database_id: selectedDatabases[0],
+      sectors: selectedSectors,
+      attachments: attachments.map(a => a.id),
+      status: startNow ? 'active' : 'scheduled'
+    };
 
-      const campaignData = {
-        ...formData,
-        database_id: selectedDatabases[0],
-        sectors: selectedSectors,
-        attachments: attachments.map(a => a.id),
-        status: startNow ? 'active' : 'scheduled'
-      };
+    let promise;
+    let successMessage;
 
-      if (isEditMode && editingCampaignId) {
-        await api.put(`/campaigns/${editingCampaignId}`, campaignData);
-        alert('Campagne mise a jour !');
-      } else {
-        await api.post('/campaigns', campaignData);
-        alert(startNow ? 'Campagne demarree !' : 'Campagne programmee !');
-      }
-      
-      navigate('/campaigns');
-    } catch (error) {
-      console.error('❌ Erreur création:', error);
-      alert('❌ Erreur: ' + (error.response?.data?.error || error.message));
+    if (isEditMode && editingCampaignId) {
+      promise = api.put(`/campaigns/${editingCampaignId}`, campaignData);
+      successMessage = 'Campagne mise à jour !';
+    } else {
+      promise = api.post('/campaigns', campaignData);
+      successMessage = startNow ? 'Campagne démarrée !' : 'Campagne programmée !';
     }
+
+    promise = promise.then(() => navigate('/campaigns'));
+
+    toast.promise(promise, {
+      loading: isEditMode ? 'Mise à jour...' : (startNow ? 'Démarrage...' : 'Programmation...'),
+      success: successMessage,
+      error: (err) => `Erreur : ${err.response?.data?.error || err.message}`
+    });
   };
 
   const getTotalSteps = () => {
@@ -430,29 +420,28 @@ const calculateLeadsCount = async () => {
   };
 
   const handleBackToTypeSelection = () => {
-    if (confirm('Changer de type de campagne ? Vous perdrez vos donnees.')) {
-      setStep(0);
-      setCampaignType(null);
-      setFormData({
-        name: '',
-        type: '',
-        objective: 'leads',
-        subject: '',
-        goal_description: '',
-        message: '',
-        link: '',
-        template_id: '',
-        assigned_users: [],
-        send_days: [1, 2, 3, 4, 5],
-        send_time_start: '08:00',
-        send_time_end: '18:00',
-        start_date: '',
-        start_time: '08:00',
-        emails_per_cycle: 50,
-        cycle_interval_minutes: 10,
-        status: 'draft'
-      });
-    }
+    toast('Changement de type - données réinitialisées', { icon: '⚠️' });
+    setStep(0);
+    setCampaignType(null);
+    setFormData({
+      name: '',
+      type: '',
+      objective: 'leads',
+      subject: '',
+      goal_description: '',
+      message: '',
+      link: '',
+      template_id: '',
+      assigned_users: [],
+      send_days: [1, 2, 3, 4, 5],
+      send_time_start: '08:00',
+      send_time_end: '18:00',
+      start_date: '',
+      start_time: '08:00',
+      emails_per_cycle: 50,
+      cycle_interval_minutes: 10,
+      status: 'draft'
+    });
   };
 
   // STEP 0: Choix type
