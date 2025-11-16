@@ -54,6 +54,8 @@ export default function ChatbotAsefi() {
 
   const callAsefiAPI = async (userMessage) => {
     try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
       // Préparer l'historique pour l'API (sans le message d'accueil)
       const conversationHistory = messages
         .slice(1) // Ignorer le message d'accueil
@@ -62,7 +64,7 @@ export default function ChatbotAsefi() {
           text: msg.text
         }));
 
-      const response = await fetch('http://localhost:3000/api/chatbot/ask', {
+      const response = await fetch(`${API_URL}/api/chatbot/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

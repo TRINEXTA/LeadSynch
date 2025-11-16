@@ -52,7 +52,10 @@ export default function Login() {
     setErrors({});
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/login', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,7 +69,7 @@ export default function Login() {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        window.location.href = 'http://localhost:5173';
+        window.location.href = APP_URL;
       } else {
         setErrors({ submit: data.error || 'Email ou mot de passe incorrect' });
       }

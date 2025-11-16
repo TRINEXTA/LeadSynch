@@ -1,9 +1,21 @@
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryOne, execute } from '../lib/db.js';
+import { z } from 'zod';
+
+// Validation UUID
+const uuidSchema = z.string().uuid('ID invalide');
 
 async function handler(req, res) {
   const { method } = req;
-  const userId = req.url.split('/')[1];
+
+  // Extraire et valider l'UUID depuis l'URL
+  const userIdRaw = req.url.split('/')[1];
+  let userId;
+  try {
+    userId = uuidSchema.parse(userIdRaw);
+  } catch (error) {
+    return res.status(400).json({ error: 'ID utilisateur invalide' });
+  }
 
   try {
     // PUT - Mettre à jour un utilisateur
