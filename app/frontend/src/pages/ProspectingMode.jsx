@@ -2,6 +2,7 @@
 import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle, UserPlus, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
 import TaskModal from '../components/pipeline/TaskModal';
 
@@ -67,16 +68,16 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
       // Reset et passer au suivant
       setNotes('');
       setLeadStartTime(Date.now());
-      
+
       if (currentIndex < leads.length - 1) {
         setCurrentIndex(prev => prev + 1);
       } else {
-        alert('✅ Tous les leads traités !');
-        onExit();
+        toast.success('✅ Tous les leads traités !', { duration: 4000 });
+        setTimeout(() => onExit(), 1000);
       }
     } catch (error) {
       console.error('Erreur qualification:', error);
-      alert('Erreur lors de la qualification');
+      toast.error('Erreur lors de la qualification');
     }
   };
 
@@ -123,7 +124,7 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
       }
     } catch (error) {
       console.error('❌ Erreur génération email:', error);
-      alert('Erreur lors de la génération de l\'email');
+      toast.error('Erreur lors de la génération de l\'email');
     } finally {
       setGenerating(false);
     }
@@ -137,8 +138,10 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
       setLeadDuration(0);
     } else {
       // Fin de la session
-      alert(`🎉 Session terminée !\n\n${processed} leads traités\n${qualified} leads qualifiés`);
-      onExit();
+      toast.success(`🎉 Session terminée !\n\n${processed} leads traités • ${qualified} leads qualifiés`, {
+        duration: 5000
+      });
+      setTimeout(() => onExit(), 1500);
     }
   };
 
@@ -175,6 +178,18 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   const handleTaskSuccess = () => {
     setShowTaskModal(false);
     // Optionnel: recharger les tâches
+  };
+
+  const handlePause = () => {
+    toast('⏸️ Pause ! Prenez un café ☕', {
+      icon: '☕',
+      duration: 3000,
+      style: {
+        background: '#fbbf24',
+        color: '#1f2937',
+        fontWeight: 'bold',
+      },
+    });
   };
 
   const formatDuration = (seconds) => {
@@ -218,7 +233,7 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => alert('⏸️ Pause ! Prenez un café ☕\n\nCliquez OK pour reprendre.')}
+            onClick={handlePause}
             className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg"
           >
             <Timer className="w-5 h-5" />
