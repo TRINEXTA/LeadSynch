@@ -9,6 +9,7 @@ export default function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -16,10 +17,10 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
-    const result = await login(email, password);
+
+    const result = await login(email, password, rememberMe);
     setLoading(false);
-    
+
     if (result.success) {
       navigate('/dashboard');
     } else {
@@ -121,6 +122,8 @@ export default function Login() {
                 <label className="flex items-center gap-2 cursor-pointer group">
                   <input
                     type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 transition-all"
                   />
                   <span className="text-sm text-gray-600 group-hover:text-gray-900 font-medium">

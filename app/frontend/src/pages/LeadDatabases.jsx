@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Plus, Database, Upload, Search, BarChart3, TrendingUp, Eye, Trash2, Archive, RefreshCw, FileSpreadsheet, Zap } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const SECTEURS_MAPPING = {
   juridique: { label: "Juridique / Legal", icon: "⚖️", color: "from-blue-500 to-cyan-500" },
@@ -29,6 +30,7 @@ export default function LeadDatabases() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSource, setFilterSource] = useState('all');
+  const [deleteModalId, setDeleteModalId] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
     totalLeads: 0,
@@ -102,28 +104,29 @@ export default function LeadDatabases() {
     setFilteredDatabases(filtered);
   };
 
-  const handleDelete = async (databaseId) => {
-    if (!confirm('Supprimer cette base de donnees ?')) return;
+  const handleDelete = async () => {
+    const promise = api.delete(`/lead-databases/${deleteModalId}`)
+      .then(() => {
+        setDeleteModalId(null);
+        loadDatabases();
+      });
 
-    try {
-      await api.delete(`/lead-databases/${databaseId}`);
-      alert('Base supprimee !');
-      loadDatabases();
-    } catch (error) {
-      console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
-    }
+    toast.promise(promise, {
+      loading: 'Suppression en cours...',
+      success: '🗑️ Base supprimée avec succès',
+      error: 'Erreur lors de la suppression',
+    });
   };
 
   const handleArchive = async (databaseId) => {
-    try {
-      await api.patch(`/lead-databases/${databaseId}/archive`);
-      alert('Base archivee !');
-      loadDatabases();
-    } catch (error) {
-      console.error('Erreur archivage:', error);
-      alert('Erreur lors de l\'archivage');
-    }
+    const promise = api.patch(`/lead-databases/${databaseId}/archive`)
+      .then(() => loadDatabases());
+
+    toast.promise(promise, {
+      loading: 'Archivage en cours...',
+      success: '📦 Base archivée avec succès',
+      error: 'Erreur lors de l\'archivage',
+    });
   };
 
   if (loading) {
@@ -334,7 +337,7 @@ export default function LeadDatabases() {
                     </button>
 
                     <button
-                      onClick={() => handleDelete(database.id)}
+                      onClick={() => setDeleteModalId(database.id)}
                       className="bg-red-100 text-red-600 py-2 px-3 rounded-lg hover:bg-red-200"
                       title="Supprimer"
                     >
@@ -375,6 +378,38 @@ export default function LeadDatabases() {
           </div>
         )}
       </div>
+
+      {/* Modal Confirmation Suppression */}
+      {deleteModalId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Supprimer la base ?</h3>
+              <p className="text-gray-600">
+                Cette action est irréversible. Tous les leads de cette base seront définitivement supprimés.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModalId(null)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+              >
+                Confirmer la suppression
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

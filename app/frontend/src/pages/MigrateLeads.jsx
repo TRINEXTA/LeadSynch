@@ -5,6 +5,7 @@ import {
   Loader2, Search, RefreshCw, Sparkles, MoveRight
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function MigrateLeads() {
   const [databases, setDatabases] = useState([]);
@@ -15,6 +16,7 @@ export default function MigrateLeads() {
   const [loading, setLoading] = useState(true);
   const [migrating, setMigrating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showMigrateModal, setShowMigrateModal] = useState(false);
 
   useEffect(() => {
     loadDatabases();
@@ -69,21 +71,22 @@ export default function MigrateLeads() {
     );
   };
 
-  const handleMigration = async () => {
+  const handleMigration = () => {
     if (!sourceDb || !targetDb || selectedLeads.length === 0) {
-      alert('⚠️ Veuillez sélectionner une base source, une base cible et au moins un lead');
+      toast.error('⚠️ Veuillez sélectionner une base source, une base cible et au moins un lead');
       return;
     }
 
     if (sourceDb === targetDb) {
-      alert('⚠️ La base source et la base cible doivent être différentes');
+      toast.error('⚠️ La base source et la base cible doivent être différentes');
       return;
     }
 
-    if (!confirm(`Migrer ${selectedLeads.length} lead(s) vers la base sélectionnée ?`)) {
-      return;
-    }
+    setShowMigrateModal(true);
+  };
 
+  const confirmMigration = async () => {
+    setShowMigrateModal(false);
     setMigrating(true);
 
     try {
@@ -94,7 +97,7 @@ export default function MigrateLeads() {
         });
       }
 
-      alert(`✅ Migration réussie ! ${selectedLeads.length} lead(s) ajouté(s) à la base cible`);
+      toast.success(`✅ Migration réussie ! ${selectedLeads.length} lead(s) ajouté(s) à la base cible`);
 
       // Réinitialiser
       setSelectedLeads([]);
@@ -105,7 +108,7 @@ export default function MigrateLeads() {
 
     } catch (error) {
       console.error('Erreur migration:', error);
-      alert('❌ Erreur lors de la migration');
+      toast.error('❌ Erreur lors de la migration');
     } finally {
       setMigrating(false);
     }
@@ -363,6 +366,40 @@ export default function MigrateLeads() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Modal Confirmation Migration */}
+        {showMigrateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <MoveRight className="w-8 h-8 text-indigo-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Migrer {selectedLeads.length} lead(s) ?
+                </h3>
+                <p className="text-gray-600">
+                  Les leads sélectionnés seront copiés vers la base cible. Ils resteront également dans la base source.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowMigrateModal(false)}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={confirmMigration}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                >
+                  Confirmer la migration
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

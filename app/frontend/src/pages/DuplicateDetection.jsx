@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Copy, Search, Loader2, AlertTriangle, CheckCircle, Zap, Users, Merge } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function DuplicateDetection() {
   const [duplicates, setDuplicates] = useState([]);
@@ -10,6 +11,7 @@ export default function DuplicateDetection() {
   const [selectedPairs, setSelectedPairs] = useState([]);
   const [detectionMethod, setDetectionMethod] = useState('email'); // email, phone, company_name
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [showMergeModal, setShowMergeModal] = useState(false);
 
   const handleDetectDuplicates = async () => {
     setLoading(true);
@@ -23,13 +25,13 @@ export default function DuplicateDetection() {
       setDuplicates(response.data.duplicates || []);
 
       if (response.data.duplicates.length === 0) {
-        alert('✅ Aucun doublon détecté !');
+        toast.success('✅ Aucun doublon détecté !');
       } else {
-        alert(`🔍 ${response.data.duplicates.length} groupes de doublons détectés`);
+        toast.success(`🔍 ${response.data.duplicates.length} groupes de doublons détectés`);
       }
     } catch (error) {
       console.error('Erreur détection:', error);
-      alert('Erreur lors de la détection des doublons');
+      toast.error('Erreur lors de la détection des doublons');
     } finally {
       setLoading(false);
     }
@@ -51,16 +53,16 @@ export default function DuplicateDetection() {
     }
   };
 
-  const handleAutoMerge = async () => {
+  const handleAutoMerge = () => {
     if (selectedPairs.length === 0) {
-      alert('Veuillez sélectionner au moins un groupe de doublons');
+      toast.warning('⚠️ Veuillez sélectionner au moins un groupe de doublons');
       return;
     }
+    setShowMergeModal(true);
+  };
 
-    if (!confirm(`Fusionner automatiquement ${selectedPairs.length} groupes de doublons ?\n\nLe lead le plus ancien sera conservé et les autres seront fusionnés avec lui.`)) {
-      return;
-    }
-
+  const confirmMerge = async () => {
+    setShowMergeModal(false);
     setMerging(true);
     setProgress({ current: 0, total: selectedPairs.length });
 
@@ -94,7 +96,11 @@ export default function DuplicateDetection() {
         }
       }
 
-      alert(`✅ Fusion automatique terminée !\n\n${successCount} groupes fusionnés\n${errorCount} erreurs`);
+      if (errorCount === 0) {
+        toast.success(`✅ Fusion terminée ! ${successCount} groupes fusionnés`);
+      } else {
+        toast.success(`✅ Fusion terminée : ${successCount} groupes fusionnés, ${errorCount} erreurs`);
+      }
 
       // Recharger la détection
       await handleDetectDuplicates();
@@ -102,7 +108,7 @@ export default function DuplicateDetection() {
 
     } catch (error) {
       console.error('Erreur fusion:', error);
-      alert('Erreur lors de la fusion des doublons');
+      toast.error('Erreur lors de la fusion des doublons');
     } finally {
       setMerging(false);
       setProgress({ current: 0, total: 0 });
@@ -350,6 +356,43 @@ export default function DuplicateDetection() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Modal Confirmation Fusion */}
+        {showMergeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Merge className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Fusionner {selectedPairs.length} groupe(s) de doublons ?
+                </h3>
+                <p className="text-gray-600 mb-2">
+                  Cette action est irréversible.
+                </p>
+                <p className="text-sm text-blue-600 font-medium">
+                  ℹ️ Le lead le plus ancien sera conservé et les autres seront fusionnés avec lui.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowMergeModal(false)}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={confirmMerge}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                >
+                  Confirmer la fusion
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

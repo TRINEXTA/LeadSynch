@@ -6,7 +6,9 @@ const { Pool } = pkg;
 const router = express.Router();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: true }  // ✅ Production: SSL strict
+    : { rejectUnauthorized: false } // ⚠️ Dev seulement: certificats locaux
 });
 
 // ==================== VALIDATION SCHEMA ====================

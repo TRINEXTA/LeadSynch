@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 import {
   Users, TrendingUp, CheckCircle, XCircle, Clock, Mail, Phone,
   Target, Award, AlertCircle, FileText, Calendar, BarChart3,
@@ -28,8 +29,21 @@ export default function DashboardManager() {
   const [recentActivities, setRecentActivities] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
 
+  // États pour les modals
+  const [rejectModalId, setRejectModalId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [respondModalId, setRespondModalId] = useState(null);
+  const [respondMessage, setRespondMessage] = useState('');
+
   useEffect(() => {
     fetchDashboard();
+
+    // Auto-refresh toutes les 30 minutes
+    const interval = setInterval(() => {
+      fetchDashboard();
+    }, 30 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboard = async () => {
@@ -69,6 +83,7 @@ export default function DashboardManager() {
 
     } catch (error) {
       console.error('Erreur chargement dashboard manager:', error);
+      toast.error('Erreur lors du chargement du dashboard');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -76,52 +91,61 @@ export default function DashboardManager() {
   };
 
   const handleApprove = async (requestId) => {
-    try {
-      await api.patch(`/validation-requests/${requestId}`, {
-        status: 'approved',
-        manager_response: 'Demande approuvée'
-      });
-      alert('Demande approuvée avec succès');
-      fetchDashboard();
-    } catch (error) {
-      console.error('Erreur approbation:', error);
-      alert('Erreur lors de l\'approbation');
-    }
+    const promise = api.patch(`/validation-requests/${requestId}`, {
+      status: 'approved',
+      manager_response: 'Demande approuvée'
+    }).then(() => fetchDashboard());
+
+    toast.promise(promise, {
+      loading: 'Approbation en cours...',
+      success: '✅ Demande approuvée avec succès',
+      error: 'Erreur lors de l\'approbation',
+    });
   };
 
-  const handleReject = async (requestId) => {
-    const reason = prompt('Raison du refus:');
-    if (!reason) return;
-
-    try {
-      await api.patch(`/validation-requests/${requestId}`, {
-        status: 'rejected',
-        manager_response: reason
-      });
-      alert('Demande rejetée');
-      fetchDashboard();
-    } catch (error) {
-      console.error('Erreur rejet:', error);
-      alert('Erreur lors du rejet');
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      toast.error('Veuillez indiquer une raison');
+      return;
     }
+
+    const promise = api.patch(`/validation-requests/${rejectModalId}`, {
+      status: 'rejected',
+      manager_response: rejectReason
+    }).then(() => {
+      setRejectModalId(null);
+      setRejectReason('');
+      fetchDashboard();
+    });
+
+    toast.promise(promise, {
+      loading: 'Envoi du refus...',
+      success: '❌ Demande rejetée',
+      error: 'Erreur lors du rejet',
+    });
   };
 
-  const handleRespond = async (requestId) => {
-    const response = prompt('Votre réponse à la demande d\'aide:');
-    if (!response) return;
-
-    try {
-      await api.patch(`/validation-requests/${requestId}`, {
-        status: 'resolved',
-        manager_response: response,
-        resolution_notes: response
-      });
-      alert('Réponse envoyée avec succès');
-      fetchDashboard();
-    } catch (error) {
-      console.error('Erreur réponse:', error);
-      alert('Erreur lors de l\'envoi de la réponse');
+  const handleRespond = async () => {
+    if (!respondMessage.trim()) {
+      toast.error('Veuillez saisir une réponse');
+      return;
     }
+
+    const promise = api.patch(`/validation-requests/${respondModalId}`, {
+      status: 'resolved',
+      manager_response: respondMessage,
+      resolution_notes: respondMessage
+    }).then(() => {
+      setRespondModalId(null);
+      setRespondMessage('');
+      fetchDashboard();
+    });
+
+    toast.promise(promise, {
+      loading: 'Envoi de la réponse...',
+      success: '✅ Réponse envoyée avec succès',
+      error: 'Erreur lors de l\'envoi',
+    });
   };
 
   if (loading) {
@@ -318,7 +342,7 @@ export default function DashboardManager() {
                           Approuver
                         </button>
                         <button
-                          onClick={() => handleReject(request.id)}
+                          onClick={() => setRejectModalId(request.id)}
                           className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all font-semibold shadow-md hover:shadow-lg"
                         >
                           <XCircle className="w-4 h-4" />
@@ -327,7 +351,7 @@ export default function DashboardManager() {
                       </>
                     ) : (
                       <button
-                        onClick={() => handleRespond(request.id)}
+                        onClick={() => setRespondModalId(request.id)}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all font-semibold shadow-md hover:shadow-lg"
                       >
                         <MessageSquare className="w-4 h-4" />
@@ -398,7 +422,6 @@ export default function DashboardManager() {
                       </span>
                     </div>
                   </div>
-                  {/* TODO: Afficher secteur géographique assigné quand le système sera implémenté */}
                 </div>
               ))}
             </div>
@@ -537,6 +560,78 @@ export default function DashboardManager() {
           </p>
         </div>
       </div>
+
+      {/* Modal Refuser */}
+      {rejectModalId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
+            <h3 className="text-xl font-bold mb-4 text-red-600">❌ Refuser la demande</h3>
+            <p className="text-gray-600 mb-4">
+              Veuillez indiquer la raison du refus pour informer le commercial :
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={4}
+              placeholder="Ex: Manque d'informations sur le prospect, budget non qualifié..."
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setRejectModalId(null);
+                  setRejectReason('');
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleReject}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-semibold hover:shadow-lg"
+              >
+                Confirmer le refus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Répondre */}
+      {respondModalId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
+            <h3 className="text-xl font-bold mb-4 text-blue-600">💬 Répondre à la demande</h3>
+            <p className="text-gray-600 mb-4">
+              Répondez à la demande d'aide du commercial :
+            </p>
+            <textarea
+              value={respondMessage}
+              onChange={(e) => setRespondMessage(e.target.value)}
+              rows={6}
+              placeholder="Votre réponse détaillée..."
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setRespondModalId(null);
+                  setRespondMessage('');
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleRespond}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg"
+              >
+                Envoyer la réponse
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

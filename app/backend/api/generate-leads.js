@@ -14,7 +14,7 @@ const generateLeadsSchema = z.object({
 });
 
 const googleMapsClient = new Client({});
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
 
 // Configuration Hunter.io (optionnel)
 const HUNTER_API_KEY = process.env.HUNTER_API_KEY || null;

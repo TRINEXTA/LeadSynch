@@ -2,6 +2,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Users, TrendingUp, Building, Mail, Phone, MapPin, Globe, Filter, Search, Download, Send, Trash2, RefreshCw, BarChart3, Target, Plus } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 import CreateLeadModal from '../components/CreateLeadModal';
 import LeadDetailsModal from '../components/LeadDetailsModal';
 
@@ -39,6 +40,7 @@ export default function DatabaseDetails() {
   const [stats, setStats] = useState({});
   const [showCreateLeadModal, setShowCreateLeadModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (databaseId) {
@@ -54,15 +56,15 @@ export default function DatabaseDetails() {
     try {
       const response = await api.get(`/lead-databases/${databaseId}`);
       const dbData = response.data.database;
-      
+
       setDatabase(dbData);
       setLeads(dbData.leads || []);
       calculateStats(dbData.leads || []);
       setLoading(false);
     } catch (error) {
       console.error('Erreur chargement base:', error);
-      alert('Erreur lors du chargement de la base');
-      navigate('/LeadDatabases');  // Corrected path to match App.jsx
+      toast.error('Erreur lors du chargement de la base');
+      navigate('/LeadDatabases');
     }
   };
 
@@ -148,12 +150,12 @@ export default function DatabaseDetails() {
     a.click();
     URL.revokeObjectURL(url);
 
-    alert('Stats exportees !');
+    toast.success('📊 Stats exportées avec succès !');
   };
 
   const handleAddToCampaign = () => {
     if (selectedLeads.length === 0) {
-      alert('Selectionnez au moins 1 lead');
+      toast.warning('⚠️ Sélectionnez au moins 1 lead');
       return;
     }
 
@@ -163,28 +165,28 @@ export default function DatabaseDetails() {
     navigate('/CampaignsManager');
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedLeads.length === 0) {
-      alert('Selectionnez au moins 1 lead');
+      toast.warning('⚠️ Sélectionnez au moins 1 lead');
       return;
     }
+    setShowDeleteModal(true);
+  };
 
-    if (!confirm(`Supprimer ${selectedLeads.length} lead(s) ?`)) {
-      return;
-    }
-
-    try {
-      await api.post(`/lead-databases/${databaseId}/delete-leads`, {
-        lead_ids: selectedLeads
-      });
-
-      alert('Leads supprimes !');
+  const confirmDelete = async () => {
+    const promise = api.post(`/lead-databases/${databaseId}/delete-leads`, {
+      lead_ids: selectedLeads
+    }).then(() => {
+      setShowDeleteModal(false);
       setSelectedLeads([]);
       loadDatabaseDetails();
-    } catch (error) {
-      console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
-    }
+    });
+
+    toast.promise(promise, {
+      loading: 'Suppression en cours...',
+      success: `🗑️ ${selectedLeads.length} lead(s) supprimé(s) avec succès`,
+      error: 'Erreur lors de la suppression',
+    });
   };
 
   const handleRefresh = () => {
@@ -517,6 +519,38 @@ export default function DatabaseDetails() {
               loadDatabaseDetails();
             }}
           />
+        )}
+
+        {/* Modal Confirmation Suppression */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Trash2 className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Supprimer {selectedLeads.length} lead(s) ?</h3>
+                <p className="text-gray-600">
+                  Cette action est irréversible. Les leads sélectionnés seront définitivement supprimés de la base.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                >
+                  Confirmer la suppression
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '../context/AuthContext';
 import {
   GraduationCap, PlayCircle, CheckCircle, Book, Target, Mail,
   Phone, Users, Database, BarChart3, Zap, ArrowRight, Clock,
@@ -7,8 +8,12 @@ import {
 } from 'lucide-react';
 
 export default function Formation() {
+  const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState({});
   const [completedLessons, setCompletedLessons] = useState([]);
+
+  // Déterminer si l'utilisateur est Manager ou Admin
+  const isManager = user?.role === 'manager' || user?.role === 'admin';
 
   const toggleModule = (moduleId) => {
     setExpandedModules({
@@ -249,6 +254,7 @@ Chaque étape déclencheimplique des actions automatiques.`
       icon: Users,
       color: 'pink',
       duration: '1h',
+      managerOnly: true, // ✅ MODULE RÉSERVÉ AUX MANAGERS
       lessons: [
         {
           id: 'create-users',
@@ -445,7 +451,10 @@ Chaque étape déclencheimplique des actions automatiques.`
 
         {/* Modules de formation */}
         <div className="space-y-6">
-          {modules.map((module, index) => {
+          {modules
+            // ✅ FILTRER LES MODULES PAR RÔLE : n'afficher les modules "managerOnly" qu'aux managers/admins
+            .filter(module => !module.managerOnly || isManager)
+            .map((module, index) => {
             const Icon = module.icon;
             const colors = getColorClasses(module.color);
             const isExpanded = expandedModules[module.id];

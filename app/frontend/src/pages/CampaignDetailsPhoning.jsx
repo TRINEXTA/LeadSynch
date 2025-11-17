@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
-  ArrowLeft, Phone, Users, TrendingUp, Clock, Calendar, Edit, 
+import {
+  ArrowLeft, Phone, Users, TrendingUp, Clock, Calendar, Edit,
   Play, Pause, StopCircle, Target, Award, Activity, BarChart3,
   CheckCircle, XCircle, PhoneCall, UserCheck, AlertCircle, Plus
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const STAGE_CONFIG = {
   cold_call: { name: 'Cold Call', color: 'bg-blue-500', icon: Phone, textColor: 'text-blue-700', bgLight: 'bg-blue-50' },
@@ -28,6 +29,7 @@ export default function CampaignDetailsPhoning() {
   const [commercials, setCommercials] = useState([]);
   const [pipelineStats, setPipelineStats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAddLeadsModal, setShowAddLeadsModal] = useState(false);
 
   useEffect(() => {
     if (campaignId) {
@@ -38,41 +40,44 @@ export default function CampaignDetailsPhoning() {
   const loadCampaignDetails = async () => {
     try {
       setLoading(true);
-      
+
       const [campaignRes, statsRes, commercialsRes, pipelineRes] = await Promise.all([
         api.get(`/campaigns/${campaignId}`),
         api.get(`/campaigns/${campaignId}/phoning-stats`),
         api.get(`/campaigns/${campaignId}/commercials`),
         api.get(`/campaigns/${campaignId}/pipeline-stats`)
       ]);
-      
+
       setCampaign(campaignRes.data.campaign);
       setStats(statsRes.data.stats);
       setCommercials(commercialsRes.data.commercials || []);
       setPipelineStats(pipelineRes.data.pipeline || []);
-      
+
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Erreur chargement campagne');
+      toast.error('Erreur chargement campagne');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddLeadsBatch = async () => {
-    if (!confirm('Ajouter 50 nouveaux leads à chaque commercial ?')) return;
-    
-    try {
-      await api.post(`/pipeline-leads/deploy-batch`, {
-        campaign_id: campaignId,
-        size: 50
-      });
-      alert('✅ Leads ajoutés avec succès !');
-      loadCampaignDetails();
-    } catch (error) {
-      console.error('Erreur:', error);
-      alert('❌ Erreur lors de l\'ajout des leads');
-    }
+  const handleAddLeadsBatch = () => {
+    setShowAddLeadsModal(true);
+  };
+
+  const confirmAddLeads = async () => {
+    setShowAddLeadsModal(false);
+
+    const promise = api.post(`/pipeline-leads/deploy-batch`, {
+      campaign_id: campaignId,
+      size: 50
+    }).then(() => loadCampaignDetails());
+
+    toast.promise(promise, {
+      loading: 'Ajout des leads en cours...',
+      success: '✅ 50 leads ajoutés à chaque commercial !',
+      error: '❌ Erreur lors de l\'ajout des leads',
+    });
   };
 
   const handleEditCampaign = () => {
@@ -80,14 +85,16 @@ export default function CampaignDetailsPhoning() {
   };
 
   const handleStatusChange = async (newStatus) => {
-    try {
-      await api.post(`/campaigns/${campaignId}/${newStatus}`);
-      alert(`✅ Campagne ${newStatus === 'pause' ? 'mise en pause' : newStatus === 'resume' ? 'relancée' : 'arrêtée'}`);
-      loadCampaignDetails();
-    } catch (error) {
-      console.error('Erreur:', error);
-      alert('❌ Erreur changement statut');
-    }
+    const statusText = newStatus === 'pause' ? 'mise en pause' : newStatus === 'resume' ? 'relancée' : 'arrêtée';
+
+    const promise = api.post(`/campaigns/${campaignId}/${newStatus}`)
+      .then(() => loadCampaignDetails());
+
+    toast.promise(promise, {
+      loading: 'Modification du statut...',
+      success: `✅ Campagne ${statusText}`,
+      error: '❌ Erreur changement statut',
+    });
   };
 
   if (loading) {
@@ -363,6 +370,40 @@ export default function CampaignDetailsPhoning() {
             </div>
           )}
         </div>
+
+        {/* Modal Confirmation Ajout Leads */}
+        {showAddLeadsModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Ajouter 50 nouveaux leads ?
+                </h3>
+                <p className="text-gray-600">
+                  Chaque commercial recevra 50 nouveaux leads à contacter pour cette campagne.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAddLeadsModal(false)}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={confirmAddLeads}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                >
+                  Confirmer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
-﻿import React, { useState, useEffect } from 'react';
-import { 
-  Calendar, Clock, Plus, Check, X, AlertCircle, 
+import React, { useState, useEffect } from 'react';
+import {
+  Calendar, Clock, Plus, Check, X, AlertCircle,
   User, Phone, Mail, Building2, ChevronDown, Filter,
   CheckCircle, XCircle, Clock3, TrendingUp, Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const PRIORITY_COLORS = {
   high: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', badge: 'bg-red-100' },
@@ -14,27 +15,33 @@ const PRIORITY_COLORS = {
 };
 
 const FOLLOWUP_TYPES = [
-  { value: 'call', label: 'Appel téléphonique', icon: '' },
-  { value: 'email', label: 'Envoi email', icon: '' },
+  { value: 'call', label: 'Appel téléphonique', icon: '📞' },
+  { value: 'email', label: 'Envoi email', icon: '📧' },
   { value: 'meeting', label: 'Rendez-vous', icon: '🤝' },
-  { value: 'demo', label: 'Démo produit', icon: '' },
-  { value: 'quote', label: 'Envoi devis', icon: '' },
-  { value: 'other', label: 'Autre', icon: '' }
+  { value: 'demo', label: 'Démo produit', icon: '🎯' },
+  { value: 'quote', label: 'Envoi devis', icon: '💰' },
+  { value: 'other', label: 'Autre', icon: '📝' }
 ];
 
 export default function FollowUps() {
   const { user } = useAuth();
   const isManager = user?.role === 'admin' || user?.role === 'manager';
-  
+
   const [followups, setFollowups] = useState([]);
   const [leads, setLeads] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('upcoming'); // upcoming, overdue, completed, all
+  const [filterStatus, setFilterStatus] = useState('upcoming');
   const [filterPriority, setFilterPriority] = useState('all');
-  
+
+  // États pour les modals
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [rescheduleModalId, setRescheduleModalId] = useState(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+
   const [stats, setStats] = useState({
     total: 0,
     upcoming: 0,
@@ -56,7 +63,7 @@ export default function FollowUps() {
   useEffect(() => {
     fetchFollowups();
     fetchLeads();
-    fetchTeamMembers(); // ✅ TOUJOURS charger les utilisateurs
+    fetchTeamMembers();
   }, [selectedUser]);
 
   useEffect(() => {
@@ -67,20 +74,20 @@ export default function FollowUps() {
     try {
       setLoading(true);
       let url = '/follow-ups';
-      
-      // Manager peut filtrer par commercial
+
       if (isManager && selectedUser !== 'all') {
         url += `?user_id=${selectedUser}`;
       }
 
       const response = await api.get(url);
       const data = response.data;
-      
+
       if (data.success) {
         setFollowups(data.followups || []);
       }
     } catch (error) {
       console.error('Erreur chargement rappels:', error);
+      toast.error('Erreur lors du chargement des rappels');
     } finally {
       setLoading(false);
     }
@@ -90,11 +97,10 @@ export default function FollowUps() {
     try {
       const response = await api.get('/leads');
       const data = response.data;
-      
+
       if (data.success) {
-        // Filtrer les leads assignés au commercial ou tous pour le manager
-        const filteredLeads = isManager 
-          ? data.leads 
+        const filteredLeads = isManager
+          ? data.leads
           : data.leads.filter(lead => user && lead.assigned_to === user.id);
         setLeads(filteredLeads);
       }
@@ -107,9 +113,9 @@ export default function FollowUps() {
     try {
       const response = await api.get('/users');
       const data = response.data;
-      
+
       if (data.success) {
-        setTeamMembers(data.users); // Tous les utilisateurs
+        setTeamMembers(data.users);
       }
     } catch (error) {
       console.error('Erreur chargement équipe:', error);
@@ -119,20 +125,20 @@ export default function FollowUps() {
   const calculateStats = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    const upcoming = followups.filter(f => 
+
+    const upcoming = followups.filter(f =>
       !f.completed && new Date(f.scheduled_date) >= today
     ).length;
-    
-    const overdue = followups.filter(f => 
+
+    const overdue = followups.filter(f =>
       !f.completed && new Date(f.scheduled_date) < today
     ).length;
-    
+
     const completed = followups.filter(f => f.completed).length;
-    
+
     const todayCount = followups.filter(f => {
       const followupDate = new Date(f.scheduled_date);
-      return !f.completed && 
+      return !f.completed &&
         followupDate.getDate() === today.getDate() &&
         followupDate.getMonth() === today.getMonth() &&
         followupDate.getFullYear() === today.getFullYear();
@@ -151,85 +157,84 @@ export default function FollowUps() {
     e.preventDefault();
 
     if (!newFollowup.lead_id || !newFollowup.scheduled_date) {
-      alert(' Lead et date requis');
+      toast.error('⚠️ Lead et date sont requis');
       return;
     }
 
-    try {
-      const scheduledDateTime = `${newFollowup.scheduled_date}T${newFollowup.scheduled_time || '09:00'}:00`;
-      
-      const response = await api.post('/follow-ups', {
-          lead_id: parseInt(newFollowup.lead_id),
-          type: newFollowup.type,
-          priority: newFollowup.priority,
-          scheduled_date: scheduledDateTime,
-          notes: newFollowup.notes,
-          title: newFollowup.title
-        });
+    const scheduledDateTime = `${newFollowup.scheduled_date}T${newFollowup.scheduled_time || '09:00'}:00`;
 
-      if (response.status === 200 || response.data.success) {
-        setShowModal(false);
-        setNewFollowup({
-          lead_id: '',
-          type: 'call',
-          priority: 'medium',
-          scheduled_date: '',
-          scheduled_time: '',
-          notes: '',
-          title: ''
-        });
-        fetchFollowups();
-      }
-    } catch (error) {
-      console.error('Erreur création rappel:', error);
-      alert(' Erreur création rappel');
-    }
+    const promise = api.post('/follow-ups', {
+      lead_id: parseInt(newFollowup.lead_id),
+      type: newFollowup.type,
+      priority: newFollowup.priority,
+      scheduled_date: scheduledDateTime,
+      notes: newFollowup.notes,
+      title: newFollowup.title
+    }).then(() => {
+      setShowModal(false);
+      setNewFollowup({
+        lead_id: '',
+        type: 'call',
+        priority: 'medium',
+        scheduled_date: '',
+        scheduled_time: '',
+        notes: '',
+        title: ''
+      });
+      fetchFollowups();
+    });
+
+    toast.promise(promise, {
+      loading: 'Création du rappel...',
+      success: '✅ Rappel créé avec succès',
+      error: 'Erreur lors de la création',
+    });
   };
 
   const handleComplete = async (id) => {
-    try {
-      const response = await api.put(`/follow-ups/${id}/complete`);
+    const promise = api.put(`/follow-ups/${id}/complete`)
+      .then(() => fetchFollowups());
 
-      if (response.status === 200 || response.data.success) {
-        fetchFollowups();
-      }
-    } catch (error) {
-      console.error('Erreur complétion rappel:', error);
-    }
+    toast.promise(promise, {
+      loading: 'Marquage comme terminé...',
+      success: '✅ Rappel marqué comme terminé',
+      error: 'Erreur lors de la complétion',
+    });
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer ce rappel ?')) return;
+    const promise = api.delete(`/follow-ups/${id}`)
+      .then(() => fetchFollowups());
 
-    try {
-      const response = await api.put(`/follow-ups/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.status === 200 || response.data.success) {
-        fetchFollowups();
-      }
-    } catch (error) {
-      console.error('Erreur suppression rappel:', error);
-    }
+    toast.promise(promise, {
+      loading: 'Suppression...',
+      success: '🗑️ Rappel supprimé',
+      error: 'Erreur lors de la suppression',
+    });
   };
 
-  const handleReschedule = async (id) => {
-    const newDate = prompt('Nouvelle date (YYYY-MM-DD):');
-    if (!newDate) return;
-
-    try {
-      const response = await fetch(`/follow-ups/${id}/reschedule`, { scheduled_date: newDate });
-
-      if (response.status === 200 || response.data.success) {
-        fetchFollowups();
-      }
-    } catch (error) {
-      console.error('Erreur reprogrammation:', error);
+  const handleReschedule = async () => {
+    if (!rescheduleDate) {
+      toast.error('Veuillez sélectionner une date');
+      return;
     }
+
+    const scheduledDateTime = `${rescheduleDate}T${rescheduleTime || '09:00'}:00`;
+
+    const promise = api.patch(`/follow-ups/${rescheduleModalId}/reschedule`, {
+      scheduled_date: scheduledDateTime
+    }).then(() => {
+      setRescheduleModalId(null);
+      setRescheduleDate('');
+      setRescheduleTime('');
+      fetchFollowups();
+    });
+
+    toast.promise(promise, {
+      loading: 'Reprogrammation...',
+      success: '📅 Rappel reprogrammé',
+      error: 'Erreur lors de la reprogrammation',
+    });
   };
 
   const getFilteredFollowups = () => {
@@ -237,10 +242,9 @@ export default function FollowUps() {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     return followups.filter(followup => {
-      // Filtre par statut
       const followupDate = new Date(followup.scheduled_date);
       let matchStatus = true;
-      
+
       if (filterStatus === 'upcoming') {
         matchStatus = !followup.completed && followupDate >= today;
       } else if (filterStatus === 'overdue') {
@@ -249,7 +253,6 @@ export default function FollowUps() {
         matchStatus = followup.completed;
       }
 
-      // Filtre par priorité
       const matchPriority = filterPriority === 'all' || followup.priority === filterPriority;
 
       return matchStatus && matchPriority;
@@ -280,9 +283,9 @@ export default function FollowUps() {
     } else if (date.toDateString() === tomorrow.toDateString()) {
       return `Demain à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
     } else {
-      return date.toLocaleDateString('fr-FR', { 
-        weekday: 'short', 
-        day: 'numeric', 
+      return date.toLocaleDateString('fr-FR', {
+        weekday: 'short',
+        day: 'numeric',
         month: 'short',
         hour: '2-digit',
         minute: '2-digit'
@@ -311,11 +314,11 @@ export default function FollowUps() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <Calendar className="w-8 h-8 text-blue-600" />
-              'Mes Rappels'
+              Mes Rappels
             </h1>
             <p className="text-gray-600 mt-1">
-              {isManager 
-                ? 'Suivez les rappels de votre équipe' 
+              {isManager
+                ? 'Suivez les rappels de votre équipe'
                 : 'Gérez vos tâches et rendez-vous à venir'
               }
             </p>
@@ -387,10 +390,10 @@ export default function FollowUps() {
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="all"> Tous</option>
-              <option value="upcoming"> À venir</option>
-              <option value="overdue"> En retard</option>
-              <option value="completed"> Complétés</option>
+              <option value="all">📋 Tous</option>
+              <option value="upcoming">⏰ À venir</option>
+              <option value="overdue">⚠️ En retard</option>
+              <option value="completed">✅ Complétés</option>
             </select>
 
             <select
@@ -398,10 +401,10 @@ export default function FollowUps() {
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
             >
-              <option value="all"> Toutes priorités</option>
-              <option value="high"> Haute</option>
-              <option value="medium"> Moyenne</option>
-              <option value="low"> Basse</option>
+              <option value="all">🎯 Toutes priorités</option>
+              <option value="high">🔴 Haute</option>
+              <option value="medium">🟠 Moyenne</option>
+              <option value="low">🔵 Basse</option>
             </select>
           </div>
         </div>
@@ -414,7 +417,7 @@ export default function FollowUps() {
             <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucun rappel</h3>
             <p className="text-gray-600 mb-6">
-              {filterStatus === 'completed' 
+              {filterStatus === 'completed'
                 ? 'Aucun rappel complété pour le moment'
                 : 'Créez votre premier rappel pour organiser votre prospection'
               }
@@ -438,10 +441,10 @@ export default function FollowUps() {
               <div
                 key={followup.id}
                 className={`bg-white rounded-xl shadow-lg hover:shadow-xl transition-all p-6 border-l-4 ${
-                  followup.completed 
-                    ? 'border-green-500 opacity-60' 
-                    : overdue 
-                    ? 'border-red-500' 
+                  followup.completed
+                    ? 'border-green-500 opacity-60'
+                    : overdue
+                    ? 'border-red-500'
                     : priorityStyle.border
                 }`}
               >
@@ -456,7 +459,7 @@ export default function FollowUps() {
                         </h3>
                         <div className="flex items-center gap-3 mt-1">
                           <span className={`text-xs font-semibold px-2 py-1 rounded ${priorityStyle.badge} ${priorityStyle.text}`}>
-                            {followup.priority === 'high' ? ' Haute' : followup.priority === 'medium' ? ' Moyenne' : ' Basse'}
+                            {followup.priority === 'high' ? '🔴 Haute' : followup.priority === 'medium' ? '🟠 Moyenne' : '🔵 Basse'}
                           </span>
                           <span className={`text-sm font-medium flex items-center gap-1 ${
                             overdue ? 'text-red-600' : followup.completed ? 'text-green-600' : 'text-gray-600'
@@ -466,12 +469,12 @@ export default function FollowUps() {
                           </span>
                           {overdue && (
                             <span className="text-xs font-semibold px-2 py-1 bg-red-100 text-red-700 rounded">
-                               EN RETARD
+                              ⚠️ EN RETARD
                             </span>
                           )}
                           {followup.completed && (
                             <span className="text-xs font-semibold px-2 py-1 bg-green-100 text-green-700 rounded">
-                               COMPLÉTÉ
+                              ✅ COMPLÉTÉ
                             </span>
                           )}
                         </div>
@@ -528,7 +531,11 @@ export default function FollowUps() {
                           Marquer terminé
                         </button>
                         <button
-                          onClick={() => handleReschedule(followup.id)}
+                          onClick={() => {
+                            setRescheduleModalId(followup.id);
+                            setRescheduleDate(new Date(followup.scheduled_date).toISOString().split('T')[0]);
+                            setRescheduleTime(new Date(followup.scheduled_date).toTimeString().slice(0, 5));
+                          }}
                           className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-all"
                         >
                           <Clock className="w-4 h-4" />
@@ -537,7 +544,7 @@ export default function FollowUps() {
                       </>
                     ) : null}
                     <button
-                      onClick={() => handleDelete(followup.id)}
+                      onClick={() => setDeleteConfirmId(followup.id)}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all"
                     >
                       <X className="w-4 h-4" />
@@ -616,9 +623,9 @@ export default function FollowUps() {
                     value={newFollowup.priority}
                     onChange={(e) => setNewFollowup({...newFollowup, priority: e.target.value})}
                   >
-                    <option value="low"> Basse</option>
-                    <option value="medium"> Moyenne</option>
-                    <option value="high"> Haute</option>
+                    <option value="low">🔵 Basse</option>
+                    <option value="medium">🟠 Moyenne</option>
+                    <option value="high">🔴 Haute</option>
                   </select>
                 </div>
               </div>
@@ -674,6 +681,82 @@ export default function FollowUps() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmation Suppression */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md">
+            <h3 className="text-xl font-bold mb-4 text-red-600">🗑️ Confirmer la suppression</h3>
+            <p className="text-gray-700 mb-6">
+              Êtes-vous sûr de vouloir supprimer ce rappel ? Cette action est irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  handleDelete(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-semibold hover:shadow-lg"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Reprogrammer */}
+      {rescheduleModalId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4 text-orange-600">📅 Reprogrammer le rappel</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Nouvelle date</label>
+                <input
+                  type="date"
+                  value={rescheduleDate}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Nouvelle heure</label>
+                <input
+                  type="time"
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setRescheduleModalId(null);
+                  setRescheduleDate('');
+                  setRescheduleTime('');
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleReschedule}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg font-semibold hover:shadow-lg"
+              >
+                Reprogrammer
+              </button>
+            </div>
           </div>
         </div>
       )}
