@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, User, Reply, Server, Send, Shield, Save, Eye, EyeOff, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Building } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function MailingSettings() {
   const [loading, setLoading] = useState(true);
@@ -45,37 +46,37 @@ export default function MailingSettings() {
   const handleSave = async () => {
     // Validation des 5 champs essentiels
     if (!settings.from_email || !settings.from_name || !settings.reply_to_email || !settings.company_name || !settings.company_address) {
-      alert('❌ Tous les champs sont obligatoires !\n\n- Email expéditeur\n- Nom expéditeur\n- Email de réponse\n- Nom de l\'entreprise\n- Adresse de l\'entreprise');
+      toast.error('❌ Tous les champs sont obligatoires !\n\nEmail expéditeur • Nom expéditeur • Email de réponse • Nom de l\'entreprise • Adresse de l\'entreprise', {
+        duration: 5000
+      });
       return;
     }
 
     // Validation email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(settings.from_email) || !emailRegex.test(settings.reply_to_email)) {
-      alert('❌ Format d\'email invalide !');
+      toast.error('❌ Format d\'email invalide !');
       return;
     }
 
     setSaving(true);
-    try {
-      await api.post('/mailing-settings', settings);
-      alert('✅ Configuration enregistrée !\n\nVos campagnes utiliseront maintenant ces paramètres.\nLe lien de désabonnement est automatiquement intégré par LeadSynch.');
-    } catch (error) {
-      console.error('Erreur save:', error);
-      alert('❌ Erreur lors de la sauvegarde');
-    } finally {
-      setSaving(false);
-    }
+    const promise = api.post('/mailing-settings', settings);
+
+    toast.promise(promise, {
+      loading: 'Enregistrement...',
+      success: '✅ Configuration enregistrée ! Vos campagnes utiliseront maintenant ces paramètres.',
+      error: '❌ Erreur lors de la sauvegarde',
+    }).finally(() => setSaving(false));
   };
 
   const handleTestEmail = async () => {
-    try {
-      await api.post('/mailing-settings/test', { email: settings.from_email });
-      alert('📧 Email de test envoyé ! Vérifiez votre boîte de réception.');
-    } catch (error) {
-      console.error('Erreur test:', error);
-      alert('❌ Erreur lors de l\'envoi du test');
-    }
+    const promise = api.post('/mailing-settings/test', { email: settings.from_email });
+
+    toast.promise(promise, {
+      loading: 'Envoi du test...',
+      success: '📧 Email de test envoyé ! Vérifiez votre boîte de réception.',
+      error: '❌ Erreur lors de l\'envoi du test',
+    });
   };
 
   if (loading) {
