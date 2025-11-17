@@ -151,4 +151,87 @@ INSTRUCTIONS RÉPONSE:
   }
 });
 
+// POST /categorize - Catégoriser un lead avec l'IA
+router.post('/categorize', authMiddleware, async (req, res) => {
+  console.log('🏷️ Asefi categorization - Lead category detection');
+
+  try {
+    const { company_name, description, website, address } = req.body;
+
+    if (!company_name || !company_name.trim()) {
+      return res.status(400).json({ error: 'Nom de l\'entreprise requis' });
+    }
+
+    // Construire le contexte pour l'IA
+    const contextParts = [
+      `Nom de l'entreprise: ${company_name}`,
+      description ? `Description: ${description}` : '',
+      website ? `Site web: ${website}` : '',
+      address ? `Adresse: ${address}` : ''
+    ].filter(Boolean).join('\n');
+
+    const prompt = `Analyse cette entreprise et détermine son secteur d'activité principal.
+
+${contextParts}
+
+Choisis UNE SEULE catégorie parmi :
+- informatique
+- comptabilite
+- juridique
+- sante
+- btp
+- hotellerie
+- immobilier
+- commerce
+- logistique
+- education
+- consulting
+- rh
+- services
+- industrie
+- automobile
+- autre
+
+Réponds UNIQUEMENT avec le nom exact de la catégorie, sans explication.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 50,
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]
+    });
+
+    const category = message.content[0].text.trim().toLowerCase();
+
+    // Validation de la catégorie
+    const validCategories = [
+      'informatique', 'comptabilite', 'juridique', 'sante', 'btp',
+      'hotellerie', 'immobilier', 'commerce', 'logistique', 'education',
+      'consulting', 'rh', 'services', 'industrie', 'automobile', 'autre'
+    ];
+
+    const finalCategory = validCategories.includes(category) ? category : 'autre';
+
+    console.log(`✅ Catégorie détectée: ${finalCategory}`);
+
+    res.json({
+      success: true,
+      category: finalCategory,
+      tokens_used: message.usage.input_tokens + message.usage.output_tokens
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur Asefi categorization:', error);
+    res.status(500).json({
+      error: 'Erreur lors de la catégorisation',
+      details: error.message
+    });
+  }
+});
+
 export default router;
