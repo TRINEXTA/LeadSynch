@@ -31,9 +31,12 @@ export async function getMailingSettings(req, res) {
 
     const settings = rows[0];
 
+    // Utiliser la clé du .env comme fallback si aucune clé n'est enregistrée
+    const actualApiKey = settings.api_key || process.env.ELASTIC_EMAIL_API_KEY || '';
+
     // Ne pas exposer la clé API complète pour des raisons de sécurité
-    const maskedApiKey = settings.api_key
-      ? `${settings.api_key.substring(0, 8)}...${settings.api_key.substring(settings.api_key.length - 4)}`
+    const maskedApiKey = actualApiKey
+      ? `${actualApiKey.substring(0, 8)}...${actualApiKey.substring(actualApiKey.length - 4)}`
       : '';
 
     res.json({
@@ -76,6 +79,9 @@ export async function updateMailingSettings(req, res) {
       });
     }
 
+    // Utiliser la clé Elastic Email du .env comme fallback si aucune clé n'est fournie
+    const finalApiKey = api_key || process.env.ELASTIC_EMAIL_API_KEY || '';
+
     // Vérifier si une config existe déjà
     const { rows: existing } = await q(
       `SELECT id FROM mailing_settings WHERE tenant_id = $1`,
@@ -112,10 +118,14 @@ export async function updateMailingSettings(req, res) {
       updateFields.push(`provider = $${paramCount++}`);
       values.push(provider || 'elasticemail');
 
-      // Si une nouvelle clé API est fournie (non masquée)
+      // Si une nouvelle clé API est fournie (non masquée), sinon utiliser la clé du .env
       if (api_key && !api_key.includes('...')) {
         updateFields.push(`api_key = $${paramCount++}`);
-        values.push(api_key);
+        values.push(finalApiKey);
+      } else if (!api_key && finalApiKey) {
+        // Utiliser la clé du .env si aucune clé n'est fournie
+        updateFields.push(`api_key = $${paramCount++}`);
+        values.push(finalApiKey);
       }
 
       updateFields.push(`configured = true`);
@@ -134,7 +144,7 @@ export async function updateMailingSettings(req, res) {
 
       result = rows[0];
     } else {
-      // Création
+      // Création - Utiliser la clé du .env si aucune clé personnalisée n'est fournie
       const { rows } = await q(
         `INSERT INTO mailing_settings (
           tenant_id, from_email, from_name, reply_to_email, company_name, company_address, provider, api_key, configured
@@ -148,7 +158,7 @@ export async function updateMailingSettings(req, res) {
           company_name || '',
           company_address || '',
           provider || 'elasticemail',
-          api_key || ''
+          finalApiKey
         ]
       );
 
@@ -205,9 +215,20 @@ export async function testMailingSettings(req, res) {
 
     const settings = rows[0];
 
+    // Utiliser la clé du .env comme fallback
+    const apiKey = settings.api_key || process.env.ELASTIC_EMAIL_API_KEY;
+
+    if (!apiKey) {
+      return res.status(400).json({
+        error: 'Clé API Elastic Email non configurée',
+        message: 'Veuillez configurer ELASTIC_EMAIL_API_KEY dans .env ou fournir une clé API'
+      });
+    }
+
     // TODO: Implémenter l'envoi réel via ElasticEmail
     // Pour l'instant, simuler le succès
     console.log(`📧 Email de test envoyé à ${test_email} depuis ${settings.from_email}`);
+    console.log(`🔑 Utilisation clé API: ${apiKey.substring(0, 8)}...`);
 
     res.json({
       message: 'Email de test envoyé avec succès',
