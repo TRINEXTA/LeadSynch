@@ -11,7 +11,8 @@ const q = (text, params=[]) => db.query(text, params);
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenant_id = req.user.tenant_id;
-    const { user_id: filter_user_id } = req.query;
+    const user_id = req.user.id;
+    const { user_id: filter_user_id, assigned_to_me, status, lead_id } = req.query;
 
     let query = `
       SELECT f.*,
@@ -24,20 +25,39 @@ router.get('/', authenticateToken, async (req, res) => {
       WHERE f.tenant_id = $1
     `;
     const params = [tenant_id];
+    let paramIndex = 2;
 
-    // ✅ TOUT LE MONDE voit TOUS les rappels du tenant
+    // Filtre: mes tâches assignées
+    if (assigned_to_me === 'true') {
+      query += ` AND f.user_id = $${paramIndex++}`;
+      params.push(user_id);
+    }
+
     // Filtre optionnel par user_id si spécifié dans le dropdown
     if (filter_user_id && filter_user_id !== 'all') {
-      query += ' AND f.user_id = $2';
+      query += ` AND f.user_id = $${paramIndex++}`;
       params.push(filter_user_id);
+    }
+
+    // Filtre par lead_id
+    if (lead_id) {
+      query += ` AND f.lead_id = $${paramIndex++}`;
+      params.push(lead_id);
+    }
+
+    // Filtre par statut (pending = non complété)
+    if (status === 'pending') {
+      query += ' AND (f.completed = FALSE OR f.completed IS NULL)';
+    } else if (status === 'completed') {
+      query += ' AND f.completed = TRUE';
     }
 
     query += ' ORDER BY f.scheduled_date ASC';
 
     const { rows } = await q(query, params);
-    
+
     console.log(`📅 Rappels trouvés: ${rows.length} pour tenant ${tenant_id}`);
-    
+
     return res.status(200).json({ success: true, followups: rows || [] });
   } catch (error) {
     console.error('❌ Erreur GET follow-ups:', error);

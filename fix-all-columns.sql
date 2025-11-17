@@ -26,18 +26,30 @@ COMMENT ON COLUMN campaigns.clicked_count IS 'Nombre de clics';
 COMMENT ON COLUMN campaigns.reply_count IS 'Nombre de réponses';
 COMMENT ON COLUMN campaigns.bounced_count IS 'Nombre de bounces (emails rejetés)';
 
--- 3. Table validation_requests (si n'existe pas, la créer)
+-- 3. Table users - Ajouter colonne manager_id
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS manager_id VARCHAR(36);
+
+CREATE INDEX IF NOT EXISTS idx_users_manager ON users(manager_id);
+
+COMMENT ON COLUMN users.manager_id IS 'ID du manager de cet utilisateur (pour validation_requests)';
+
+-- 4. Table validation_requests (si n'existe pas, la créer avec TOUTES les colonnes)
 CREATE TABLE IF NOT EXISTS validation_requests (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
   tenant_id VARCHAR(36) NOT NULL,
-  lead_id VARCHAR(36) NOT NULL,
-  requester_id VARCHAR(36) NOT NULL,
   type VARCHAR(50) NOT NULL DEFAULT 'validation',
-  status VARCHAR(50) NOT NULL DEFAULT 'pending',
+  requester_id VARCHAR(36) NOT NULL,
+  lead_id VARCHAR(36),
+  campaign_id VARCHAR(36),
+  subject VARCHAR(255) NOT NULL,
   message TEXT,
-  response TEXT,
-  responded_by VARCHAR(36),
-  responded_at TIMESTAMP,
+  priority VARCHAR(50) DEFAULT 'normal',
+  assigned_to VARCHAR(36),
+  status VARCHAR(50) NOT NULL DEFAULT 'pending',
+  reviewed_by VARCHAR(36),
+  manager_response TEXT,
+  resolution_notes TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -45,6 +57,7 @@ CREATE TABLE IF NOT EXISTS validation_requests (
 CREATE INDEX IF NOT EXISTS idx_validation_requests_tenant ON validation_requests(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_validation_requests_lead ON validation_requests(lead_id);
 CREATE INDEX IF NOT EXISTS idx_validation_requests_requester ON validation_requests(requester_id);
+CREATE INDEX IF NOT EXISTS idx_validation_requests_assigned ON validation_requests(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_validation_requests_status ON validation_requests(status);
 
 -- Vérifier que tout est OK

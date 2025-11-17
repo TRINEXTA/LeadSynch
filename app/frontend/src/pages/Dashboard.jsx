@@ -1,18 +1,22 @@
 ﻿import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Users, Briefcase, Phone, Mail, TrendingUp, Calendar, 
+import {
+  Users, Briefcase, Phone, Mail, TrendingUp, Calendar,
   Target, DollarSign, Activity, PieChart, UserCheck, Clock,
-  Eye, MousePointer, Send, CheckCircle, Award, Zap
+  Eye, MousePointer, Send, CheckCircle, Award, Zap, FileText, HelpCircle, AlertCircle
 } from "lucide-react";
 import QuotasWidget from "../components/QuotasWidget";
 import HealthStatusWidget from "../components/HealthStatusWidget";
+import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [validationRequests, setValidationRequests] = useState([]);
+  const [myTasks, setMyTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
@@ -21,15 +25,43 @@ export default function Dashboard() {
     try {
       setRefreshing(true);
 
-      const [statsRes, dashRes] = await Promise.all([
+      const requests = [
         api.get("/stats"),
         api.get("/stats/dashboard")
-      ]);
+      ];
 
-      console.log("Dashboard data:", dashRes.data);
-      setStats(statsRes.data.stats);
-      setDashboardData(dashRes.data);
-      
+      // Si manager/admin : charger les demandes de validation assignées à moi
+      if (user?.role === 'manager' || user?.role === 'admin') {
+        requests.push(api.get("/validation-requests?status=pending&assigned_to_me=true"));
+      }
+
+      // Charger les tâches de l'utilisateur
+      requests.push(api.get("/follow-ups?assigned_to_me=true&status=pending"));
+
+      const results = await Promise.allSettled(requests);
+
+      // Stats et dashboard
+      if (results[0].status === 'fulfilled') {
+        setStats(results[0].value.data.stats);
+      }
+      if (results[1].status === 'fulfilled') {
+        setDashboardData(results[1].value.data);
+      }
+
+      // Validation requests (si manager/admin)
+      let resultIndex = 2;
+      if (user?.role === 'manager' || user?.role === 'admin') {
+        if (results[resultIndex].status === 'fulfilled') {
+          setValidationRequests(results[resultIndex].value.data.requests || []);
+        }
+        resultIndex++;
+      }
+
+      // Mes tâches
+      if (results[resultIndex].status === 'fulfilled') {
+        setMyTasks(results[resultIndex].value.data.followups || []);
+      }
+
     } catch (error) {
       console.error("Erreur dashboard:", error?.response?.data || error.message);
     } finally {
@@ -442,6 +474,159 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
+          {/* Widget Demandes de Validation (Managers/Admins) */}
+          {(user?.role === 'manager' || user?.role === 'admin') && (
+            <Card className="bg-white shadow-lg hover:shadow-xl transition-shadow border-l-4 border-l-orange-500">
+              <CardHeader className="pb-3 bg-gradient-to-r from-orange-50 to-red-50 border-b">
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-base">
+                    <AlertCircle className="w-5 h-5 text-orange-600" />
+                    Demandes en attente
+                  </span>
+                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    {validationRequests.length}
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {validationRequests.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500 text-sm">
+                    <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                    Aucune demande en attente
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto">
+                    {validationRequests.slice(0, 10).map((request) => (
+                      <div
+                        key={request.id}
+                        className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/validation-requests?id=${request.id}`)}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-lg ${
+                            request.type === 'validation' ? 'bg-emerald-100' : 'bg-cyan-100'
+                          }`}>
+                            {request.type === 'validation' ? (
+                              <CheckCircle className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <HelpCircle className="w-4 h-4 text-cyan-600" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {request.subject}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              De: {request.requester_first_name && request.requester_last_name
+                                ? `${request.requester_first_name} ${request.requester_last_name}`
+                                : request.requester_email || 'Utilisateur'}
+                            </p>
+                            {request.company_name && (
+                              <p className="text-xs text-gray-600 mt-1 font-medium">
+                                Lead: {request.company_name}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                request.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                request.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {request.priority === 'high' ? 'Haute' :
+                                 request.priority === 'medium' ? 'Moyenne' : 'Basse'}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {new Date(request.created_at).toLocaleDateString('fr-FR')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Widget Mes Tâches */}
+          <Card className="bg-white shadow-lg hover:shadow-xl transition-shadow border-l-4 border-l-purple-500">
+            <CardHeader className="pb-3 bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-base">
+                  <FileText className="w-5 h-5 text-purple-600" />
+                  Mes Tâches
+                </span>
+                <span className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                  {myTasks.length}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {myTasks.length === 0 ? (
+                <div className="p-6 text-center text-gray-500 text-sm">
+                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                  Aucune tâche en attente
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto">
+                  {myTasks.slice(0, 10).map((task) => (
+                    <div
+                      key={task.id}
+                      className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/pipeline?lead=${task.lead_id}`)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${
+                          task.type === 'call' ? 'bg-blue-100' :
+                          task.type === 'email' ? 'bg-green-100' :
+                          task.type === 'meeting' ? 'bg-purple-100' :
+                          task.type === 'demo' ? 'bg-pink-100' :
+                          task.type === 'quote' ? 'bg-yellow-100' :
+                          'bg-gray-100'
+                        }`}>
+                          <span className="text-base">
+                            {task.type === 'call' ? '📞' :
+                             task.type === 'email' ? '📧' :
+                             task.type === 'meeting' ? '🤝' :
+                             task.type === 'demo' ? '🎬' :
+                             task.type === 'quote' ? '💰' : '📋'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {task.title}
+                          </p>
+                          {task.lead_company && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Lead: {task.lead_company}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                              task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {task.priority === 'high' ? 'Haute' :
+                               task.priority === 'medium' ? 'Moyenne' : 'Basse'}
+                            </span>
+                            {task.scheduled_date && (
+                              <span className="text-xs text-gray-400 flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(task.scheduled_date).toLocaleDateString('fr-FR')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <HealthStatusWidget />
           <QuotasWidget />
           
