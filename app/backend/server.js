@@ -33,26 +33,40 @@ if (!process.env.ELASTIC_EMAIL_API_KEY) {
 const app = express();
 app.set('trust proxy', 1);
 
-// ========= ?? CORS FIX COMPLET =========
+// ========= 🌐 CORS FIX COMPLET =========
 const allowedOrigins = [
   'https://app.leadsynch.com',
   'https://leadsynch.vercel.app',
   'http://localhost:5173',
+  'http://localhost:5174', // Website local
   'http://localhost:3000'
 ];
 
-console.log('?? CORS configur� pour:', allowedOrigins.join(', '));
+// Pattern pour accepter tous les déploiements Vercel (preview + production)
+const vercelPattern = /https:\/\/leadsynch-.*\.vercel\.app$/;
+
+console.log('🌐 CORS configuré pour:', allowedOrigins.join(', '));
+console.log('🌐 CORS pattern Vercel: *.vercel.app');
 
 app.use(cors({
   origin: function(origin, callback) {
+    // Pas d'origine (comme Postman ou curl) → autoriser
     if (!origin) return callback(null, true);
-    
+
+    // Vérifier la liste des origines exactes
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log('? Origin refus�:', origin);
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+
+    // Vérifier le pattern Vercel (tous les déploiements preview)
+    if (vercelPattern.test(origin)) {
+      console.log('✅ Origin Vercel autorisée:', origin);
+      return callback(null, true);
+    }
+
+    // Sinon refuser
+    console.log('❌ Origin refusée:', origin);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
