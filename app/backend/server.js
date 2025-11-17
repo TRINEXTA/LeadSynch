@@ -37,7 +37,8 @@ app.set('trust proxy', 1);
 const allowedOrigins = [
   'https://app.leadsynch.com',
   'https://leadsynch.vercel.app',
-  'http://localhost:5173',
+  'http://localhost:5173',  // App frontend
+  'http://localhost:5174',  // Website
   'http://localhost:3000'
 ];
 
