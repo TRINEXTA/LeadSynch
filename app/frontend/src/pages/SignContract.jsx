@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, FileText, Mail } from 'lucide-react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 export default function SignContract() {
   const { token } = useParams();
@@ -42,16 +43,16 @@ export default function SignContract() {
   const handleRequestOTP = async (e) => {
     e.preventDefault();
     if (!formData.cgv_accepted) {
-      alert('Vous devez accepter les CGV');
+      toast.error('Vous devez accepter les CGV');
       return;
     }
     setOtpSending(true);
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/sign/${token}/request-otp`, formData);
       setStep(2);
-      alert('Code envoyé par email !');
+      toast.success('📧 Code envoyé par email !');
     } catch (err) {
-      alert(err.response?.data?.error || 'Erreur lors de l\'envoi du code');
+      toast.error(err.response?.data?.error || 'Erreur lors de l\'envoi du code');
     } finally {
       setOtpSending(false);
     }
@@ -60,15 +61,16 @@ export default function SignContract() {
   const handleVerifyOTP = async () => {
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
-      alert('Veuillez entrer le code complet');
+      toast.error('Veuillez entrer le code complet');
       return;
     }
     setOtpVerifying(true);
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/sign/${token}/verify-otp`, { otp: otpCode });
       setStep(3);
+      toast.success('✅ Code vérifié avec succès !');
     } catch (err) {
-      alert(err.response?.data?.error || 'Code invalide');
+      toast.error(err.response?.data?.error || 'Code invalide');
       setOtp(['', '', '', '', '', '']);
     } finally {
       setOtpVerifying(false);
