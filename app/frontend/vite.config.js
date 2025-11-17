@@ -21,50 +21,25 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
-    // Optimisation minification
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true, // Supprime console.log en production
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug']
-      }
-    },
-    // Optimisation chunks
+    sourcemap: true, // Activé temporairement pour debug
+    minify: 'esbuild', // Plus stable que terser pour les dépendances React
+
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // Chunking stratégique pour meilleur cache
-        manualChunks: (id) => {
-          // Vendor chunks (libraries tierces)
-          if (id.includes('node_modules')) {
-            // React ecosystem
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
-            }
-            // UI libraries
-            if (id.includes('lucide-react') || id.includes('framer-motion') || id.includes('@hello-pangea')) {
-              return 'vendor-ui';
-            }
-            // Charts
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
-            }
-            // HTTP client
-            if (id.includes('axios')) {
-              return 'vendor-http';
-            }
-            // Toast notifications
-            if (id.includes('react-hot-toast')) {
-              return 'vendor-toast';
-            }
-            // Autres vendors
-            return 'vendor-other';
-          }
-
-          // Pages chunks (lazy loaded automatiquement grâce à React.lazy)
-          // Les pages seront automatiquement splittées par route
+        // ✅ FIX: Regrouper React avec TOUTES les dépendances qui l'utilisent
+        manualChunks: {
+          'vendor-react': [
+            'react',
+            'react-dom',
+            'react-router-dom',
+            'react-hot-toast',
+            'framer-motion',  // Utilise useSyncExternalStore
+            '@hello-pangea/dnd'
+          ],
+          'vendor-charts': ['recharts'],
+          'vendor-http': ['axios'],
+          'vendor-icons': ['lucide-react']
         },
         // Noms de fichiers avec hash pour cache-busting
         entryFileNames: 'js/[name]-[hash].js',
@@ -75,7 +50,7 @@ export default defineConfig({
     // Optimisation CSS
     cssCodeSplit: true,
     // Target moderne pour bundle plus petit
-    target: 'es2015',
+    target: 'esnext',
     // Optimisation assets
     assetsInlineLimit: 4096 // Inline assets < 4KB en base64
   },
@@ -84,6 +59,7 @@ export default defineConfig({
     // Supprime les commentaires
     legalComments: 'none',
     // Optimise le tree-shaking
-    treeShaking: true
+    treeShaking: true,
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : []
   }
 })
