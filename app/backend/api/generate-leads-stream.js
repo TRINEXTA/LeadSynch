@@ -5,11 +5,13 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 const googleMapsClient = new Client({});
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+// Accepter GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY pour compatibilité
+const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
 
 // Validation : la clé API doit être définie
 if (!GOOGLE_API_KEY) {
-  console.error('❌ GOOGLE_API_KEY non configurée dans les variables d\'environnement');
+  console.error('❌ GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY non configurée dans les variables d\'environnement');
+  console.error('💡 Veuillez ajouter GOOGLE_MAPS_API_KEY=votre_clé dans le fichier .env');
 }
 
 const activeSearches = new Map();
@@ -205,8 +207,13 @@ async function enrichLeadWithEmail(companyName, website) {
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
 
+  // Utiliser originalUrl pour supporter Express et Vercel
+  const url = req.originalUrl || req.url || '';
+
   try {
-    if (req.method === 'POST' && req.url.includes('/generate-leads')) {
+    // ⚠️ LEGACY: Génération synchrone (non utilisé - le frontend utilise le streaming ci-dessous)
+    // Ce bloc est gardé pour compatibilité mais devrait être supprimé à terme
+    if (req.method === 'POST' && url.includes('/generate-leads') && !url.includes('stream')) {
       const { sector, city, radius = 10, quantity = 50 } = req.body;
 
       if (!sector || !city) {
@@ -380,9 +387,9 @@ async function handler(req, res) {
       });
     }
 
-    
+
     // STREAMING AVEC SERVER-SENT EVENTS
-    if (req.method === 'POST' && req.url.includes('/generate-leads-stream')) {
+    if (req.method === 'POST' && (url.includes('/generate-leads-stream') || url === '/')) {
       const { sector, city, radius = 10, quantity = 50, searchId } = req.body;
 
       if (!sector || !city) {
@@ -405,7 +412,7 @@ async function handler(req, res) {
         sendProgress({ type: 'progress', percent: 10, message: 'Recherche en base...' });
         
         const existingLeads = await queryAll(
-          `SELECT * FROM global_leads WHERE industry = return res.status(405) AND city ILIKE $2 ORDER BY last_verified_at DESC LIMIT $3`,
+          `SELECT * FROM global_leads WHERE industry = $1 AND city ILIKE $2 ORDER BY last_verified_at DESC LIMIT $3`,
           [sector, `%${city}%`, quantity]
         );
 
@@ -436,7 +443,7 @@ async function handler(req, res) {
                 await new Promise(resolve => setTimeout(resolve, 500));
               }
 
-              const existing = await queryAll('SELECT id FROM global_leads WHERE google_place_id = return res.status(405)', [place.place_id]);
+              const existing = await queryAll('SELECT id FROM global_leads WHERE google_place_id = $1', [place.place_id]);
               if (existing.length > 0) continue;
 
               try {
@@ -449,7 +456,7 @@ async function handler(req, res) {
 
                 const result = await execute(
                   `INSERT INTO global_leads (company_name, phone, website, email, all_emails, address, city, latitude, longitude, industry, google_place_id, google_types, rating, review_count, source, first_discovered_by, last_verified_at)
-                   VALUES (return res.status(405), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()) RETURNING *`,
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()) RETURNING *`,
                   [details.name, details.formatted_phone_number || null, details.website || null, emails[0] || null, emails.join(', ') || null, details.formatted_address || null, city, details.geometry?.location?.lat || null, details.geometry?.location?.lng || null, sector, place.place_id, JSON.stringify(details.types || []), details.rating || null, details.user_ratings_total || null, 'google_maps', tenant_id]
                 );
 
@@ -478,19 +485,19 @@ async function handler(req, res) {
     }
 
     // PAUSE/RESUME/STOP
-    if (req.method === 'POST' && req.url.includes('/pause-search')) {
+    if (req.method === 'POST' && (url.includes('/pause-search') || url === '/')) {
       const { searchId } = req.body;
       const search = activeSearches.get(searchId);
       if (search) { search.paused = true; return res.json({ success: true, paused: true }); }
       return res.status(404).json({ error: 'Search not found' });
     }
-    if (req.method === 'POST' && req.url.includes('/resume-search')) {
+    if (req.method === 'POST' && (url.includes('/resume-search') || url === '/')) {
       const { searchId } = req.body;
       const search = activeSearches.get(searchId);
       if (search) { search.paused = false; return res.json({ success: true, paused: false }); }
       return res.status(404).json({ error: 'Search not found' });
     }
-    if (req.method === 'POST' && req.url.includes('/stop-search')) {
+    if (req.method === 'POST' && (url.includes('/stop-search') || url === '/')) {
       const { searchId } = req.body;
       const search = activeSearches.get(searchId);
       if (search) { search.active = false; activeSearches.delete(searchId); return res.json({ success: true, stopped: true }); }
