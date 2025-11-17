@@ -59,10 +59,13 @@ export default function MailingSettings() {
     setSaving(true);
     try {
       await api.post('/mailing-settings', settings);
-      alert('✅ Configuration enregistrée !\n\nVos campagnes utiliseront maintenant ces paramètres.\nLe lien de désabonnement est automatiquement intégré par LeadSynch.');
+      // Recharger les settings pour obtenir le statut 'configured'
+      await loadSettings();
+      alert('✅ Configuration enregistrée !\n\nVos campagnes utiliseront maintenant ces paramètres.\nLe lien de désabonnement est automatiquement intégré par LeadSynch.\n\nVous pouvez maintenant envoyer un email de test.');
     } catch (error) {
       console.error('Erreur save:', error);
-      alert('❌ Erreur lors de la sauvegarde');
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de la sauvegarde';
+      alert(`❌ ${errorMsg}`);
     } finally {
       setSaving(false);
     }
@@ -70,11 +73,12 @@ export default function MailingSettings() {
 
   const handleTestEmail = async () => {
     try {
-      await api.post('/mailing-settings/test', { email: settings.from_email });
+      await api.post('/mailing-settings/test', { test_email: settings.from_email });
       alert('📧 Email de test envoyé ! Vérifiez votre boîte de réception.');
     } catch (error) {
       console.error('Erreur test:', error);
-      alert('❌ Erreur lors de l\'envoi du test');
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'envoi du test';
+      alert(`❌ ${errorMsg}`);
     }
   };
 
@@ -412,7 +416,9 @@ export default function MailingSettings() {
 
             <button
               onClick={handleTestEmail}
-              className="px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
+              disabled={!settings.configured}
+              className="px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!settings.configured ? 'Veuillez d\'abord enregistrer votre configuration' : 'Envoyer un email de test'}
             >
               <Send className="w-5 h-5 inline mr-2" />
               Envoyer un test
