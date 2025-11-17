@@ -1,0 +1,72 @@
+services:
+  # Backend API Node.js
+  - type: web
+    name: leadsynch-backend
+    runtime: node
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      # Database
+      - key: POSTGRES_URL
+        sync: false  # Set in Render dashboard
+
+      # Authentication
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+
+      # Email Service
+      - key: ELASTIC_EMAIL_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: noreply@leadsynch.com
+      - key: EMAIL_REPLY_TO
+        value: support@leadsynch.com
+
+      # AI Services
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # Google Services
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+
+      # Hunter.io (optional)
+      - key: HUNTER_API_KEY
+        sync: false
+
+      # Environment
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+      # CORS
+      - key: FRONTEND_URL
+        value: https://app.leadsynch.com  # Update with your Vercel URL
+
+      # Security
+      - key: SSL_REJECT_UNAUTHORIZED
+        value: true
+
+      # Tenant
+      - key: TRINEXTA_TENANT_ID
+        value: 584544e5-892c-4550-a9f6-f8360d7c3eb9
+
+    # Auto-deploy on push
+    autoDeploy: true
+
+    # Health checks
+    healthCheck:
+      path: /api/health
+      interval: 30
+      timeout: 5
+      unhealthyThreshold: 3
+      healthyThreshold: 2
+
+# Database - À configurer séparément sur Neon
+# 1. Créer une base de données sur Neon (https://neon.tech)
+# 2. Copier la connection string POSTGRES_URL
+# 3. Ajouter dans les variables d'environnement Render
