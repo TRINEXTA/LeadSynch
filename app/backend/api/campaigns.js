@@ -376,7 +376,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     if (updates.template_id !== undefined) {
       updateFields.push(`template_id = $${paramIndex++}`);
-      values.push(updates.template_id);
+      values.push(updates.template_id || null); // Convertir chaîne vide en null pour UUID
     }
     if (updates.send_days !== undefined) {
       updateFields.push(`send_days = $${paramIndex++}`);
@@ -384,15 +384,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     if (updates.send_time_start !== undefined) {
       updateFields.push(`send_time_start = $${paramIndex++}`);
-      values.push(updates.send_time_start);
+      values.push(updates.send_time_start || null);
     }
     if (updates.send_time_end !== undefined) {
       updateFields.push(`send_time_end = $${paramIndex++}`);
-      values.push(updates.send_time_end);
+      values.push(updates.send_time_end || null);
     }
     if (updates.start_date !== undefined) {
       updateFields.push(`start_date = $${paramIndex++}`);
-      values.push(updates.start_date);
+      values.push(updates.start_date || null); // Convertir chaîne vide en null pour date
     }
     if (updates.emails_per_cycle !== undefined) {
       updateFields.push(`emails_per_cycle = $${paramIndex++}`);
