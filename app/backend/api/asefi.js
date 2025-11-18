@@ -5,8 +5,13 @@ import { query, queryOne } from '../lib/db.js';
 
 const router = express.Router();
 
+// Vérifier que la clé API est configurée
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error('⚠️ ANTHROPIC_API_KEY non configurée dans les variables d\'environnement');
+}
+
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY || 'dummy-key-for-error-handling',
 });
 
 // POST / - Chatbot Asefi intelligent (s'alimente des vraies données)
@@ -14,6 +19,15 @@ router.post('/', authMiddleware, async (req, res) => {
   console.log('💬 Asefi chatbot - Question utilisateur');
 
   try {
+    // Vérifier la clé API
+    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'dummy-key-for-error-handling') {
+      console.error('❌ ANTHROPIC_API_KEY manquante');
+      return res.status(500).json({
+        error: 'Configuration IA manquante. Contactez le support.',
+        details: 'ANTHROPIC_API_KEY non configurée'
+      });
+    }
+
     const { prompt } = req.body;
     const userId = req.user.id;
     const tenantId = req.user.tenant_id;
