@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import { z } from 'zod';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
