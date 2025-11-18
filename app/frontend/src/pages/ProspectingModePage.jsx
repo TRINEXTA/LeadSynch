@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import api from '../api/axios';
-import ProspectingMode from './ProspectingMode';
+import ProspectionMode from './ProspectingMode';
 
 export default function ProspectingModePage() {
   const [leads, setLeads] = useState([]);
@@ -52,7 +52,7 @@ export default function ProspectingModePage() {
   }
 
   return (
-    <ProspectingMode
+    <ProspectionMode
       leads={leads}
       onExit={handleExit}
       onLeadUpdated={handleLeadUpdated}
