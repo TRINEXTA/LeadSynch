@@ -104,8 +104,7 @@ export default function Sidebar() {
       items: [
         { name: 'Génération de Leads', href: '/LeadGeneration', icon: Search },
         { name: 'Recatégoriser (IA)', href: '/RecategorizeLeads', icon: Sparkles },
-        { name: 'Détecter Doublons', href: '/DuplicateDetection', icon: Database },
-        { name: 'Gérer Doublons', href: '/duplicates', icon: Copy }
+        { name: 'Détection de Doublons', href: '/duplicates', icon: Copy }
       ]
     },
 

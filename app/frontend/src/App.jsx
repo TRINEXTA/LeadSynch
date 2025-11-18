@@ -179,7 +179,6 @@ function App() {
               <Route path="/FollowUps" element={<FollowUps />} />
               <Route path="/ProspectingMode" element={<ProspectingModePage />} />
 
-              <Route path="/DuplicateDetection" element={<DuplicateDetection />} />
               <Route path="/duplicates" element={<DuplicateDetection />} />
               <Route path="/RecategorizeLeads" element={<RecategorizeLeads />} />
 
