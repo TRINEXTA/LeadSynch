@@ -1,19 +1,46 @@
-﻿CLSimport axios from "axios";
+import axios from "axios";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, ""); // ex: https://leadsynch-api.onrender.com
+// Détection automatique de l'environnement
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:3000'
+  : 'https://leadsynch-api.onrender.com';
+
+console.log('✅ API URL:', API_BASE);
 
 const api = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" }
+  baseURL: `${API_BASE}/api`,
+  headers: {
+    "Content-Type": "application/json"
+  }
 });
 
-// 🔧 Sécurise contre les vieux appels "/api/..." ou "http://localhost:3000/..."
-api.interceptors.request.use((cfg) => {
-  if (cfg.url?.startsWith("/api/")) cfg.url = cfg.url.slice(4);          // "/api/x" -> "/x"
-  if (cfg.url?.startsWith("http://localhost:3000"))
-    cfg.url = cfg.url.replace("http://localhost:3000", "");
-  return cfg;
-});
+// Interceptor pour ajouter le token automatiquement
+api.interceptors.request.use(
+  (config) => {
+    // Chercher le token dans localStorage (remember me) OU sessionStorage (session temporaire)
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor de réponse pour gérer les erreurs
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.warn('⚠️ Non autorisé (401) - Token invalide ou expiré');
+      // Supprimer le token des deux storages
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;
