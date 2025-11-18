@@ -21,8 +21,8 @@ export function Alert({ children, className = '', variant = 'default', ...props 
   const Icon = icons[variant]
   
   return (
-    <div 
-      className={`relative rounded-lg border p-4  `}
+    <div
+      className={`relative rounded-lg border p-4 ${variants[variant]} ${className}`}
       {...props}
     >
       <div className='flex items-start gap-3'>
@@ -35,7 +35,7 @@ export function Alert({ children, className = '', variant = 'default', ...props 
 
 export function AlertTitle({ children, className = '', ...props }) {
   return (
-    <h5 className={`font-semibold mb-1 `} {...props}>
+    <h5 className={`font-semibold mb-1 ${className}`} {...props}>
       {children}
     </h5>
   )
@@ -43,7 +43,7 @@ export function AlertTitle({ children, className = '', ...props }) {
 
 export function AlertDescription({ children, className = '', ...props }) {
   return (
-    <div className={`text-sm `} {...props}>
+    <div className={`text-sm ${className}`} {...props}>
       {children}
     </div>
   )

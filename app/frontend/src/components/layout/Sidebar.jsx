@@ -51,6 +51,7 @@ export default function Sidebar() {
   }
 
   const isAdmin = user?.role === 'admin'
+  const isManager = user?.role === 'manager'
   const isCommercial = user?.role === 'commercial'
 
   const navigation = {
@@ -59,16 +60,16 @@ export default function Sidebar() {
       { name: 'Dashboard Manager', href: '/dashboard-manager', icon: BarChart3, roles: ['manager', 'admin'] },
       { name: 'Mon Dashboard', href: '/CommercialDashboard', icon: Target, roles: ['commercial'] }
     ],
-    
+
     leads: {
       title: 'Leads & Prospects',
       icon: Database,
       items: [
-        { name: 'Mes Prospects', href: '/MyLeads', icon: UserCircle, roles: ['commercial'] },
-        { name: 'Tous les Leads', href: '/leads', icon: Database, roles: ['admin'] },
-        { name: 'Bases de Données', href: '/LeadDatabases', icon: FolderOpen, roles: ['admin'] },
-        { name: 'Importer des Leads', href: '/ImportLeads', icon: FileSpreadsheet, roles: ['admin'] },
-        { name: 'Scoring & Qualification', href: '/LeadScoring', icon: TrendingUp, roles: ['admin'] }
+        { name: 'Mes Prospects', href: '/MyLeads', icon: UserCircle, roles: ['commercial', 'manager'] },
+        { name: 'Tous les Leads', href: '/leads', icon: Database, roles: ['admin', 'manager'] },
+        { name: 'Bases de Données', href: '/LeadDatabases', icon: FolderOpen, roles: ['admin', 'manager'] },
+        { name: 'Importer des Leads', href: '/ImportLeads', icon: FileSpreadsheet, roles: ['admin', 'manager'] },
+        { name: 'Scoring & Qualification', href: '/LeadScoring', icon: TrendingUp, roles: ['admin', 'manager'] }
       ]
     },
 
@@ -76,11 +77,11 @@ export default function Sidebar() {
       title: 'Campagnes',
       icon: Megaphone,
       items: [
-        { name: 'Mes Rappels', href: '/FollowUps', icon: Calendar, roles: ['commercial', 'admin'] },
-        { name: 'Mode Prospection', href: '/ProspectingMode', icon: Phone, roles: ['commercial', 'admin'] },
-        { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin'] },
-        { name: 'Gestion Campagnes', href: '/CampaignsManager', icon: Target, roles: ['admin'] },
-        { name: 'Campagnes', href: '/Campaigns', icon: Mail, roles: ['admin'] },
+        { name: 'Mes Rappels', href: '/FollowUps', icon: Calendar, roles: ['commercial', 'admin', 'manager'] },
+        { name: 'Mode Prospection', href: '/ProspectingMode', icon: Phone, roles: ['commercial', 'admin', 'manager'] },
+        { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin', 'manager'] },
+        { name: 'Gestion Campagnes', href: '/CampaignsManager', icon: Target, roles: ['admin', 'manager'] },
+        { name: 'Campagnes', href: '/Campaigns', icon: Mail, roles: ['admin', 'manager'] },
         { name: 'Statistiques', href: '/Statistics', icon: BarChart3, roles: ['admin'] }
       ]
     },
@@ -88,7 +89,7 @@ export default function Sidebar() {
     email: {
       title: 'Email Marketing',
       icon: Mail,
-      roles: ['admin'],
+      roles: ['admin', 'manager'],
       items: [
         { name: 'Templates Email', href: '/EmailTemplates', icon: Mail },
         { name: 'Config Mailing', href: '/MailingSettings', icon: Settings },
@@ -100,7 +101,7 @@ export default function Sidebar() {
     generation: {
       title: 'Génération IA',
       icon: Sparkles,
-      roles: ['admin'],
+      roles: ['admin', 'manager'],
       items: [
         { name: 'Génération de Leads', href: '/LeadGeneration', icon: Search },
         { name: 'Recatégoriser (IA)', href: '/RecategorizeLeads', icon: Sparkles },
@@ -111,7 +112,7 @@ export default function Sidebar() {
     billing: {
       title: 'Facturation & Crédits',
       icon: CreditCard,
-      roles: ['admin'],
+      roles: ['admin'], // ❌ Managers n'ont PAS accès à la facturation
       items: [
         { name: 'Crédits Leads', href: '/lead-credits', icon: Zap },
         { name: 'Services & Abonnements', href: '/services', icon: CreditCard },
@@ -122,16 +123,16 @@ export default function Sidebar() {
     admin: {
       title: 'Administration',
       icon: Settings,
-      roles: ['admin'],
+      roles: ['admin', 'manager'],
       items: [
-        { name: 'Équipes', href: '/teams', icon: Users },
-        { name: 'Utilisateurs', href: '/users', icon: UserCircle },
-        { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users },
-        { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin },
-        { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen },
-        { name: 'Migration Leads', href: '/MigrateLeads', icon: Database },
-        { name: 'Zone de Test', href: '/TestZone', icon: TestTube },
-        { name: 'Formation', href: '/Formation', icon: GraduationCap }
+        { name: 'Équipes', href: '/teams', icon: Users, roles: ['admin', 'manager'] },
+        { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin'] }, // ❌ Seul admin peut gérer TOUS les users
+        { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users, roles: ['admin', 'manager'] },
+        { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin, roles: ['admin', 'manager'] },
+        { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen, roles: ['admin', 'manager'] },
+        { name: 'Migration Leads', href: '/MigrateLeads', icon: Database, roles: ['admin'] },
+        { name: 'Zone de Test', href: '/TestZone', icon: TestTube, roles: ['admin'] },
+        { name: 'Formation', href: '/Formation', icon: GraduationCap, roles: ['admin', 'manager'] }
       ]
     }
   }

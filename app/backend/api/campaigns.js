@@ -50,9 +50,12 @@ const execute = async (query, params = []) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
-    
-    const campaigns = await queryAll(
-      `SELECT 
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    // ✅ NOUVELLE LOGIQUE : Managers avec filtre multi-manager
+    let query = `
+      SELECT
         c.*,
         ld.name as database_name,
         et.name as template_name
@@ -60,14 +63,38 @@ router.get('/', authenticateToken, async (req, res) => {
       LEFT JOIN lead_databases ld ON c.database_id = ld.id
       LEFT JOIN email_templates et ON c.template_id = et.id
       WHERE c.tenant_id = $1
-      ORDER BY c.created_at DESC`,
-      [tenantId]
-    );
-    
-    console.log('📋 Campagnes chargées:', campaigns.length);
-    
+    `;
+
+    const params = [tenantId];
+
+    // Si manager : vérifier s'il y a plusieurs managers
+    if (userRole === 'manager') {
+      const managerCount = await queryOne(
+        'SELECT COUNT(*) as count FROM users WHERE tenant_id = $1 AND role = $2 AND is_active = true',
+        [tenantId, 'manager']
+      );
+
+      const totalManagers = parseInt(managerCount?.count || 0);
+      console.log(`👥 Nombre de managers dans le tenant: ${totalManagers}`);
+
+      // Si plusieurs managers, filtrer par created_by
+      if (totalManagers > 1) {
+        query += ` AND c.created_by = $2`;
+        params.push(userId);
+        console.log(`🔒 Filtrage multi-manager activé pour user ${userId}`);
+      } else {
+        console.log(`✅ Manager unique - accès à toutes les campagnes`);
+      }
+    }
+
+    query += ` ORDER BY c.created_at DESC`;
+
+    const campaigns = await queryAll(query, params);
+
+    console.log(`📋 Campagnes chargées: ${campaigns.length} (role: ${userRole})`);
+
     return res.json({ success: true, campaigns });
-    
+
   } catch (error) {
     console.error('❌ Erreur GET campaigns:', error);
     return res.status(500).json({ error: error.message });
@@ -99,14 +126,31 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
 
     const params = [tenantId, userId];
 
-    if (userRole !== 'admin' && userRole !== 'manager') {
+    // ✅ NOUVELLE LOGIQUE : Gestion managers multi-tenant
+    if (userRole === 'manager') {
+      const managerCount = await queryOne(
+        'SELECT COUNT(*) as count FROM users WHERE tenant_id = $1 AND role = $2 AND is_active = true',
+        [tenantId, 'manager']
+      );
+
+      const totalManagers = parseInt(managerCount?.count || 0);
+
+      // Si plusieurs managers, filtrer par created_by
+      if (totalManagers > 1) {
+        query += ` AND c.created_by = $2`;
+        console.log(`🔒 Manager multi-tenant: filtrage par created_by`);
+      } else {
+        console.log(`✅ Manager unique: accès complet`);
+      }
+    } else if (userRole !== 'admin') {
+      // Commerciaux/users : uniquement leurs campagnes assignées
       query += ` AND (
         c.assigned_users::jsonb ? $2::text
         OR c.created_by = $2
       )`;
     }
 
-    query += ` 
+    query += `
       GROUP BY c.id, ld.name, et.name
       ORDER BY c.created_at DESC
     `;

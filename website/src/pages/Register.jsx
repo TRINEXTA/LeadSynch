@@ -43,6 +43,21 @@ export default function Register() {
     enterprise: { name: 'Enterprise', price: 'Sur mesure', color: 'orange' }
   };
 
+  // Mapping des styles pour classes Tailwind (fix production build)
+  const planStyles = {
+    gray: 'border-gray-500 bg-gray-50',
+    blue: 'border-blue-500 bg-blue-50',
+    purple: 'border-purple-500 bg-purple-50',
+    orange: 'border-orange-500 bg-orange-50'
+  };
+
+  const iconColorStyles = {
+    gray: 'text-gray-600',
+    blue: 'text-blue-600',
+    purple: 'text-purple-600',
+    orange: 'text-orange-600'
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -116,7 +131,11 @@ export default function Register() {
     setErrors(prev => ({ ...prev, siret: null }));
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const API_URL = import.meta.env.VITE_API_URL;
+
+      if (!API_URL) {
+        throw new Error('❌ VITE_API_URL non configurée');
+      }
 
       // Appel à l'API backend qui utilise l'API gratuite du gouvernement
       const response = await fetch(`${API_URL}/api/verify-siret`, {
@@ -173,8 +192,12 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+      const API_URL = import.meta.env.VITE_API_URL;
+      const APP_URL = import.meta.env.VITE_APP_URL;
+
+      if (!API_URL || !APP_URL) {
+        throw new Error('❌ Variables d\'environnement manquantes. Veuillez configurer VITE_API_URL et VITE_APP_URL');
+      }
 
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
@@ -557,7 +580,7 @@ export default function Register() {
                       key={key}
                       className={`relative cursor-pointer rounded-xl border-2 p-6 transition-all ${
                         formData.plan === key
-                          ? `border-${plan.color}-500 bg-${plan.color}-50`
+                          ? planStyles[plan.color]
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                     >
@@ -572,7 +595,7 @@ export default function Register() {
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
                         {formData.plan === key && (
-                          <Check className={`w-6 h-6 text-${plan.color}-600`} />
+                          <Check className={`w-6 h-6 ${iconColorStyles[plan.color]}`} />
                         )}
                       </div>
                       <p className="text-2xl font-bold text-gray-900">

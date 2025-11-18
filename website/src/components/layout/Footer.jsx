@@ -76,10 +76,10 @@ export default function Footer() {
                   </div>
                   <div className="text-center md:text-left">
                     <h3 className="text-white font-bold text-xl mb-2">
-                      Besoin d un support IT pour votre entreprise ?
+                      Besoin d'un support IT pour votre entreprise ?
                     </h3>
                     <p className="text-gray-300 text-sm mb-3">
-                      Découvrez TRINEXTA, notre service d infogérance dédié aux TPE/PME
+                      Découvrez TRINEXTA, notre service d'infogérance dédié aux TPE/PME
                     </p>
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs text-gray-400">
                       <span>✅ Maintenance préventive</span>

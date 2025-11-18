@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, Code, Image as ImageIcon, Save, Sparkles, Type, Mail, ChevronDown } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 const TEMPLATE_BLOCKS = {
   header: `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center;">
@@ -311,13 +312,19 @@ export default function EmailTemplateEditor({ template, onSave, onClose }) {
                   <div className="bg-white rounded-lg shadow-lg max-w-2xl mx-auto">
                     <div
                       dangerouslySetInnerHTML={{
-                        __html: htmlBody
-                          .replace(/{{name}}/g, 'Jean Dupont')
-                          .replace(/{{company}}/g, 'Votre Entreprise')
-                          .replace(/{{email}}/g, 'jean.dupont@example.com')
-                          .replace(/{{phone}}/g, '01 23 45 67 89')
-                          .replace(/{{link}}/g, '#')
-                          .replace(/{{unsubscribe_link}}/g, '#')
+                        __html: DOMPurify.sanitize(
+                          htmlBody
+                            .replace(/{{name}}/g, 'Jean Dupont')
+                            .replace(/{{company}}/g, 'Votre Entreprise')
+                            .replace(/{{email}}/g, 'jean.dupont@example.com')
+                            .replace(/{{phone}}/g, '01 23 45 67 89')
+                            .replace(/{{link}}/g, '#')
+                            .replace(/{{unsubscribe_link}}/g, '#'),
+                          {
+                            ALLOWED_TAGS: ['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'a', 'img', 'br', 'ul', 'ol', 'li', 'span', 'table', 'tr', 'td', 'th', 'tbody', 'thead'],
+                            ALLOWED_ATTR: ['style', 'href', 'src', 'alt', 'width', 'height', 'class', 'id']
+                          }
+                        )
                       }}
                     />
                   </div>

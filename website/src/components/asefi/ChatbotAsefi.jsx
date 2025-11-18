@@ -54,7 +54,11 @@ export default function ChatbotAsefi() {
 
   const callAsefiAPI = async (userMessage) => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const API_URL = import.meta.env.VITE_API_URL;
+
+      if (!API_URL) {
+        throw new Error('❌ VITE_API_URL non configurée');
+      }
 
       // Préparer l'historique pour l'API (sans le message d'accueil)
       const conversationHistory = messages

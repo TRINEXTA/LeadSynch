@@ -52,8 +52,12 @@ export default function Login() {
     setErrors({});
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+      const API_URL = import.meta.env.VITE_API_URL;
+      const APP_URL = import.meta.env.VITE_APP_URL;
+
+      if (!API_URL || !APP_URL) {
+        throw new Error('❌ Variables d\'environnement manquantes. Veuillez configurer VITE_API_URL et VITE_APP_URL');
+      }
 
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
@@ -258,7 +262,7 @@ export default function Login() {
         {/* Sign Up Link */}
         <div className="text-center mt-6">
           <p className="text-gray-600">
-            Vous n avez pas encore de compte ?{' '}
+            Vous n'avez pas encore de compte ?{' '}
             <Link to="/register" className="text-blue-600 hover:text-blue-700 hover:underline font-semibold">
               Créer un compte gratuitement
             </Link>

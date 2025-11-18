@@ -50,9 +50,9 @@ export default function DashboardManager() {
     try {
       setRefreshing(true);
 
-      // Charger les membres de l'équipe
+      // Charger les membres de l'équipe (incluant managers car ils sont aussi commerciaux)
       const usersRes = await api.get('/users').catch(() => ({ data: { users: [] } }));
-      const team = (usersRes.data.users || []).filter(u => u.role === 'user' || u.role === 'commercial');
+      const team = (usersRes.data.users || []).filter(u => u.role === 'user' || u.role === 'commercial' || u.role === 'manager');
       setTeamMembers(team);
 
       // Stats de l'équipe

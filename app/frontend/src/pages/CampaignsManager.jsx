@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Phone, MessageSquare, Send, ArrowRight, ArrowLeft, Database, Users, Calendar, Settings, Paperclip, X, Eye, TestTube, Check, Target, Clock, Zap, AlertCircle, Plus, Edit } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import DOMPurify from 'dompurify';
 
 const CAMPAIGN_TYPES = [
   { id: 'email', name: 'Campagne Email', icon: Mail, color: 'from-blue-600 to-cyan-600', description: 'Envoi emails automatises' },
@@ -1091,7 +1092,12 @@ const calculateLeadsCount = async () => {
                 </button>
               </div>
               <div className="p-6">
-                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                <div dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(previewHtml, {
+                    ALLOWED_TAGS: ['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'a', 'img', 'br', 'ul', 'ol', 'li', 'span', 'table', 'tr', 'td', 'th', 'tbody', 'thead'],
+                    ALLOWED_ATTR: ['style', 'href', 'src', 'alt', 'width', 'height', 'class', 'id']
+                  })
+                }} />
               </div>
             </div>
           </div>
