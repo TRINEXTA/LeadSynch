@@ -429,14 +429,50 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (updates.assigned_users !== undefined && campaign.type !== 'email' && updates.assigned_users.length > 0) {
       console.log(`👥 Réaffectation: injection de leads dans le pipeline pour ${updates.assigned_users.length} commercial(aux)...`);
 
-      // Récupérer les leads de la base de données de la campagne
-      const leads = await queryAll(
-        `SELECT DISTINCT l.*
-         FROM leads l
-         JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-         WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
-        [tenantId, campaign.database_id]
-      );
+      // 🔧 FIX: Récupérer les leads en RESPECTANT le filtre de secteurs de la campagne
+      let leads = [];
+
+      // Parser le champ sectors de la campagne (JSON)
+      const campaignSectors = campaign.sector ? (typeof campaign.sector === 'string' ? JSON.parse(campaign.sector) : campaign.sector) : null;
+
+      if (campaignSectors && Object.keys(campaignSectors).length > 0) {
+        // ✅ Appliquer le filtre de secteurs (même logique que lors de la création)
+        console.log(`🎯 Application du filtre de secteurs:`, campaignSectors);
+
+        const sectorConditions = [];
+        const params = [tenantId, campaign.database_id];
+        let paramIndex = 3;
+
+        Object.entries(campaignSectors)
+          .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
+          .forEach(([dbId, sectorList]) => {
+            sectorConditions.push(`(ldr.database_id = $${paramIndex} AND l.sector = ANY($${paramIndex + 1}))`);
+            params.push(dbId, sectorList);
+            paramIndex += 2;
+          });
+
+        if (sectorConditions.length > 0) {
+          leads = await queryAll(
+            `SELECT DISTINCT l.*
+             FROM leads l
+             JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+             WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')})`,
+            params
+          );
+        }
+      } else {
+        // ✅ Pas de filtre de secteurs : récupérer tous les leads de la database
+        console.log(`📋 Récupération de tous les leads (pas de filtre secteurs)`);
+        leads = await queryAll(
+          `SELECT DISTINCT l.*
+           FROM leads l
+           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+          [tenantId, campaign.database_id]
+        );
+      }
+
+      console.log(`📊 ${leads.length} leads récupérés avec filtre`);
 
       if (leads.length > 0) {
         await execute('BEGIN');
@@ -469,6 +505,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           console.error('❌ Erreur réaffectation/injection :', e.message);
           throw e;
         }
+      } else {
+        console.log(`⚠️ Aucun lead trouvé avec le filtre de secteurs appliqué`);
       }
     }
 

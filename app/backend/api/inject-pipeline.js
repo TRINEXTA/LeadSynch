@@ -36,20 +36,54 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Aucun commercial assigné à cette campagne' });
     }
 
-    // Récupérer les leads
-    const leads = await queryAll(
-      `SELECT DISTINCT l.*
-       FROM leads l
-       JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-       WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
-      [tenantId, camp.database_id]
-    );
+    // 🔧 FIX: Récupérer les leads en RESPECTANT le filtre de secteurs de la campagne
+    let leads = [];
 
-    if (leads.length === 0) {
-      return res.status(400).json({ error: 'Aucun lead trouvé dans cette base de données' });
+    // Parser le champ sectors de la campagne (JSON)
+    const campaignSectors = camp.sector ? (typeof camp.sector === 'string' ? JSON.parse(camp.sector) : camp.sector) : null;
+
+    if (campaignSectors && Object.keys(campaignSectors).length > 0) {
+      // ✅ Appliquer le filtre de secteurs
+      console.log(`🎯 Application du filtre de secteurs:`, campaignSectors);
+
+      const sectorConditions = [];
+      const params = [tenantId, camp.database_id];
+      let paramIndex = 3;
+
+      Object.entries(campaignSectors)
+        .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
+        .forEach(([dbId, sectorList]) => {
+          sectorConditions.push(`(ldr.database_id = $${paramIndex} AND l.sector = ANY($${paramIndex + 1}))`);
+          params.push(dbId, sectorList);
+          paramIndex += 2;
+        });
+
+      if (sectorConditions.length > 0) {
+        leads = await queryAll(
+          `SELECT DISTINCT l.*
+           FROM leads l
+           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')})`,
+          params
+        );
+      }
+    } else {
+      // ✅ Pas de filtre de secteurs : récupérer tous les leads
+      console.log(`📋 Récupération de tous les leads (pas de filtre secteurs)`);
+      leads = await queryAll(
+        `SELECT DISTINCT l.*
+         FROM leads l
+         JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+         WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+        [tenantId, camp.database_id]
+      );
     }
 
-    console.log(`📊 ${leads.length} leads trouvés, injection dans pipeline...`);
+    if (leads.length === 0) {
+      return res.status(400).json({ error: 'Aucun lead trouvé avec le filtre appliqué' });
+    }
+
+    console.log(`📊 ${leads.length} leads trouvés avec filtre, injection dans pipeline...`);
 
     await execute('BEGIN');
 

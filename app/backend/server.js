@@ -168,6 +168,7 @@ import signaturesRoute from './api/signatures.js';
 import campaignDetailedStatsRoute from './api/campaign-detailed-stats.js';
 import validationRequestsRoute from './api/validation-requests.js';
 import leadSectorAssignmentRoute from './api/lead-sector-assignment.js';
+import injectPipelineRoute from './api/inject-pipeline.js';
 import { getMailingSettings, updateMailingSettings, testMailingSettings } from './api/mailing-settings.js';
 import billingRoutes from './api/billing.js';
 import duplicatesRoutes from './api/duplicates.js';
@@ -242,6 +243,7 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
+app.all('/api/inject-pipeline', injectPipelineRoute);
 app.use('/api/api-gouv', apiGouvLeadsRoute);
 app.use('/api/geographic-sectors', geographicSectorsRoute);
 
