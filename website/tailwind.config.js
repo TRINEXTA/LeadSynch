@@ -38,6 +38,15 @@ export default {
       fontFamily: {
         sans: ['SF Pro Display', 'Inter', '-apple-system', 'sans-serif'],
       },
+      keyframes: {
+        gradient: {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+      },
+      animation: {
+        gradient: 'gradient 8s ease infinite',
+      },
     },
   },
   plugins: [],

@@ -10,8 +10,8 @@ export function Badge({ children, className = '', variant = 'default', ...props 
   }
   
   return (
-    <span 
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium  `}
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}
       {...props}
     >
       {children}

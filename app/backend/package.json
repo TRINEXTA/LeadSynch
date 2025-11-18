@@ -12,7 +12,7 @@
     "@azure/identity": "^4.13.0",
     "@googlemaps/google-maps-services-js": "^3.4.2",
     "@microsoft/microsoft-graph-client": "^3.0.7",
-    "@vercel/postgres": "^0.5.1",
+    "@vercel/postgres": "^0.10.0",
     "axios": "^1.13.1",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.1.2",

@@ -25,7 +25,7 @@ export default function Home() {
             {/* Titre principal */}
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 mb-6 leading-tight">
               Transformez vos prospects en{' '}
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 animate-gradient">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 animate-gradient" style={{ backgroundSize: '200% 200%' }}>
                 clients qualifiés
               </span>
             </h1>
@@ -95,7 +95,7 @@ export default function Home() {
                 <div className="text-gray-600 font-medium">Emails envoyés</div>
                 <div className="mt-4 flex items-center gap-2 text-green-600 text-sm font-semibold">
                   <TrendingUp className="w-4 h-4" />
-                  <span>Taux d ouverture 42%</span>
+                  <span>Taux d'ouverture 42%</span>
                 </div>
               </div>
 
@@ -250,7 +250,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { name: 'Sophie Martin', company: 'Tech Solutions', text: 'LeadSynch a transformé notre prospection. Nous avons généré 250 leads qualifiés en 1 mois !' },
-              { name: 'Thomas Dubois', company: 'Digital Agency', text: 'L IA Asefi est bluffante. Elle rédige des emails personnalisés qui convertissent à 35% !' },
+              { name: 'Thomas Dubois', company: 'Digital Agency', text: 'L\'IA Asefi est bluffante. Elle rédige des emails personnalisés qui convertissent à 35% !' },
               { name: 'Marie Lefebvre', company: 'SaaS Startup', text: 'Un ROI incroyable ! Nous avons économisé 20h par semaine sur la prospection.' }
             ].map((testimonial, index) => (
               <div key={index} className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 hover:bg-white/20 transition-all">
