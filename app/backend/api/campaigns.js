@@ -355,24 +355,69 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
     const updates = req.body;
 
-    const campaign = await queryOne(
-      `UPDATE campaigns 
-       SET name = COALESCE($1, name), subject = COALESCE($2, subject),
-           description = COALESCE($3, description), template_id = COALESCE($4, template_id),
-           send_days = COALESCE($5, send_days), send_time_start = COALESCE($6, send_time_start),
-           send_time_end = COALESCE($7, send_time_end), start_date = COALESCE($8, start_date),
-           emails_per_cycle = COALESCE($9, emails_per_cycle),
-           assigned_users = COALESCE($10, assigned_users), updated_at = NOW()
-       WHERE id = $11 AND tenant_id = $12 RETURNING *`,
-      [
-        updates.name, updates.subject, updates.goal_description, updates.template_id,
-        updates.send_days ? JSON.stringify(updates.send_days) : null,
-        updates.send_time_start, updates.send_time_end, updates.start_date,
-        updates.emails_per_cycle,
-        updates.assigned_users ? JSON.stringify(updates.assigned_users) : null,
-        campaignId, tenantId
-      ]
-    );
+    console.log('📝 Mise à jour campagne:', campaignId, 'avec:', updates);
+
+    // Construire la requête dynamiquement pour ne mettre à jour que les champs fournis
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (updates.name !== undefined) {
+      updateFields.push(`name = $${paramIndex++}`);
+      values.push(updates.name);
+    }
+    if (updates.subject !== undefined) {
+      updateFields.push(`subject = $${paramIndex++}`);
+      values.push(updates.subject);
+    }
+    if (updates.description !== undefined || updates.goal_description !== undefined) {
+      updateFields.push(`description = $${paramIndex++}`);
+      values.push(updates.description || updates.goal_description);
+    }
+    if (updates.template_id !== undefined) {
+      updateFields.push(`template_id = $${paramIndex++}`);
+      values.push(updates.template_id);
+    }
+    if (updates.send_days !== undefined) {
+      updateFields.push(`send_days = $${paramIndex++}`);
+      values.push(JSON.stringify(updates.send_days));
+    }
+    if (updates.send_time_start !== undefined) {
+      updateFields.push(`send_time_start = $${paramIndex++}`);
+      values.push(updates.send_time_start);
+    }
+    if (updates.send_time_end !== undefined) {
+      updateFields.push(`send_time_end = $${paramIndex++}`);
+      values.push(updates.send_time_end);
+    }
+    if (updates.start_date !== undefined) {
+      updateFields.push(`start_date = $${paramIndex++}`);
+      values.push(updates.start_date);
+    }
+    if (updates.emails_per_cycle !== undefined) {
+      updateFields.push(`emails_per_cycle = $${paramIndex++}`);
+      values.push(updates.emails_per_cycle);
+    }
+    if (updates.assigned_users !== undefined) {
+      updateFields.push(`assigned_users = $${paramIndex++}`);
+      values.push(JSON.stringify(updates.assigned_users));
+    }
+
+    // Toujours mettre à jour updated_at
+    updateFields.push(`updated_at = NOW()`);
+
+    if (updateFields.length === 1) { // Seulement updated_at
+      return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
+    }
+
+    values.push(campaignId, tenantId);
+
+    const query = `UPDATE campaigns
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramIndex++} AND tenant_id = $${paramIndex++}
+      RETURNING *`;
+
+    const campaign = await queryOne(query, values);
 
     if (!campaign) {
       return res.status(404).json({ error: 'Campagne non trouvée' });

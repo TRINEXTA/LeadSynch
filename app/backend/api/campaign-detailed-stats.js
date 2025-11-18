@@ -34,11 +34,11 @@ export default async function handler(req, res) {
     const leadStats = await queryAll(
       `SELECT
         COUNT(DISTINCT pl.lead_id) as total_leads,
-        COUNT(DISTINCT CASE WHEN pl.status IN ('contacted', 'clicked', 'opened', 'replied') THEN pl.lead_id END) as contacted,
-        COUNT(DISTINCT CASE WHEN pl.status = 'clicked' THEN pl.lead_id END) as one_call,
-        COUNT(DISTINCT CASE WHEN pl.status = 'no_answer' OR pl.status = 'bounced' THEN pl.lead_id END) as no_answer,
-        COUNT(DISTINCT CASE WHEN pl.status = 'qualified' THEN pl.lead_id END) as qualified,
-        COUNT(DISTINCT CASE WHEN pl.status = 'stopped' OR pl.status = 'unsubscribed' THEN pl.lead_id END) as stopped
+        COUNT(DISTINCT CASE WHEN pl.stage IN ('qualifie', 'tres_qualifie', 'proposition', 'relancer') THEN pl.lead_id END) as contacted,
+        COUNT(DISTINCT CASE WHEN pl.stage = 'clicked' THEN pl.lead_id END) as one_call,
+        COUNT(DISTINCT CASE WHEN pl.stage = 'nrp' THEN pl.lead_id END) as no_answer,
+        COUNT(DISTINCT CASE WHEN pl.stage IN ('qualifie', 'tres_qualifie') THEN pl.lead_id END) as qualified,
+        COUNT(DISTINCT CASE WHEN pl.stage = 'hors_scope' THEN pl.lead_id END) as stopped
        FROM pipeline_leads pl
        WHERE pl.campaign_id = $1`,
       [campaign_id]
