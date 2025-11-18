@@ -1,7 +1,7 @@
-﻿import axios from "axios";
+import axios from "axios";
 
 // Détection automatique de l'environnement
-const API_BASE = window.location.hostname === 'localhost' 
+const API_BASE = window.location.hostname === 'localhost'
   ? 'http://localhost:3000'
   : 'https://leadsynch-api.onrender.com';
 
@@ -9,7 +9,7 @@ console.log('✅ API URL:', API_BASE);
 
 const api = axios.create({
   baseURL: `${API_BASE}/api`,
-  headers: { 
+  headers: {
     "Content-Type": "application/json"
   }
 });
