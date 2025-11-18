@@ -424,6 +424,54 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     console.log('✅ Campagne mise à jour:', campaignId);
+
+    // ✅ Si assigned_users a été modifié ET c'est une campagne phoning, injecter dans pipeline
+    if (updates.assigned_users !== undefined && campaign.type !== 'email' && updates.assigned_users.length > 0) {
+      console.log(`👥 Réaffectation: injection de leads dans le pipeline pour ${updates.assigned_users.length} commercial(aux)...`);
+
+      // Récupérer les leads de la base de données de la campagne
+      const leads = await queryAll(
+        `SELECT DISTINCT l.*
+         FROM leads l
+         JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+         WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+        [tenantId, campaign.database_id]
+      );
+
+      if (leads.length > 0) {
+        await execute('BEGIN');
+
+        try {
+          for (let i = 0; i < leads.length; i++) {
+            const lead = leads[i];
+            const assignedUserId = updates.assigned_users[i % updates.assigned_users.length];
+
+            await execute(
+              `UPDATE leads SET assigned_to = $1, updated_at = NOW()
+               WHERE id = $2 AND tenant_id = $3`,
+              [assignedUserId, lead.id, tenantId]
+            );
+
+            await execute(
+              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id)
+               DO UPDATE SET assigned_user_id = EXCLUDED.assigned_user_id, updated_at = NOW()`,
+              [tenantId, lead.id, campaignId, assignedUserId]
+            );
+          }
+
+          await execute('COMMIT');
+          console.log(`✅ ${leads.length} leads réaffectés et injectés dans le pipeline`);
+
+        } catch (e) {
+          await execute('ROLLBACK');
+          console.error('❌ Erreur réaffectation/injection :', e.message);
+          throw e;
+        }
+      }
+    }
+
     return res.json({ success: true, campaign });
 
   } catch (error) {
