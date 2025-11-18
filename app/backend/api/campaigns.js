@@ -861,23 +861,39 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
     const tenantId = req.user?.tenant_id;
 
-    // Récupérer les commerciaux avec leurs stats
+    // Récupérer la campagne avec ses utilisateurs assignés
+    const campaign = await queryOne(
+      'SELECT assigned_users FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    // Si pas d'utilisateurs assignés, retourner tableau vide
+    const assignedUserIds = campaign.assigned_users || [];
+    if (assignedUserIds.length === 0) {
+      return res.json({ success: true, commercials: [] });
+    }
+
+    // Récupérer les commerciaux avec leurs stats depuis pipeline_leads
     const commercials = await queryAll(
-      `SELECT 
+      `SELECT
         u.id,
         u.first_name,
         u.last_name,
         u.email,
-        ca.leads_assigned,
-        ca.leads_contacted,
-        ca.calls_made,
-        ca.meetings_scheduled,
-        ca.qualified_since_last_refill
-      FROM campaign_assignments ca
-      JOIN users u ON u.id = ca.user_id
-      WHERE ca.campaign_id = $1 AND ca.tenant_id = $2
+        u.role,
+        COUNT(DISTINCT pl.lead_id) as leads_assigned,
+        COUNT(DISTINCT CASE WHEN pl.stage != 'cold_call' THEN pl.lead_id END) as leads_contacted,
+        COUNT(DISTINCT CASE WHEN pl.stage IN ('tres_qualifie', 'proposition', 'gagne') THEN pl.lead_id END) as meetings_scheduled
+      FROM users u
+      LEFT JOIN pipeline_leads pl ON pl.assigned_user_id = u.id AND pl.campaign_id = $1
+      WHERE u.id = ANY($2::uuid[]) AND u.tenant_id = $3
+      GROUP BY u.id, u.first_name, u.last_name, u.email, u.role
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, tenantId]
+      [campaignId, assignedUserIds, tenantId]
     );
 
     return res.json({ success: true, commercials });
