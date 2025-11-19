@@ -18,10 +18,12 @@ router.get('/', authenticateToken, async (req, res) => {
       SELECT f.*,
              l.company_name, l.email AS lead_email, l.phone AS lead_phone, l.industry,
              u.first_name || ' ' || u.last_name AS user_name,
-             u.role as user_role
+             u.role as user_role,
+             c.first_name || ' ' || c.last_name AS created_by_name
       FROM follow_ups f
       LEFT JOIN leads l ON f.lead_id = l.id
       LEFT JOIN users u ON f.user_id = u.id
+      LEFT JOIN users c ON f.created_by = c.id
       WHERE f.tenant_id = $1
     `;
     const params = [tenant_id];
@@ -83,8 +85,8 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const { rows } = await q(
       `INSERT INTO follow_ups
-       (tenant_id, lead_id, user_id, type, priority, title, notes, scheduled_date, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+       (tenant_id, lead_id, user_id, type, priority, title, notes, scheduled_date, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
        RETURNING *`,
       [
         tenant_id,
@@ -94,7 +96,8 @@ router.post('/', authenticateToken, async (req, res) => {
         priority || 'medium',
         title || null,
         notes || null,
-        scheduled_date
+        scheduled_date,
+        req.user.id // Qui a créé la tâche
       ]
     );
 

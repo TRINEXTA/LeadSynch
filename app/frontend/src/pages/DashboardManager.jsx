@@ -95,9 +95,9 @@ export default function DashboardManager() {
       // Charger les tâches que j'ai créées/envoyées
       const tasksRes = await api.get('/follow-ups')
         .catch(() => ({ data: { followups: [] } }));
-      // Filtrer pour ne garder que celles créées par moi mais assignées à d'autres
+      // Filtrer pour ne garder que celles créées par moi (peu importe à qui elles sont assignées)
       const myCreatedTasks = (tasksRes.data.followups || []).filter(
-        task => task.user_id !== userId // Assignées à quelqu'un d'autre
+        task => task.created_by === user.id // Tâches que MOI j'ai créées
       );
       setSentTasks(myCreatedTasks);
 
