@@ -1035,6 +1035,145 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== MANAGE TEAM (ADD/REMOVE USERS) ====================
+router.patch('/:id/team', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const campaignId = req.params.id;
+    const { action, user_ids } = req.body; // action: 'add' | 'remove', user_ids: string[]
+
+    if (!action || !['add', 'remove'].includes(action)) {
+      return res.status(400).json({ error: 'Action invalide (add ou remove)' });
+    }
+
+    if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({ error: 'user_ids requis (tableau d\'UUIDs)' });
+    }
+
+    console.log(`👥 ${action === 'add' ? 'Ajout' : 'Retrait'} de ${user_ids.length} commercial(aux) à/de la campagne ${campaignId}`);
+
+    // Récupérer la campagne
+    const campaign = await queryOne(
+      'SELECT * FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    // Parser assigned_users actuel
+    let currentUsers = [];
+    try {
+      currentUsers = Array.isArray(campaign.assigned_users)
+        ? campaign.assigned_users
+        : JSON.parse(campaign.assigned_users || '[]');
+    } catch (e) {
+      currentUsers = [];
+    }
+
+    let newUsers = [...currentUsers];
+
+    if (action === 'add') {
+      // Ajouter les nouveaux utilisateurs
+      user_ids.forEach(uid => {
+        if (!newUsers.includes(uid)) {
+          newUsers.push(uid);
+        }
+      });
+
+      console.log(`➕ Ajout de ${user_ids.length} commercial(aux)`);
+
+      // Injecter les leads de chaque nouveau commercial dans le pipeline
+      for (const userId of user_ids) {
+        if (!currentUsers.includes(userId)) {
+          // Récupérer les leads assignés à ce commercial
+          const leads = await queryAll(
+            `SELECT DISTINCT l.*
+             FROM leads l
+             JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+             WHERE l.tenant_id = $1
+               AND ldr.database_id = $2
+               AND l.assigned_to = $3`,
+            [tenantId, campaign.database_id, userId]
+          );
+
+          console.log(`📊 ${leads.length} leads trouvés pour le commercial ${userId}`);
+
+          // Injecter dans le pipeline
+          if (leads.length > 0 && campaign.type !== 'email') {
+            await execute('BEGIN');
+
+            try {
+              for (const lead of leads) {
+                await execute(
+                  `INSERT INTO pipeline_leads
+                   (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+                   VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
+                   ON CONFLICT (lead_id, campaign_id)
+                   DO UPDATE SET assigned_user_id = EXCLUDED.assigned_user_id, updated_at = NOW()`,
+                  [tenantId, lead.id, campaignId, userId]
+                );
+              }
+
+              await execute('COMMIT');
+              console.log(`✅ ${leads.length} leads injectés dans le pipeline pour ${userId}`);
+
+            } catch (e) {
+              await execute('ROLLBACK');
+              console.error(`❌ Erreur injection pipeline:`, e.message);
+              throw e;
+            }
+          }
+        }
+      }
+
+    } else if (action === 'remove') {
+      // Retirer les utilisateurs
+      newUsers = newUsers.filter(uid => !user_ids.includes(uid));
+
+      console.log(`➖ Retrait de ${user_ids.length} commercial(aux)`);
+
+      // Optionnel : Retirer les leads du pipeline
+      // (ou les laisser pour historique)
+      await execute(
+        `DELETE FROM pipeline_leads
+         WHERE campaign_id = $1
+           AND tenant_id = $2
+           AND assigned_user_id = ANY($3::uuid[])`,
+        [campaignId, tenantId, user_ids]
+      );
+
+      console.log(`✅ Leads retirés du pipeline pour ${user_ids.length} commercial(aux)`);
+    }
+
+    // Mettre à jour la campagne
+    const updatedCampaign = await queryOne(
+      `UPDATE campaigns
+       SET assigned_users = $1, updated_at = NOW()
+       WHERE id = $2 AND tenant_id = $3
+       RETURNING *`,
+      [JSON.stringify(newUsers), campaignId, tenantId]
+    );
+
+    console.log(`✅ Équipe mise à jour: ${currentUsers.length} → ${newUsers.length} commercial(aux)`);
+
+    return res.json({
+      success: true,
+      message: action === 'add'
+        ? `${user_ids.length} commercial(aux) ajouté(s) avec succès`
+        : `${user_ids.length} commercial(aux) retiré(s) avec succès`,
+      campaign: updatedCampaign,
+      team_size_before: currentUsers.length,
+      team_size_after: newUsers.length
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur gestion équipe:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== GET PIPELINE STATS ====================
 router.get('/:id/pipeline-stats', authenticateToken, async (req, res) => {
   try {

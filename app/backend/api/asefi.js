@@ -7,11 +7,15 @@ const router = express.Router();
 
 // Vérifier que la clé API est configurée
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('⚠️ ANTHROPIC_API_KEY non configurée dans les variables d\'environnement');
+  console.error('⚠️ ========================================');
+  console.error('⚠️ ANTHROPIC_API_KEY non configurée !');
+  console.error('⚠️ L\'IA Asefi ne fonctionnera pas en production');
+  console.error('⚠️ Configurez ANTHROPIC_API_KEY dans vos variables d\'environnement');
+  console.error('⚠️ ========================================');
 }
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || 'dummy-key-for-error-handling',
+  apiKey: process.env.ANTHROPIC_API_KEY || 'sk-ant-dummy-key', // Clé dummy pour éviter crash
 });
 
 // POST / - Chatbot Asefi intelligent (s'alimente des vraies données)
@@ -20,11 +24,13 @@ router.post('/', authMiddleware, async (req, res) => {
 
   try {
     // Vérifier la clé API
-    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'dummy-key-for-error-handling') {
-      console.error('❌ ANTHROPIC_API_KEY manquante');
-      return res.status(500).json({
-        error: 'Configuration IA manquante. Contactez le support.',
-        details: 'ANTHROPIC_API_KEY non configurée'
+    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'sk-ant-dummy-key') {
+      console.error('❌ ANTHROPIC_API_KEY manquante - L\'IA ne peut pas fonctionner');
+      return res.status(503).json({
+        error: 'Service IA temporairement indisponible',
+        message: 'L\'intelligence artificielle Asefi n\'est pas configurée. Veuillez contacter le support technique.',
+        support_email: 'support@leadsynch.com',
+        details: 'ANTHROPIC_API_KEY manquante en production'
       });
     }
 

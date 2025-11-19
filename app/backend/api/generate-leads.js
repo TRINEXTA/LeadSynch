@@ -267,17 +267,17 @@ async function handler(req, res) {
       const foundInDatabase = existingLeads.length;
       const missingCount = quantity - foundInDatabase;
 
-      console.log(`✅ ${foundInDatabase} leads trouvés en base (0.03€/lead)`);
-      console.log(`🔍 ${missingCount} leads manquants, recherche Google Maps (0.06€/lead)`);
+      console.log(`✅ ${foundInDatabase} leads trouvés en base (0.10€/lead)`);
+      console.log(`🔍 ${missingCount} leads manquants, recherche Google Maps (0.10€/lead)`);
 
       let newLeads = [];
       let googleLeadsGenerated = 0;
       let creditsConsumed = 0;
       let totalCost = 0;
 
-      // Consommer les crédits pour les leads de la base (0.03€)
+      // Consommer les crédits pour les leads de la base (0.10€)
       if (foundInDatabase > 0) {
-        const dbCost = foundInDatabase * 0.03;
+        const dbCost = foundInDatabase * 0.10;
         creditsConsumed += foundInDatabase;
         totalCost += dbCost;
 
@@ -285,7 +285,7 @@ async function handler(req, res) {
         for (const lead of existingLeads) {
           await execute(
             `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
-             VALUES ($1, $2, 1, 'database', 0.03)`,
+             VALUES ($1, $2, 1, 'database', 0.10)`,
             [tenant_id, lead.id]
           );
         }
@@ -293,7 +293,7 @@ async function handler(req, res) {
         console.log(`💰 ${foundInDatabase} crédits consommés (BDD): ${dbCost.toFixed(2)}€`);
       }
 
-      // 3. GÉNÉRER DEPUIS GOOGLE MAPS API (0.06€) SI NÉCESSAIRE
+      // 3. GÉNÉRER DEPUIS GOOGLE MAPS API (0.10€) SI NÉCESSAIRE
       if (missingCount > 0) {
         if (!GOOGLE_API_KEY) {
           console.log(`⚠️ Pas de clé Google Maps API configurée, seulement ${foundInDatabase} leads retournés`);
@@ -372,19 +372,19 @@ async function handler(req, res) {
                     ]
                   );
 
-                  // Enregistrer l'usage pour ce lead Google Maps (0.06€)
+                  // Enregistrer l'usage pour ce lead Google Maps (0.10€)
                   await execute(
                     `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
-                     VALUES ($1, $2, 1, 'google_maps', 0.06)`,
+                     VALUES ($1, $2, 1, 'google_maps', 0.10)`,
                     [tenant_id, newLead.id]
                   );
 
                   newLeads.push(newLead);
                   googleLeadsGenerated++;
                   creditsConsumed++;
-                  totalCost += 0.06;
+                  totalCost += 0.10;
 
-                  console.log(`💰 1 crédit consommé (Google Maps): 0.06€`);
+                  console.log(`💰 1 crédit consommé (Google Maps): 0.10€`);
 
                 } catch (detailsError) {
                   console.error(`Erreur détails:`, detailsError.message);
@@ -420,8 +420,7 @@ async function handler(req, res) {
         fetched_from_google: googleLeadsGenerated,
         total: totalLeads.length,
         credits_consumed: creditsConsumed,
-        cost_database: (foundInDatabase * 0.03).toFixed(2),
-        cost_google_maps: (googleLeadsGenerated * 0.06).toFixed(2),
+        cost_per_lead: 0.10,
         total_cost: totalCost.toFixed(2),
         credits_remaining: creditsAvailable - creditsConsumed,
         leads: totalLeads.slice(0, quantity)
