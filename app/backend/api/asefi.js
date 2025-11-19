@@ -107,12 +107,35 @@ TU ES UN ASSISTANT IA COMPLET ET UTILE. Tu peux :
 ${recentLeads.length > 0 ? `Leads récents:
 ${recentLeads.map((l, i) => `${i + 1}. ${l.company_name} - ${l.sector || 'Non spécifié'} - ${l.status}`).join('\n')}` : ''}
 
-${services.length > 0 ? `💰 PLANS TARIFAIRES (données actuelles depuis la base de données):
-${services.map(s => {
-  const price = s.base_price ? `${s.base_price}${s.currency || 'EUR'}/${s.billing_cycle || 'mois'}` : 'Sur mesure';
-  const desc = s.description ? ' - ' + s.description : '';
-  return `- ${s.name}: ${price}${desc}`;
-}).join('\n')}` : ''}
+💰 PLANS TARIFAIRES LEADSYNCH (VRAIS TARIFS OFFICIELS):
+
+📦 **GRATUIT** - 0€/mois
+• 30 leads/emails • 2 recherches Google Maps
+• 1 devis/mois • 1 utilisateur • 1 campagne
+• Pipeline basique + Import CSV
+
+🚀 **STARTER** - 49€/mois
+• 5000 leads/emails • Max 1000 prospects Google Maps
+• 50 devis/mois, 30 contrats/mois
+• 3 utilisateurs • 5 campagnes actives
+• Pipeline avancé + Mode Prospection
+• Asefi IA Basic (500 caractères)
+• Support email + chat
+
+⭐ **PRO** - 99€/mois (POPULAIRE)
+• 20000 leads/emails • 2500 générations Google Maps
+• 500 devis/mois, 200 contrats/mois
+• 10 utilisateurs • Campagnes illimitées
+• Asefi IA Pro (2000 caractères)
+• Scoring automatique + Analytics avancés
+• Support prioritaire 24/7 + API complète
+• Intégrations (Zapier, Make) + Webhooks
+
+🏢 **ENTERPRISE** - Sur mesure
+• Quotas personnalisés selon besoins
+• Asefi IA Enterprise (10k caractères)
+• Infrastructure dédiée + Account manager
+• SSO + SLA 99.9% + Développements sur-mesure
 
 🔧 FONCTIONNALITÉS LEADSYNCH:
 • Génération de leads (Google Maps + scraping web)
