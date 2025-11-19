@@ -74,6 +74,19 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const recentLeads = recentLeadsQuery.rows || [];
 
+    // ===== RÉCUPÉRER LES VRAIS SERVICES/TARIFS DEPUIS LA DB (AUTONOME) =====
+    const servicesQuery = await query(
+      `SELECT name, description, category, base_price, currency, billing_cycle, features
+       FROM services
+       WHERE tenant_id = $1 AND is_active = true AND category = 'subscription'
+       ORDER BY base_price ASC`,
+      [tenantId]
+    );
+
+    const services = servicesQuery.rows || [];
+
+    console.log(`📊 ${services.length} services/tarifs récupérés depuis la DB`);
+
     // ===== CONSTRUIRE LE CONTEXTE DYNAMIQUE =====
 
     const dynamicContext = `Tu es Asefi, l'assistant IA intelligent de LeadSynch - Plateforme CRM B2B.
@@ -96,12 +109,14 @@ ${recentLeads.map((l, i) => `${i + 1}. ${l.company_name} - ${l.sector || 'Secteu
 
 INFORMATIONS GÉNÉRALES SUR LEADSYNCH (POUR RÉFÉRENCE):
 
-PLANS TARIFAIRES (INFORMATION GÉNÉRALE):
-- GRATUIT: 30 leads/mois
-- STARTER: 27€/mois - 500 leads
-- PRO: 67€/mois - 2000 leads
-- BUSINESS: 147€/mois - 10000 leads
-- ENTREPRISE: Sur mesure - illimité
+${services.length > 0 ? `PLANS TARIFAIRES ACTUELS (DONNÉES TEMPS RÉEL DEPUIS LA BASE DE DONNÉES):
+${services.map(s => {
+  const price = s.base_price ? `${s.base_price}${s.currency || 'EUR'}/${s.billing_cycle || 'mois'}` : 'Sur mesure';
+  const features = s.features ? (typeof s.features === 'string' ? s.features : JSON.stringify(s.features)) : '';
+  return `- ${s.name}: ${price}${s.description ? '\n  ' + s.description : ''}${features ? '\n  Fonctionnalités: ' + features : ''}`;
+}).join('\n')}
+
+⚠️ CES TARIFS SONT LES VRAIS TARIFS ACTUELS RÉCUPÉRÉS DE LA BASE DE DONNÉES.` : 'PLANS TARIFAIRES: Contactez contact@leadsynch.com pour connaître nos offres actuelles'}
 
 FONCTIONNALITÉS CLÉS:
 1. Génération leads Google Maps + scraping
