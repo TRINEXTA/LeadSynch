@@ -76,8 +76,9 @@ router.post('/', authenticateToken, async (req, res) => {
     // Utiliser user_id du body (attribution) OU req.user.id (auto-assignation)
     const assigned_user_id = user_id || req.user.id;
 
-    if (!lead_id || !scheduled_date) {
-      return res.status(400).json({ error: 'lead_id et scheduled_date requis' });
+    // scheduled_date requis, mais lead_id optionnel (tâches générales sans lead)
+    if (!scheduled_date) {
+      return res.status(400).json({ error: 'scheduled_date requis' });
     }
 
     const { rows } = await q(
