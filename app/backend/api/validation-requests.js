@@ -136,8 +136,8 @@ export default async function handler(req, res) {
       } = req.body;
 
       // Validation
-      if (!type || !['validation', 'help'].includes(type)) {
-        return res.status(400).json({ error: 'Type requis: validation ou help' });
+      if (!type || !['validation', 'help', 'leadshow'].includes(type)) {
+        return res.status(400).json({ error: 'Type requis: validation, help ou leadshow' });
       }
 
       if (!subject || subject.trim().length === 0) {
@@ -176,10 +176,16 @@ export default async function handler(req, res) {
 
       console.log(`✅ Demande ${type} créée:`, newRequest.id);
 
+      const messages = {
+        validation: 'validation',
+        help: 'd\'aide',
+        leadshow: 'd\'escalade (Lead Show)'
+      };
+
       return res.status(201).json({
         success: true,
         request: newRequest,
-        message: `Demande de ${type === 'validation' ? 'validation' : 'd\'aide'} créée avec succès`
+        message: `Demande de ${messages[type] || type} créée avec succès`
       });
     }
 

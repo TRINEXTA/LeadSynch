@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS validation_requests (
   tenant_id UUID NOT NULL,
 
   -- Type de demande
-  type VARCHAR(20) NOT NULL CHECK (type IN ('validation', 'help')),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('validation', 'help', 'leadshow')),
 
   -- Qui demande
   requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -79,8 +79,8 @@ CREATE TRIGGER validation_requests_updated_at
   EXECUTE FUNCTION update_validation_requests_updated_at();
 
 -- Commentaires pour documentation
-COMMENT ON TABLE validation_requests IS 'Demandes de validation et d''aide des commerciaux aux managers';
-COMMENT ON COLUMN validation_requests.type IS 'Type: validation (approbation) ou help (demande d''aide)';
+COMMENT ON TABLE validation_requests IS 'Demandes de validation, aide et escalades (leadshow) des commerciaux aux managers';
+COMMENT ON COLUMN validation_requests.type IS 'Type: validation (approbation), help (demande d''aide) ou leadshow (escalade au responsable)';
 COMMENT ON COLUMN validation_requests.status IS 'Statut: pending, in_review, approved, rejected, resolved, cancelled';
 COMMENT ON COLUMN validation_requests.priority IS 'Priorité: low, normal, high, urgent';
 
