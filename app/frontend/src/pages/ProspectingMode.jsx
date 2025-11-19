@@ -1,10 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle, UserPlus, Send } from 'lucide-react';
+import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
-import TaskModal from '../components/pipeline/TaskModal';
 
 const QUICK_QUALIFICATIONS = [
   { id: 'tres_qualifie', label: '🔥 Très Chaud', color: 'bg-green-500', stage: 'tres_qualifie' },
@@ -28,8 +27,6 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   // Modals state
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationRequestType, setValidationRequestType] = useState('validation');
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [taskModalMode, setTaskModalMode] = useState('create'); // 'create' ou 'assign'
 
   // Protection contre leads undefined ou vide
   const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
@@ -163,21 +160,6 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   const handleRequestHelp = () => {
     setValidationRequestType('help');
     setShowValidationModal(true);
-  };
-
-  const handleAssignTask = async () => {
-    setTaskModalMode('assign');
-    setShowTaskModal(true);
-  };
-
-  const handleSendTask = async () => {
-    setTaskModalMode('create');
-    setShowTaskModal(true);
-  };
-
-  const handleTaskSuccess = () => {
-    setShowTaskModal(false);
-    // Optionnel: recharger les tâches
   };
 
   const handlePause = () => {
@@ -435,25 +417,6 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
                   Lead Show
                 </button>
               </div>
-
-              {/* Ligne 3 : Tâches */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={handleAssignTask}
-                  className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
-                >
-                  <UserPlus className="w-5 h-5" />
-                  Attribution Tâches
-                </button>
-
-                <button
-                  onClick={handleSendTask}
-                  className="bg-gradient-to-r from-pink-500 to-pink-600 text-white py-3 rounded-xl font-semibold hover:from-pink-600 hover:to-pink-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm"
-                >
-                  <Send className="w-5 h-5" />
-                  Tâches Envoi
-                </button>
-              </div>
             </div>
 
             {/* Notes */}
@@ -505,17 +468,6 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
           onClose={() => setShowValidationModal(false)}
           lead={currentLead}
           type={validationRequestType}
-        />
-      )}
-
-      {/* Task Modal */}
-      {showTaskModal && currentLead && (
-        <TaskModal
-          isOpen={showTaskModal}
-          onClose={() => setShowTaskModal(false)}
-          lead={currentLead}
-          mode={taskModalMode}
-          onSuccess={handleTaskSuccess}
         />
       )}
     </div>

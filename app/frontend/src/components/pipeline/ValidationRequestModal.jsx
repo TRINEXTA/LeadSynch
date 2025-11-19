@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, AlertCircle, HelpCircle, CheckCircle } from 'lucide-react';
+import { X, AlertCircle, HelpCircle, CheckCircle, UserCog } from 'lucide-react';
 import api from '../../api/axios';
 
 export default function ValidationRequestModal({ isOpen, onClose, lead, type = 'validation' }) {
@@ -27,7 +27,12 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
       });
 
       // Succès
-      alert(`Demande de ${type === 'validation' ? 'validation' : 'd\'aide'} envoyée avec succès au manager`);
+      const messages = {
+        validation: 'validation',
+        help: 'd\'aide',
+        leadshow: 'd\'escalade (Lead Show)'
+      };
+      alert(`Demande de ${messages[type] || 'validation'} envoyée avec succès au manager`);
 
       // Réinitialiser et fermer
       setFormData({ subject: '', message: '', priority: 'normal' });
@@ -43,6 +48,8 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
   if (!isOpen) return null;
 
   const isValidation = type === 'validation';
+  const isHelp = type === 'help';
+  const isLeadShow = type === 'leadshow';
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -51,20 +58,24 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
         <div className={`p-6 border-b flex items-center justify-between ${
           isValidation
             ? 'bg-gradient-to-r from-green-500 to-emerald-600'
+            : isLeadShow
+            ? 'bg-gradient-to-r from-purple-500 to-purple-600'
             : 'bg-gradient-to-r from-blue-500 to-indigo-600'
         }`}>
           <div className="flex items-center gap-3 text-white">
             {isValidation ? (
               <CheckCircle className="w-7 h-7" />
+            ) : isLeadShow ? (
+              <UserCog className="w-7 h-7" />
             ) : (
               <HelpCircle className="w-7 h-7" />
             )}
             <div>
               <h2 className="text-2xl font-bold">
-                {isValidation ? 'Demande de Validation' : 'Demande d\'Aide'}
+                {isValidation ? 'Demande de Validation' : isLeadShow ? 'Lead Show / Escalade' : 'Demande d\'Aide'}
               </h2>
               <p className="text-white/90 text-sm">
-                Votre manager sera notifié immédiatement
+                {isLeadShow ? 'Le prospect souhaite parler à un responsable' : 'Votre manager sera notifié immédiatement'}
               </p>
             </div>
           </div>
@@ -114,6 +125,8 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
               placeholder={
                 isValidation
                   ? 'Ex: Validation deal 50k€ avec prospect qualifié'
+                  : isLeadShow
+                  ? 'Ex: Lead demande à parler au directeur commercial'
                   : 'Ex: Besoin d\'aide sur objection prix'
               }
               required
@@ -150,6 +163,8 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
               placeholder={
                 isValidation
                   ? 'Décrivez le contexte de la validation demandée:\n- Montant du deal\n- Conditions négociées\n- Raison de la demande\n- Échéance si applicable'
+                  : isLeadShow
+                  ? 'Décrivez la demande du prospect:\n- Raison de l\'escalade\n- Attentes du prospect\n- Contexte de la discussion\n- Urgence de la situation'
                   : 'Décrivez votre problème ou question:\n- Contexte de la situation\n- Ce que vous avez déjà essayé\n- Aide spécifique souhaitée'
               }
               rows={8}
@@ -176,6 +191,8 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
               className={`flex-1 px-6 py-3 rounded-lg font-semibold text-white transition ${
                 isValidation
                   ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+                  : isLeadShow
+                  ? 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700'
                   : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
@@ -185,7 +202,7 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
                   Envoi en cours...
                 </span>
               ) : (
-                `Envoyer la demande de ${isValidation ? 'validation' : 'd\'aide'}`
+                `Envoyer la demande ${isValidation ? 'de validation' : isLeadShow ? 'd\'escalade' : 'd\'aide'}`
               )}
             </button>
           </div>

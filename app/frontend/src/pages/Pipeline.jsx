@@ -180,6 +180,12 @@ export default function Pipeline() {
     setShowValidationModal(true);
   };
 
+  const handleLeadShow = (lead) => {
+    setSelectedLead(lead);
+    setValidationRequestType('leadshow');
+    setShowValidationModal(true);
+  };
+
   const handleCreateLead = (stageId) => {
     setCreatingLeadStage(stageId);
     setEditingLead(null);
@@ -406,6 +412,7 @@ export default function Pipeline() {
                                     onViewHistory={handleViewHistory}
                                     onRequestValidation={handleRequestValidation}
                                     onRequestHelp={handleRequestHelp}
+                                    onLeadShow={handleLeadShow}
                                   />
                                 </div>
                               )}
