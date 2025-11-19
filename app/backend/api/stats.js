@@ -155,8 +155,8 @@ router.get("/", async (req, res) => {
     const emailStatsQuery = `
       SELECT
         COUNT(CASE WHEN event_type = 'sent' THEN 1 END)::int as total_sent,
-        COUNT(CASE WHEN event_type = 'opened' THEN 1 END)::int as total_opened,
-        COUNT(CASE WHEN event_type = 'clicked' THEN 1 END)::int as total_clicked
+        COUNT(CASE WHEN event_type = 'open' THEN 1 END)::int as total_opened,
+        COUNT(CASE WHEN event_type = 'click' THEN 1 END)::int as total_clicked
       FROM email_tracking
       WHERE tenant_id = $1
     `;
@@ -170,13 +170,24 @@ router.get("/", async (req, res) => {
         AND created_at >= NOW() - INTERVAL '30 days'
     `;
 
-    const [leadsStats, statusDist, topSectors, campaignsStats, emailStats, activityStats] = await Promise.all([
+    // Statistiques d'appels depuis follow_ups
+    const callStatsQuery = `
+      SELECT
+        COUNT(CASE WHEN completed = true THEN 1 END)::int as total_calls,
+        COUNT(CASE WHEN completed = false AND scheduled_date < NOW() THEN 1 END)::int as missed_calls,
+        COUNT(CASE WHEN completed = false AND scheduled_date >= NOW() THEN 1 END)::int as upcoming_calls
+      FROM follow_ups
+      WHERE tenant_id = $1 AND type = 'call'
+    `;
+
+    const [leadsStats, statusDist, topSectors, campaignsStats, emailStats, activityStats, callStats] = await Promise.all([
       query(leadsStatsQuery, [tenantId]),
       query(statusDistQuery, [tenantId]),
       query(topSectorsQuery, [tenantId]),
       query(campaignsQuery, [tenantId]),
       query(emailStatsQuery, [tenantId]),
-      query(activityStatsQuery, [tenantId])
+      query(activityStatsQuery, [tenantId]),
+      query(callStatsQuery, [tenantId])
     ]);
 
     const total = leadsStats.rows[0]?.total_leads || 0;
@@ -216,8 +227,10 @@ router.get("/", async (req, res) => {
         click_rate: clickRate
       },
       call_stats: {
-        total_calls: 0, // À implémenter quand le système d'appels sera en place
-        avg_duration: 0
+        total_calls: callStats.rows[0]?.total_calls || 0,
+        missed_calls: callStats.rows[0]?.missed_calls || 0,
+        upcoming_calls: callStats.rows[0]?.upcoming_calls || 0,
+        avg_duration: 0 // Peut être calculé si on ajoute un champ duration
       },
       activity_score: activityScore,
       daily_actions: dailyActions
