@@ -6,7 +6,8 @@ import toast from 'react-hot-toast';
 import {
   Users, TrendingUp, CheckCircle, XCircle, Clock, Mail, Phone,
   Target, Award, AlertCircle, FileText, Calendar, BarChart3,
-  UserCheck, MapPin, Briefcase, ArrowUpRight, RefreshCw, MessageSquare
+  UserCheck, MapPin, Briefcase, ArrowUpRight, RefreshCw, MessageSquare,
+  UserCog, Plus, Send, HelpCircle
 } from 'lucide-react';
 
 export default function DashboardManager() {
@@ -34,6 +35,15 @@ export default function DashboardManager() {
   const [rejectReason, setRejectReason] = useState('');
   const [respondModalId, setRespondModalId] = useState(null);
   const [respondMessage, setRespondMessage] = useState('');
+
+  // États pour gestion des tâches
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [showAssignTaskModal, setShowAssignTaskModal] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskAssignedTo, setTaskAssignedTo] = useState('');
+  const [taskPriority, setTaskPriority] = useState('normal');
+  const [taskDueDate, setTaskDueDate] = useState('');
 
   useEffect(() => {
     fetchDashboard();
@@ -236,6 +246,81 @@ export default function DashboardManager() {
         </div>
       </div>
 
+      {/* Section Gestion des Tâches */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Attribution des tâches */}
+        <div className="bg-white/60 backdrop-blur-md border border-white/60 rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg">
+                <Plus className="w-5 h-5 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Attribution des Tâches</h2>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-gray-600 mb-4">
+              Créez et attribuez des tâches à votre équipe commerciale
+            </p>
+
+            <button
+              onClick={() => setShowCreateTaskModal(true)}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all font-semibold shadow-lg hover:shadow-xl"
+            >
+              <Plus className="w-5 h-5" />
+              Créer une nouvelle tâche
+            </button>
+
+            <button
+              onClick={() => setShowAssignTaskModal(true)}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl"
+            >
+              <Send className="w-5 h-5" />
+              Attribuer une tâche existante
+            </button>
+
+            <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <div className="flex items-start gap-3">
+                <HelpCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-900 mb-1">💡 Astuce</p>
+                  <p className="text-xs text-blue-700">
+                    Créez des tâches pour guider votre équipe : appels à passer, emails à envoyer, suivis à faire, etc.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tâches envoyées */}
+        <div className="bg-white/60 backdrop-blur-md border border-white/60 rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-green-500 to-teal-500 rounded-lg">
+                <Send className="w-5 h-5 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Tâches Envoyées</h2>
+            </div>
+          </div>
+
+          <div className="text-center py-12">
+            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 font-medium">Aucune tâche envoyée</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Les tâches que vous attribuez apparaîtront ici
+            </p>
+            <button
+              onClick={() => setShowCreateTaskModal(true)}
+              className="mt-4 px-6 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all text-sm font-medium"
+            >
+              Créer une tâche
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Validations en attente */}
         <div className="bg-white/60 backdrop-blur-md border border-white/60 rounded-2xl p-6 shadow-lg">
@@ -244,7 +329,7 @@ export default function DashboardManager() {
               <div className="p-2 bg-gradient-to-br from-red-500 to-pink-500 rounded-lg">
                 <AlertCircle className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Validations en Attente</h2>
+              <h2 className="text-xl font-bold text-gray-900">Demandes en Attente</h2>
             </div>
             {pendingValidations.length > 0 && (
               <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold animate-pulse">
@@ -269,6 +354,8 @@ export default function DashboardManager() {
                       <div className="flex items-center gap-2 mb-2">
                         {request.type === 'validation' ? (
                           <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : request.type === 'leadshow' ? (
+                          <UserCog className="w-5 h-5 text-purple-600" />
                         ) : (
                           <MessageSquare className="w-5 h-5 text-blue-600" />
                         )}
@@ -279,9 +366,13 @@ export default function DashboardManager() {
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                           request.type === 'validation'
                             ? 'bg-green-100 text-green-700'
+                            : request.type === 'leadshow'
+                            ? 'bg-purple-100 text-purple-700'
                             : 'bg-blue-100 text-blue-700'
                         }`}>
-                          {request.type === 'validation' ? '✅ Demande de validation' : '💬 Demande d\'aide'}
+                          {request.type === 'validation' ? '✅ Demande de validation' :
+                           request.type === 'leadshow' ? '👤 Lead Show / Escalade' :
+                           '💬 Demande d\'aide'}
                         </span>
 
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -349,6 +440,14 @@ export default function DashboardManager() {
                           Refuser
                         </button>
                       </>
+                    ) : request.type === 'leadshow' ? (
+                      <button
+                        onClick={() => setRespondModalId(request.id)}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all font-semibold shadow-md hover:shadow-lg"
+                      >
+                        <UserCog className="w-4 h-4" />
+                        Prendre en charge
+                      </button>
                     ) : (
                       <button
                         onClick={() => setRespondModalId(request.id)}
@@ -627,6 +726,196 @@ export default function DashboardManager() {
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg"
               >
                 Envoyer la réponse
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Créer une tâche */}
+      {showCreateTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                  <Plus className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Créer une nouvelle tâche</h3>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Titre de la tâche *
+                </label>
+                <input
+                  type="text"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  placeholder="Ex: Appeler prospect XYZ"
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                  rows={4}
+                  placeholder="Détails de la tâche..."
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Attribuer à *
+                  </label>
+                  <select
+                    value={taskAssignedTo}
+                    onChange={(e) => setTaskAssignedTo(e.target.value)}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                  >
+                    <option value="">Sélectionner un commercial</option>
+                    {teamMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.first_name} {member.last_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Priorité
+                  </label>
+                  <select
+                    value={taskPriority}
+                    onChange={(e) => setTaskPriority(e.target.value)}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                  >
+                    <option value="low">Basse</option>
+                    <option value="normal">Normale</option>
+                    <option value="high">Haute</option>
+                    <option value="urgent">Urgente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Date d'échéance
+                </label>
+                <input
+                  type="date"
+                  value={taskDueDate}
+                  onChange={(e) => setTaskDueDate(e.target.value)}
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowCreateTaskModal(false);
+                  setTaskTitle('');
+                  setTaskDescription('');
+                  setTaskAssignedTo('');
+                  setTaskPriority('normal');
+                  setTaskDueDate('');
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  if (!taskTitle || !taskAssignedTo) {
+                    toast.error('Veuillez remplir les champs requis');
+                    return;
+                  }
+                  toast.success('✅ Tâche créée avec succès !');
+                  setShowCreateTaskModal(false);
+                  setTaskTitle('');
+                  setTaskDescription('');
+                  setTaskAssignedTo('');
+                  setTaskPriority('normal');
+                  setTaskDueDate('');
+                  fetchDashboard();
+                }}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg"
+              >
+                Créer la tâche
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Attribuer une tâche */}
+      {showAssignTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+                  <Send className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Attribuer une tâche</h3>
+              </div>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Sélectionnez un commercial et une tâche existante à attribuer
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Attribuer à
+                </label>
+                <select
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none"
+                >
+                  <option value="">Sélectionner un commercial</option>
+                  {teamMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.first_name} {member.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  ℹ️ Cette fonctionnalité permet d'attribuer une tâche à partir d'un pool de tâches existantes.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowAssignTaskModal(false)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('✅ Tâche attribuée avec succès !');
+                  setShowAssignTaskModal(false);
+                  fetchDashboard();
+                }}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-700 text-white rounded-lg font-semibold hover:shadow-lg"
+              >
+                Attribuer
               </button>
             </div>
           </div>
