@@ -558,21 +558,27 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
     let shouldTriggerRefill = false;
     if (oldStage === 'cold_call' && newStage !== 'cold_call') {
       console.log(`📊 Lead qualifié: ${oldStage} → ${newStage}`);
-      
-      const { rows: updateRows } = await q(
-        `UPDATE campaign_assignments 
-         SET qualified_since_last_refill = qualified_since_last_refill + 1,
-             leads_contacted = leads_contacted + 1
-         WHERE campaign_id = $1 AND user_id = $2
-         RETURNING qualified_since_last_refill`,
-        [campaignId, assignedUserId]
-      );
 
-      const qualifiedCount = updateRows[0]?.qualified_since_last_refill || 0;
-      console.log(`🔢 Compteur qualification: ${qualifiedCount}/10`);
+      // Mettre à jour le compteur de qualifications (optionnel - ne pas bloquer si la table n'existe pas)
+      try {
+        const { rows: updateRows } = await q(
+          `UPDATE campaign_assignments
+           SET qualified_since_last_refill = qualified_since_last_refill + 1,
+               leads_contacted = leads_contacted + 1
+           WHERE campaign_id = $1 AND user_id = $2
+           RETURNING qualified_since_last_refill`,
+          [campaignId, assignedUserId]
+        );
 
-      if (qualifiedCount >= 10) {
-        shouldTriggerRefill = true;
+        const qualifiedCount = updateRows[0]?.qualified_since_last_refill || 0;
+        console.log(`🔢 Compteur qualification: ${qualifiedCount}/10`);
+
+        if (qualifiedCount >= 10) {
+          shouldTriggerRefill = true;
+        }
+      } catch (assignmentError) {
+        console.warn(`⚠️ Table campaign_assignments non disponible ou enregistrement manquant:`, assignmentError.message);
+        // Continuer sans bloquer la qualification
       }
     }
 
@@ -661,8 +667,13 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 
     let refillResult = null;
     if (shouldTriggerRefill && campaignId && assignedUserId) {
-      console.log(`🚀 Déclenchement auto-refill pour user ${assignedUserId}`);
-      refillResult = await smartRefill(campaignId, assignedUserId, tenantId);
+      try {
+        console.log(`🚀 Déclenchement auto-refill pour user ${assignedUserId}`);
+        refillResult = await smartRefill(campaignId, assignedUserId, tenantId);
+      } catch (refillError) {
+        console.warn(`⚠️ Erreur auto-refill (table campaign_assignments non disponible):`, refillError.message);
+        // Continuer sans auto-refill
+      }
     }
 
     console.log(`✅ Lead ${id} qualifié: ${qualification} → ${oldStage} → ${newStage}`);

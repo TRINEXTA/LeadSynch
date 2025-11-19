@@ -19,6 +19,7 @@ const CAMPAIGN_STATUS = {
 const CAMPAIGN_TYPES = {
   email: { name: 'Email', icon: Mail, color: 'text-blue-600', bgGradient: 'from-blue-500 to-cyan-500' },
   phoning: { name: 'Phoning', icon: Phone, color: 'text-green-600', bgGradient: 'from-green-500 to-emerald-500' },
+  phone: { name: 'Phoning', icon: Phone, color: 'text-green-600', bgGradient: 'from-green-500 to-emerald-500' }, // Alias pour 'phoning'
   sms: { name: 'SMS', icon: MessageSquare, color: 'text-purple-600', bgGradient: 'from-purple-500 to-pink-500' },
   whatsapp: { name: 'WhatsApp', icon: Send, color: 'text-emerald-600', bgGradient: 'from-emerald-500 to-teal-500' }
 };
