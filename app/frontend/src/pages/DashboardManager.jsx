@@ -29,6 +29,7 @@ export default function DashboardManager() {
   const [pendingValidations, setPendingValidations] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [sentTasks, setSentTasks] = useState([]);
 
   // États pour les modals
   const [rejectModalId, setRejectModalId] = useState(null);
@@ -90,6 +91,15 @@ export default function DashboardManager() {
       const validationsRes = await api.get('/validation-requests?status=pending&assigned_to_me=true')
         .catch(() => ({ data: { requests: [] } }));
       setPendingValidations(validationsRes.data.requests || []);
+
+      // Charger les tâches que j'ai créées/envoyées
+      const tasksRes = await api.get('/follow-ups')
+        .catch(() => ({ data: { followups: [] } }));
+      // Filtrer pour ne garder que celles créées par moi mais assignées à d'autres
+      const myCreatedTasks = (tasksRes.data.followups || []).filter(
+        task => task.user_id !== userId // Assignées à quelqu'un d'autre
+      );
+      setSentTasks(myCreatedTasks);
 
     } catch (error) {
       console.error('Erreur chargement dashboard manager:', error);
@@ -303,21 +313,72 @@ export default function DashboardManager() {
               </div>
               <h2 className="text-xl font-bold text-gray-900">Tâches Envoyées</h2>
             </div>
+            {sentTasks.length > 0 && (
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
+                {sentTasks.length}
+              </span>
+            )}
           </div>
 
-          <div className="text-center py-12">
-            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 font-medium">Aucune tâche envoyée</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Les tâches que vous attribuez apparaîtront ici
-            </p>
-            <button
-              onClick={() => setShowCreateTaskModal(true)}
-              className="mt-4 px-6 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all text-sm font-medium"
-            >
-              Créer une tâche
-            </button>
-          </div>
+          {sentTasks.length === 0 ? (
+            <div className="text-center py-12">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 font-medium">Aucune tâche envoyée</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Les tâches que vous attribuez apparaîtront ici
+              </p>
+              <button
+                onClick={() => setShowCreateTaskModal(true)}
+                className="mt-4 px-6 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all text-sm font-medium"
+              >
+                Créer une tâche
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {sentTasks.map((task) => (
+                <div key={task.id} className="bg-white/80 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                          task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                          task.priority === 'medium' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {task.priority === 'urgent' ? '🔥' : task.priority === 'high' ? '⚡' : '📋'}
+                        </span>
+                        <span className="font-semibold text-gray-900">{task.title || 'Tâche'}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">{task.notes || 'Aucune description'}</p>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          <span>{new Date(task.scheduled_date).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <UserCheck className="w-3 h-3" />
+                          <span>{task.user_name || 'Non assigné'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {task.completed ? (
+                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+                          ✅ Terminé
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">
+                          ⏳ En attente
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -836,19 +897,36 @@ export default function DashboardManager() {
                 Annuler
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!taskTitle || !taskAssignedTo) {
                     toast.error('Veuillez remplir les champs requis');
                     return;
                   }
-                  toast.success('✅ Tâche créée avec succès !');
-                  setShowCreateTaskModal(false);
-                  setTaskTitle('');
-                  setTaskDescription('');
-                  setTaskAssignedTo('');
-                  setTaskPriority('normal');
-                  setTaskDueDate('');
-                  fetchDashboard();
+
+                  try {
+                    // Créer la tâche via API
+                    await api.post('/follow-ups', {
+                      user_id: taskAssignedTo,
+                      type: 'other',
+                      priority: taskPriority,
+                      title: taskTitle,
+                      notes: taskDescription,
+                      scheduled_date: taskDueDate || new Date().toISOString().split('T')[0],
+                      lead_id: null // Tâche générale non liée à un lead spécifique
+                    });
+
+                    toast.success('✅ Tâche créée avec succès !');
+                    setShowCreateTaskModal(false);
+                    setTaskTitle('');
+                    setTaskDescription('');
+                    setTaskAssignedTo('');
+                    setTaskPriority('normal');
+                    setTaskDueDate('');
+                    fetchDashboard();
+                  } catch (error) {
+                    console.error('Erreur création tâche:', error);
+                    toast.error('Erreur lors de la création de la tâche');
+                  }
                 }}
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg"
               >
