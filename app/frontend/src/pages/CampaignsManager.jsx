@@ -367,7 +367,11 @@ const calculateLeadsCount = async () => {
       database_id: selectedDatabases[0],
       sectors: selectedSectors,
       attachments: attachments.map(a => a.id),
-      status: 'draft'
+      status: 'draft',
+      // Transform empty strings to null (Zod validation requirement)
+      link: formData.link === '' ? null : formData.link,
+      start_date: formData.start_date === '' ? null : formData.start_date,
+      template_id: formData.template_id === '' ? null : formData.template_id
     };
 
     const promise = api.post('/campaigns', campaignData)
@@ -387,7 +391,11 @@ const calculateLeadsCount = async () => {
       database_id: selectedDatabases[0],
       sectors: selectedSectors,
       attachments: attachments.map(a => a.id),
-      status: startNow ? 'active' : 'scheduled'
+      status: startNow ? 'active' : 'scheduled',
+      // Transform empty strings to null (Zod validation requirement)
+      link: formData.link === '' ? null : formData.link,
+      start_date: formData.start_date === '' ? null : formData.start_date,
+      template_id: formData.template_id === '' ? null : formData.template_id
     };
 
     let promise;
