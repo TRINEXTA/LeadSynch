@@ -129,7 +129,7 @@ INSTRUCTIONS RÉPONSE:
     // ===== APPEL CLAUDE API =====
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022', // Claude 3.5 Sonnet (stable)
+      model: 'claude-sonnet-4-20250514', // Claude Sonnet 4 (latest)
       max_tokens: 1500,
       temperature: 0.7,
       system: dynamicContext,
