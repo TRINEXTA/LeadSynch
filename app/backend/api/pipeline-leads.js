@@ -510,10 +510,10 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const userId = req.user?.id;
     const { id } = req.params;
-    const { qualification, notes, follow_up_date, deal_value, call_duration, next_action, scheduled_date } = req.body;
+    const { qualification, stage, notes, follow_up_date, deal_value, call_duration, next_action, scheduled_date } = req.body;
 
-    if (!qualification) {
-      return res.status(400).json({ error: 'qualification requise' });
+    if (!qualification && !stage) {
+      return res.status(400).json({ error: 'qualification ou stage requis' });
     }
 
     const stageMapping = {
@@ -536,10 +536,15 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       'tres_qualifie': 'tres_qualifie',
       'qualifie': 'qualifie',
       'a_relancer': 'relancer',
-      'pas_interesse': 'hors_scope'
+      'pas_interesse': 'hors_scope',
+      // 🆕 Ajout des qualifications manquantes du frontend
+      'proposition': 'proposition',
+      'gagne': 'gagne',
+      'mauvais_contact': 'hors_scope'
     };
 
-    const newStage = stageMapping[qualification] || 'cold_call';
+    // Priorité au stage envoyé directement, sinon mapping depuis qualification
+    const newStage = stage || stageMapping[qualification] || 'cold_call';
 
     const { rows: currentRows } = await q(
       `SELECT * FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
