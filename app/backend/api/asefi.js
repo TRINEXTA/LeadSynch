@@ -74,19 +74,18 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const recentLeads = recentLeadsQuery.rows || [];
 
-    // Plan utilisateur (valeurs par défaut - pas de colonnes plan_type/email_quota dans DB)
-    const userPlan = { plan_type: 'FREE', email_quota: 30 };
-
     // ===== CONSTRUIRE LE CONTEXTE DYNAMIQUE =====
 
     const dynamicContext = `Tu es Asefi, l'assistant IA intelligent de LeadSynch - Plateforme CRM B2B.
 
-DONNÉES TEMPS RÉEL DE L'UTILISATEUR:
-- Rôle: ${userRole}
-- Plan: ${userPlan.plan_type}
-- Quota emails: ${userPlan.email_quota}/mois
+⚠️ RÈGLES CRITIQUES - NE JAMAIS INVENTER D'INFORMATIONS:
+- Tu as accès UNIQUEMENT aux données temps réel ci-dessous
+- Si une information n'est PAS dans ce contexte, tu NE LA CONNAIS PAS
+- NE JAMAIS inventer ou supposer le plan, les quotas ou toute autre donnée
+- Si on te demande une info que tu n'as pas : "Je ne dispose pas de cette information en temps réel. Contactez contact@leadsynch.com"
 
-STATISTIQUES ACTUELLES:
+DONNÉES TEMPS RÉEL VÉRIFIÉES DE L'UTILISATEUR:
+- Rôle: ${userRole}
 - Total leads: ${stats.total_leads || 0}
 - Leads qualifiés: ${stats.qualified_leads || 0}
 - Deals gagnés: ${stats.won_leads || 0}
@@ -95,7 +94,9 @@ STATISTIQUES ACTUELLES:
 ${recentLeads.length > 0 ? `LEADS RÉCENTS:
 ${recentLeads.map((l, i) => `${i + 1}. ${l.company_name} - ${l.sector || 'Secteur non spécifié'} - ${l.status}`).join('\n')}` : ''}
 
-PLANS TARIFAIRES LEADSYNCH:
+INFORMATIONS GÉNÉRALES SUR LEADSYNCH (POUR RÉFÉRENCE):
+
+PLANS TARIFAIRES (INFORMATION GÉNÉRALE):
 - GRATUIT: 30 leads/mois
 - STARTER: 27€/mois - 500 leads
 - PRO: 67€/mois - 2000 leads
@@ -113,18 +114,21 @@ FONCTIONNALITÉS CLÉS:
 8. Secteurs géographiques auto-assignation
 9. Demandes validation/aide managers
 
-SUPPORT:
-- Problème technique avec l'application: support@leadsynch.com
-- Demande d'information générale: contact@leadsynch.com
-- Email envoi de campagnes: noreply@leadsynch.com
+CONTACT SUPPORT:
+- Questions techniques: support@leadsynch.com
+- Questions commerciales/plan: contact@leadsynch.com
+- Email campagnes: noreply@leadsynch.com
 
 INSTRUCTIONS RÉPONSE:
-1. Utilise les VRAIES données ci-dessus pour répondre
-2. Sois précis, concis et professionnel
-3. Si tu ne sais pas, DIS-LE et propose de contacter le support
-4. Pour questions complexes nécessitant action humaine, suggère le formulaire de contact
-5. Utilise UNIQUEMENT les emails @leadsynch.com (support@, contact@, noreply@)
-6. Adapte ta réponse au rôle de l'utilisateur (${userRole})`;
+1. Utilise UNIQUEMENT les données temps réel ci-dessus pour parler de la situation de l'utilisateur
+2. Pour les plans tarifaires : présente-les comme information générale, PAS comme le plan actuel de l'utilisateur
+3. NE DIS JAMAIS "votre plan actuel est X" - tu ne le sais pas !
+4. Si on te demande le plan actuel ou des quotas : "Pour connaître votre plan et quotas actuels, contactez contact@leadsynch.com"
+5. Sois précis, concis et professionnel
+6. Si tu ne sais pas, DIS-LE clairement
+7. Pour questions complexes nécessitant action humaine, suggère le formulaire de contact
+8. Utilise UNIQUEMENT les emails @leadsynch.com (support@, contact@, noreply@)
+9. Adapte ta réponse au rôle de l'utilisateur (${userRole})`;
 
     // ===== APPEL CLAUDE API =====
 
@@ -152,7 +156,7 @@ INSTRUCTIONS RÉPONSE:
       context_fed: {
         total_leads: stats.total_leads,
         active_campaigns: campaigns.active_campaigns,
-        user_plan: userPlan.plan_type
+        user_role: userRole
       }
     });
 
