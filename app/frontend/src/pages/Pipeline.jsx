@@ -61,13 +61,14 @@ export default function Pipeline() {
     try {
       const leadsResponse = await api.get('/pipeline-leads');
       const leadsData = leadsResponse.data.leads || [];
-      
-      const campaignsResponse = await api.get('/campaigns');
+
+      // Utiliser /my-campaigns pour charger uniquement les campagnes assignées à l'utilisateur
+      const campaignsResponse = await api.get('/campaigns/my-campaigns');
       const campaignsData = campaignsResponse.data.campaigns || [];
-      
+
       console.log('✅ Leads chargés:', leadsData.length);
       console.log('✅ Campagnes chargées:', campaignsData.length);
-      
+
       setLeads(leadsData);
       setCampaigns(campaignsData);
       setFilteredLeads(leadsData);
@@ -281,14 +282,17 @@ export default function Pipeline() {
             <select
               value={selectedCampaign}
               onChange={(e) => setSelectedCampaign(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 appearance-none bg-white"
+              className="w-full pl-10 pr-4 py-2.5 border-2 border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 appearance-none bg-white font-semibold text-gray-700"
             >
-              <option value="all">Toutes les campagnes</option>
-              {campaigns.map(campaign => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
+              <option value="all">📋 Toutes les campagnes ({leads.length} leads)</option>
+              {campaigns.map(campaign => {
+                const campaignLeadsCount = leads.filter(l => l.campaign_id === campaign.id).length;
+                return (
+                  <option key={campaign.id} value={campaign.id}>
+                    🎯 {campaign.name} ({campaignLeadsCount} leads)
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>

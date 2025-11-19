@@ -7,11 +7,8 @@ const router = express.Router();
 // Toutes les routes nécessitent l'authentification
 router.use(authMiddleware);
 
-// Prix par lead
-const PRICES = {
-  FROM_DATABASE: 0.03, // Lead déjà dans notre BDD
-  FROM_GOOGLE_MAPS: 0.06 // Lead récupéré via Google Maps API
-};
+// Prix par lead - TARIF UNIQUE
+const PRICE_PER_LEAD = 0.10; // Prix unique par lead (peu importe la source)
 
 /**
  * GET /api/lead-credits
@@ -279,7 +276,7 @@ router.post('/consume', async (req, res) => {
       return res.status(400).json({ error: 'Source invalide' });
     }
 
-    const cost = source === 'database' ? PRICES.FROM_DATABASE : PRICES.FROM_GOOGLE_MAPS;
+    const cost = PRICE_PER_LEAD; // Tarif unique quelle que soit la source
 
     // Vérifier les crédits disponibles
     const { rows: credits } = await q(
@@ -328,15 +325,12 @@ router.post('/consume', async (req, res) => {
  */
 router.get('/pricing', (req, res) => {
   res.json({
-    prices: {
-      from_database: PRICES.FROM_DATABASE,
-      from_google_maps: PRICES.FROM_GOOGLE_MAPS
-    },
+    price_per_lead: PRICE_PER_LEAD,
     packs: [
-      { credits: 100, price_per_lead: 0.05, total: 5, savings: 0 },
-      { credits: 500, price_per_lead: 0.045, total: 22.5, savings: 10 },
-      { credits: 1000, price_per_lead: 0.04, total: 40, savings: 20 },
-      { credits: 5000, price_per_lead: 0.035, total: 175, savings: 30 }
+      { credits: 100, price_per_lead: 0.10, total: 10, savings: 0 },
+      { credits: 500, price_per_lead: 0.09, total: 45, savings: 10 },
+      { credits: 1000, price_per_lead: 0.08, total: 80, savings: 20 },
+      { credits: 5000, price_per_lead: 0.07, total: 350, savings: 30 }
     ]
   });
 });
