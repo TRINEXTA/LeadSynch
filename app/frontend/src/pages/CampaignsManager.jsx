@@ -80,15 +80,18 @@ export default function CampaignsManager() {
     try {
       const response = await api.get(`/campaigns/${campaignId}`);
       const campaign = response.data.campaign;
-      
-      const type = CAMPAIGN_TYPES.find(t => t.id === campaign.type);
+
+      // Mapping inverse: 'phone' → 'phoning' (affichage frontend)
+      const campaignType = campaign.type === 'phone' ? 'phoning' : campaign.type;
+
+      const type = CAMPAIGN_TYPES.find(t => t.id === campaignType);
       if (type) {
         setCampaignType(type);
       }
-      
+
       setFormData({
         name: campaign.name || '',
-        type: campaign.type || '',
+        type: campaignType || '',
         objective: campaign.objective || 'leads',
         subject: campaign.subject || '',
         goal_description: campaign.goal_description || '',
@@ -360,6 +363,7 @@ const calculateLeadsCount = async () => {
   const handleSaveDraft = async () => {
     const campaignData = {
       ...formData,
+      type: formData.type === 'phoning' ? 'phone' : formData.type, // Mapping: 'phoning' → 'phone' (backend validation)
       database_id: selectedDatabases[0],
       sectors: selectedSectors,
       attachments: attachments.map(a => a.id),
@@ -379,6 +383,7 @@ const calculateLeadsCount = async () => {
   const handleCreateCampaign = async (startNow = false) => {
     const campaignData = {
       ...formData,
+      type: formData.type === 'phoning' ? 'phone' : formData.type, // Mapping: 'phoning' → 'phone' (backend validation)
       database_id: selectedDatabases[0],
       sectors: selectedSectors,
       attachments: attachments.map(a => a.id),
