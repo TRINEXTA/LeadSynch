@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, Users, Mail, Phone, Target, DollarSign,
   Calendar, CheckCircle, XCircle, Clock, BarChart3,
-  Activity, Zap, Database, Award, ArrowUp, ArrowDown, Loader2
+  Activity, Zap, Database, Award, ArrowUp, ArrowDown, Loader2, Shield
 } from 'lucide-react';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function Statistics() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('30'); // jours
+
+  // Vérification admin uniquement
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     loadStatistics();
@@ -123,11 +134,17 @@ export default function Statistics() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
-              Statistiques & Analytics
-            </h1>
+            <div className="flex items-center gap-3 mb-3">
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Statistiques & Analytics
+              </h1>
+              <span className="px-3 py-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-bold rounded-full flex items-center gap-1">
+                <Shield className="w-4 h-4" />
+                ADMIN ONLY
+              </span>
+            </div>
             <p className="text-gray-700 text-lg font-medium">
-              Vue d'ensemble de votre activité commerciale
+              Vue d'ensemble complète de l'activité commerciale de toute l'organisation
             </p>
           </div>
 

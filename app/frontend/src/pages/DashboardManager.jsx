@@ -7,7 +7,7 @@ import {
   Users, TrendingUp, CheckCircle, XCircle, Clock, Mail, Phone,
   Target, Award, AlertCircle, FileText, Calendar, BarChart3,
   UserCheck, MapPin, Briefcase, ArrowUpRight, RefreshCw, MessageSquare,
-  UserCog, Plus, Send, HelpCircle
+  UserCog, Plus, Send, HelpCircle, Eye
 } from 'lucide-react';
 
 export default function DashboardManager() {
