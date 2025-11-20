@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, CheckCircle, HelpCircle, UserCog } from 'lucide-react';
+import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, CheckCircle, HelpCircle, UserCog, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const STAGE_CONFIG = {
@@ -269,7 +269,42 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
             <Clock className="w-4 h-4 text-blue-600" />
             Historique détaillé
           </h4>
-          
+
+          {/* Indicateur demande en cours */}
+          {lead.has_pending_request && (
+            <div className="mb-3 p-3 bg-orange-50 border-2 border-orange-300 rounded-lg animate-pulse">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-orange-600" />
+                <div>
+                  <p className="text-sm font-bold text-orange-900">⚠️ Demande en cours</p>
+                  <p className="text-xs text-orange-700">Une demande de validation/aide est en attente pour ce lead</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Statistiques d'activité */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-blue-600" />
+                <div>
+                  <p className="text-xs text-blue-600 font-semibold">Emails envoyés</p>
+                  <p className="text-lg font-bold text-blue-900">{lead.emails_sent || 0}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-2">
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-purple-600" />
+                <div>
+                  <p className="text-xs text-purple-600 font-semibold">Appels passés</p>
+                  <p className="text-lg font-bold text-purple-900">{lead.calls_made || 0}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-2">
             {lead.last_email_date && (
               <div className="flex items-center gap-2 text-xs bg-white rounded-lg p-2 border border-blue-100">

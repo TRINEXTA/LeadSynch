@@ -17,7 +17,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const userRole = req.user?.role;
 
     let query = `
-      SELECT 
+      SELECT
         pl.*,
         l.company_name,
         l.contact_name,
@@ -27,7 +27,25 @@ router.get('/', authenticateToken, async (req, res) => {
         l.sector,
         l.status as lead_status,
         c.name as campaign_name,
-        c.type as campaign_type
+        c.type as campaign_type,
+        -- Compter les emails envoyés
+        (SELECT COUNT(*)
+         FROM lead_call_history
+         WHERE lead_id = pl.lead_id
+           AND action_type = 'email'
+           AND tenant_id = pl.tenant_id) as emails_sent,
+        -- Compter les appels passés
+        (SELECT COUNT(*)
+         FROM lead_call_history
+         WHERE lead_id = pl.lead_id
+           AND action_type = 'call'
+           AND tenant_id = pl.tenant_id) as calls_made,
+        -- Vérifier s'il y a une demande de validation en cours
+        (SELECT COUNT(*) > 0
+         FROM validation_requests
+         WHERE lead_id = pl.lead_id
+           AND status = 'pending'
+           AND tenant_id = pl.tenant_id) as has_pending_request
       FROM pipeline_leads pl
       JOIN leads l ON l.id = pl.lead_id
       LEFT JOIN campaigns c ON c.id = pl.campaign_id
