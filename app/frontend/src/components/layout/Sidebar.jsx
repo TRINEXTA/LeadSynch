@@ -24,7 +24,8 @@ import {
   DollarSign,
   Copy,
   GraduationCap,
-  MapPin
+  MapPin,
+  CheckCircle
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -77,6 +78,7 @@ export default function Sidebar() {
       title: 'Campagnes',
       icon: Megaphone,
       items: [
+        { name: 'Mes Tâches', href: '/my-tasks', icon: CheckCircle, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mes Rappels', href: '/FollowUps', icon: Calendar, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mode Prospection', href: '/ProspectingMode', icon: Phone, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin', 'manager'] },

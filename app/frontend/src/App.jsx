@@ -57,6 +57,7 @@ const GoogleApiSetup = lazy(() => import('./pages/GoogleApiSetup'));
 const FollowUps = lazy(() => import('./pages/FollowUps'));
 const ProspectingModePage = lazy(() => import('./pages/ProspectingModePage'));
 const CommercialDashboard = lazy(() => import('./pages/CommercialDashboard'));
+const MyTasks = lazy(() => import('./pages/MyTasks'));
 
 // Gestion des doublons
 const DuplicateDetection = lazy(() => import('./pages/DuplicateDetection'));
@@ -178,6 +179,7 @@ function App() {
 
               <Route path="/FollowUps" element={<FollowUps />} />
               <Route path="/ProspectingMode" element={<ProspectingModePage />} />
+              <Route path="/my-tasks" element={<MyTasks />} />
 
               <Route path="/duplicates" element={<DuplicateDetection />} />
               <Route path="/RecategorizeLeads" element={<RecategorizeLeads />} />
