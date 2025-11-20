@@ -994,6 +994,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         }
       }
     }
+    }
 
     return res.json({ 
       success: true, 
