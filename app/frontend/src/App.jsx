@@ -91,6 +91,10 @@ const Billing = lazy(() => import('./pages/Billing'));
 const LeadCredits = lazy(() => import('./pages/LeadCredits'));
 const Services = lazy(() => import('./pages/Services'));
 
+// Super-Admin TRINEXTA
+const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
+const SuperAdminTenants = lazy(() => import('./pages/SuperAdminTenants'));
+
 // Composant de chargement élégant
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -204,6 +208,10 @@ function App() {
               <Route path="/billing" element={<Billing />} />
               <Route path="/lead-credits" element={<LeadCredits />} />
               <Route path="/services" element={<Services />} />
+
+              {/* Routes Super-Admin TRINEXTA */}
+              <Route path="/super-admin" element={<SuperAdminDashboard />} />
+              <Route path="/super-admin/tenants" element={<SuperAdminTenants />} />
             </Route>
 
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

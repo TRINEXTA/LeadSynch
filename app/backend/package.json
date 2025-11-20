@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node server.js",
     "build": "echo 'No build needed'",
-    "test": "echo 'No tests yet'"
+    "test": "echo 'No tests yet'",
+    "migrate": "node run-migrations.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",

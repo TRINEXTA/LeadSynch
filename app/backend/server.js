@@ -177,6 +177,7 @@ import leadCreditsRoutes from './api/lead-credits.js';
 import servicesRoutes from './api/services.js';
 import subscriptionsRoutes from './api/subscriptions.js';
 import businessConfigRoutes from './api/business-config.js';
+import superAdminRoutes from './api/super-admin.js';
 
 // ========== API Gouv - Génération leads légaux ==========
 import apiGouvLeadsRoute from './api/api-gouv-leads.js';
@@ -272,6 +273,9 @@ app.use('/api/lead-credits', leadCreditsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/subscriptions', subscriptionsRoutes);
 app.use('/api/business-config', businessConfigRoutes);
+
+// ========== 👑 ROUTES SUPER-ADMIN TRINEXTA ==========
+app.use('/api/super-admin', superAdminRoutes);
 
 // ========== 🔒 ROUTES RGPD & BLACKLIST ==========
 import checkBlacklistRoute from './api/check-blacklist.js';
