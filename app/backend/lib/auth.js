@@ -22,9 +22,9 @@ export async function verifyPassword(password, hash) {
   return await bcrypt.compare(password, hash);
 }
 
-export function generateToken(userId, tenantId, role) {
+export function generateToken(userId, tenantId, role, is_super_admin = false) {
   return jwt.sign(
-    { id: userId, tenant_id: tenantId, role },
+    { id: userId, tenant_id: tenantId, role, is_super_admin },
     JWT_SECRET,
     { expiresIn: '7d' }
   );

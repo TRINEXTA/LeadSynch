@@ -33,14 +33,15 @@ async function getHandler(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   
-  // ✅ CORRECTION : Retourner first_name et last_name
+  // ✅ CORRECTION : Retourner first_name, last_name et is_super_admin
   return res.json({
     id: req.user.id,
     email: req.user.email,
     first_name: req.user.first_name,
     last_name: req.user.last_name,
     role: req.user.role,
-    tenant_id: req.user.tenant_id
+    tenant_id: req.user.tenant_id,
+    is_super_admin: req.user.is_super_admin || false
   });
 }
 

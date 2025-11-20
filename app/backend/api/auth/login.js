@@ -22,9 +22,9 @@ async function handler(req, res) {
       return res.status(400).json({ error: 'Email et mot de passe requis' });
     }
 
-    // Chercher l'utilisateur avec first_name et last_name
+    // Chercher l'utilisateur avec first_name, last_name et is_super_admin
     const { rows } = await db.query(
-      `SELECT u.*, t.name as tenant_name 
+      `SELECT u.*, t.name as tenant_name
        FROM users u
        LEFT JOIN tenants t ON u.tenant_id = t.id
        WHERE u.email = $1`,
@@ -64,7 +64,7 @@ async function handler(req, res) {
     );
     console.log('✅ last_login mis à jour');
 
-    // Générer le token JWT avec first_name et last_name
+    // Générer le token JWT avec first_name, last_name et is_super_admin
     const token = jwt.sign(
       {
         id: user.id,
@@ -72,7 +72,8 @@ async function handler(req, res) {
         role: user.role,
         tenant_id: user.tenant_id,
         first_name: user.first_name,
-        last_name: user.last_name
+        last_name: user.last_name,
+        is_super_admin: user.is_super_admin || false
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
@@ -81,7 +82,7 @@ async function handler(req, res) {
     console.log('Token genere avec succes');
     console.log('========== LOGIN SUCCESS ==========');
 
-    // Retourner first_name et last_name
+    // Retourner first_name, last_name et is_super_admin
     return res.json({
       success: true,
       token,
@@ -92,7 +93,8 @@ async function handler(req, res) {
         last_name: user.last_name,
         role: user.role,
         tenant_id: user.tenant_id,
-        tenant_name: user.tenant_name
+        tenant_name: user.tenant_name,
+        is_super_admin: user.is_super_admin || false
       }
     });
 
