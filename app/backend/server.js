@@ -176,6 +176,7 @@ import exportRoutes from './api/export.js';
 import leadCreditsRoutes from './api/lead-credits.js';
 import servicesRoutes from './api/services.js';
 import subscriptionsRoutes from './api/subscriptions.js';
+import businessConfigRoutes from './api/business-config.js';
 
 // ========== API Gouv - Génération leads légaux ==========
 import apiGouvLeadsRoute from './api/api-gouv-leads.js';
@@ -270,6 +271,7 @@ app.use('/api/lead-credits', leadCreditsRoutes);
 // ========== ?? ROUTES SERVICES & ABONNEMENTS ==========
 app.use('/api/services', servicesRoutes);
 app.use('/api/subscriptions', subscriptionsRoutes);
+app.use('/api/business-config', businessConfigRoutes);
 
 // ========== 🔒 ROUTES RGPD & BLACKLIST ==========
 import checkBlacklistRoute from './api/check-blacklist.js';

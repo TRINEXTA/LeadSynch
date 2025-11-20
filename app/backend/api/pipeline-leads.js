@@ -716,21 +716,119 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 });
 
 // =============================
+// POST /pipeline-leads
+// Créer un nouveau lead et l'ajouter au pipeline
+// =============================
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+
+    const {
+      company_name,
+      contact_name,
+      email,
+      phone,
+      city,
+      website,
+      industry,
+      deal_value,
+      notes,
+      score,
+      stage, // Stage du pipeline (cold_call, clicked, contacted, etc.)
+      campaign_id
+    } = req.body;
+
+    // Validation
+    if (!company_name || !email) {
+      return res.status(400).json({ error: 'company_name et email sont requis' });
+    }
+
+    if (!stage) {
+      return res.status(400).json({ error: 'stage requis pour le pipeline' });
+    }
+
+    console.log(`🆕 Création lead + pipeline: ${company_name} (stage: ${stage})`);
+
+    // 1. Créer le lead dans la table leads
+    const { rows: leadRows } = await q(
+      `INSERT INTO leads
+       (tenant_id, company_name, contact_name, email, phone, city, website,
+        industry, deal_value, notes, score, status, assigned_to, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'new', $12, NOW(), NOW())
+       RETURNING *`,
+      [
+        tenantId,
+        company_name,
+        contact_name || null,
+        email,
+        phone || null,
+        city || null,
+        website || null,
+        industry || null,
+        deal_value || null,
+        notes || null,
+        score || 50,
+        userId // Assigné à l'utilisateur qui crée
+      ]
+    );
+
+    const newLead = leadRows[0];
+
+    // 2. Ajouter le lead au pipeline
+    const { rows: pipelineRows } = await q(
+      `INSERT INTO pipeline_leads
+       (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())
+       RETURNING *`,
+      [
+        tenantId,
+        newLead.id,
+        campaign_id || null,
+        stage,
+        userId
+      ]
+    );
+
+    console.log(`✅ Lead créé: ${newLead.id}, Pipeline: ${pipelineRows[0].id}`);
+
+    return res.status(201).json({
+      success: true,
+      lead: newLead,
+      pipelineLead: pipelineRows[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur POST /pipeline-leads:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================
 // PATCH /pipeline-leads/:id
-// Met à jour le stage d'un lead dans le pipeline
+// Met à jour un lead (données + stage dans le pipeline)
 // =============================
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
-    const { stage } = req.body;
+    const {
+      stage,
+      company_name,
+      contact_name,
+      email,
+      phone,
+      city,
+      website,
+      industry,
+      deal_value,
+      notes,
+      score
+    } = req.body;
 
-    if (!stage) {
-      return res.status(400).json({ error: 'stage requis' });
-    }
-
+    // Récupérer le pipeline_lead et son lead_id
     const { rows: beforeRows } = await q(
-      `SELECT stage, campaign_id, assigned_user_id FROM pipeline_leads 
+      `SELECT stage, campaign_id, assigned_user_id, lead_id FROM pipeline_leads
        WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
@@ -742,22 +840,87 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     const oldStage = beforeRows[0].stage;
     const campaignId = beforeRows[0].campaign_id;
     const assignedUserId = beforeRows[0].assigned_user_id;
+    const leadId = beforeRows[0].lead_id;
 
-    const { rows } = await q(
-      `UPDATE pipeline_leads 
-       SET stage = $1, updated_at = NOW()
-       WHERE id = $2 AND tenant_id = $3
-       RETURNING *`,
-      [stage, id, tenantId]
-    );
+    // 1. Mettre à jour les données du lead dans la table leads (si fournies)
+    if (company_name || email || contact_name || phone || city || website || industry || deal_value !== undefined || notes || score !== undefined) {
+      const updateFields = [];
+      const updateParams = [];
+      let paramIndex = 1;
 
-    console.log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
+      if (company_name) {
+        updateFields.push(`company_name = $${paramIndex++}`);
+        updateParams.push(company_name);
+      }
+      if (contact_name !== undefined) {
+        updateFields.push(`contact_name = $${paramIndex++}`);
+        updateParams.push(contact_name);
+      }
+      if (email) {
+        updateFields.push(`email = $${paramIndex++}`);
+        updateParams.push(email);
+      }
+      if (phone !== undefined) {
+        updateFields.push(`phone = $${paramIndex++}`);
+        updateParams.push(phone);
+      }
+      if (city !== undefined) {
+        updateFields.push(`city = $${paramIndex++}`);
+        updateParams.push(city);
+      }
+      if (website !== undefined) {
+        updateFields.push(`website = $${paramIndex++}`);
+        updateParams.push(website);
+      }
+      if (industry !== undefined) {
+        updateFields.push(`industry = $${paramIndex++}`);
+        updateParams.push(industry);
+      }
+      if (deal_value !== undefined) {
+        updateFields.push(`deal_value = $${paramIndex++}`);
+        updateParams.push(deal_value);
+      }
+      if (notes !== undefined) {
+        updateFields.push(`notes = $${paramIndex++}`);
+        updateParams.push(notes);
+      }
+      if (score !== undefined) {
+        updateFields.push(`score = $${paramIndex++}`);
+        updateParams.push(score);
+      }
 
+      if (updateFields.length > 0) {
+        updateFields.push(`updated_at = NOW()`);
+        updateParams.push(leadId, tenantId);
+
+        await q(
+          `UPDATE leads SET ${updateFields.join(', ')}
+           WHERE id = $${paramIndex++} AND tenant_id = $${paramIndex++}`,
+          updateParams
+        );
+
+        console.log(`✏️ Lead ${leadId} mis à jour`);
+      }
+    }
+
+    // 2. Mettre à jour le stage si fourni
     let refillResult = null;
-    if (oldStage === 'cold_call' && stage !== 'cold_call' && campaignId && assignedUserId) {
-      console.log(`🔍 Lead sorti de Cold Call, vérification du pipeline...`);
-      
-      const { rows: countRows } = await q(
+    if (stage && stage !== oldStage) {
+      const { rows } = await q(
+        `UPDATE pipeline_leads
+         SET stage = $1, updated_at = NOW()
+         WHERE id = $2 AND tenant_id = $3
+         RETURNING *`,
+        [stage, id, tenantId]
+      );
+
+      console.log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
+
+      // Auto-refill si nécessaire
+      if (oldStage === 'cold_call' && stage !== 'cold_call' && campaignId && assignedUserId) {
+        console.log(`🔍 Lead sorti de Cold Call, vérification du pipeline...`);
+
+        const { rows: countRows } = await q(
         `SELECT COUNT(*) as count
          FROM pipeline_leads
          WHERE campaign_id = $1 

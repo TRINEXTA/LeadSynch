@@ -1112,14 +1112,14 @@ export default function DashboardManager() {
               </div>
 
               {/* Lead associé */}
-              {selectedTaskDetails.lead_company && (
+              {selectedTaskDetails.company_name && (
                 <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                   <div className="flex items-center gap-2 mb-1">
                     <Briefcase className="w-4 h-4 text-green-600" />
                     <p className="text-xs font-semibold text-green-700">Lead associé</p>
                   </div>
                   <p className="text-sm font-bold text-green-900">
-                    {selectedTaskDetails.lead_company}
+                    {selectedTaskDetails.company_name}
                   </p>
                   {selectedTaskDetails.lead_id && (
                     <button
