@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, AlertCircle, HelpCircle, CheckCircle, UserCog } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function ValidationRequestModal({ isOpen, onClose, lead, type = 'validation' }) {
   const [formData, setFormData] = useState({
@@ -19,7 +20,7 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
     try {
       await api.post('/validation-requests', {
         type: type,
-        lead_id: lead?.id,
+        lead_id: lead?.lead_id || lead?.id, // ✅ Utiliser lead_id (vrai lead) ou fallback sur id
         campaign_id: lead?.campaign_id,
         subject: formData.subject,
         message: formData.message,
@@ -32,14 +33,16 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
         help: 'd\'aide',
         leadshow: 'd\'escalade (Lead Show)'
       };
-      alert(`Demande de ${messages[type] || 'validation'} envoyée avec succès au manager`);
+      toast.success(`✅ Demande de ${messages[type] || 'validation'} envoyée au manager`);
 
       // Réinitialiser et fermer
       setFormData({ subject: '', message: '', priority: 'normal' });
       onClose();
     } catch (err) {
       console.error('Erreur création demande:', err);
-      setError(err.response?.data?.error || 'Erreur lors de la création de la demande');
+      const errorMsg = err.response?.data?.error || 'Erreur lors de la création de la demande';
+      setError(errorMsg);
+      toast.error(`❌ ${errorMsg}`);
     } finally {
       setSubmitting(false);
     }
