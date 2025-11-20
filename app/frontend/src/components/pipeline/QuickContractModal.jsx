@@ -277,7 +277,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
                     )}
                   </div>
                 </button>
-              )))}
+              ))}
               </div>
             )}
           </div>
