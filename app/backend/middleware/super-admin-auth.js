@@ -12,7 +12,8 @@ const SUPER_ADMIN_EMAILS = [
   'admin@trinexta.fr',
   'direction@trinexta.fr',
   'dev@trinexta.fr',
-  'support@trinexta.fr'
+  'support@trinexta.fr',
+  'vprince@trinexta.fr'
 ];
 
 // ========================================
