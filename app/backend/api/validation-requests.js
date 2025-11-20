@@ -86,8 +86,8 @@ export default async function handler(req, res) {
     }
 
     // GET - Détail d'une demande
-    if (req.method === 'GET' && req.url.includes('/validation-requests/')) {
-      const requestId = req.url.split('/validation-requests/')[1].split('?')[0];
+    if (req.method === 'GET' && req.url !== '/' && req.url.includes('/')) {
+      const requestId = req.url.replace('/', '').split('?')[0];
 
       const request = await queryOne(
         `SELECT
@@ -191,7 +191,7 @@ export default async function handler(req, res) {
 
     // PATCH - Mettre à jour une demande (répondre, approuver, rejeter)
     if (req.method === 'PATCH') {
-      const requestId = req.url.split('/validation-requests/')[1].split('?')[0];
+      const requestId = req.url.replace('/', '').split('?')[0];
 
       const {
         status: newStatus,
@@ -275,7 +275,7 @@ export default async function handler(req, res) {
 
     // DELETE - Annuler une demande
     if (req.method === 'DELETE') {
-      const requestId = req.url.split('/validation-requests/')[1];
+      const requestId = req.url.replace('/', '').split('?')[0];
 
       // Vérifier que c'est bien le créateur ou un manager
       const existingRequest = await queryOne(

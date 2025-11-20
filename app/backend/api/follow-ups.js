@@ -115,7 +115,7 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:id/complete', authenticateToken, async (req, res) => {
   try {
     const tenant_id = req.user.tenant_id;
-    const followupId = parseInt(req.params.id);
+    const followupId = req.params.id; // UUID string
     const { completed_notes } = req.body;
 
     const { rows } = await q(
@@ -142,12 +142,12 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
 });
 
 // =============================
-// PUT /follow-ups/:id/reschedule - Repousser la date
+// PUT/PATCH /follow-ups/:id/reschedule - Repousser la date
 // =============================
-router.put('/:id/reschedule', authenticateToken, async (req, res) => {
+const rescheduleHandler = async (req, res) => {
   try {
     const tenant_id = req.user.tenant_id;
-    const followupId = parseInt(req.params.id);
+    const followupId = req.params.id; // UUID string, pas parseInt!
     const { scheduled_date } = req.body;
 
     if (!scheduled_date) {
@@ -173,7 +173,11 @@ router.put('/:id/reschedule', authenticateToken, async (req, res) => {
     console.error('❌ Erreur reschedule:', error);
     return res.status(500).json({ error: error.message });
   }
-});
+};
+
+// Supporter PUT et PATCH pour reschedule
+router.put('/:id/reschedule', authenticateToken, rescheduleHandler);
+router.patch('/:id/reschedule', authenticateToken, rescheduleHandler);
 
 // =============================
 // DELETE /follow-ups/:id - Supprimer un rappel
@@ -181,7 +185,7 @@ router.put('/:id/reschedule', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const tenant_id = req.user.tenant_id;
-    const followupId = parseInt(req.params.id);
+    const followupId = req.params.id; // UUID string
 
     const { rows } = await q(
       'DELETE FROM follow_ups WHERE id = $1 AND tenant_id = $2 RETURNING id',
