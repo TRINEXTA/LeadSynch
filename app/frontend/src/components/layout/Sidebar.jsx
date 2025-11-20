@@ -26,7 +26,10 @@ import {
   GraduationCap,
   MapPin,
   CheckCircle,
-  Package
+  Package,
+  Crown,
+  Activity,
+  FileText
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -55,6 +58,7 @@ export default function Sidebar() {
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
   const isCommercial = user?.role === 'commercial'
+  const isSuperAdmin = user?.is_super_admin === true
 
   const navigation = {
     main: [
@@ -139,6 +143,18 @@ export default function Sidebar() {
         { name: 'Zone de Test', href: '/TestZone', icon: TestTube, roles: ['admin'] },
         { name: 'Formation', href: '/Formation', icon: GraduationCap, roles: ['admin', 'manager'] }
       ]
+    },
+
+    super_admin: {
+      title: '👑 SUPER-ADMIN TRINEXTA',
+      icon: Crown,
+      requireSuperAdmin: true,
+      items: [
+        { name: 'Dashboard Super-Admin', href: '/super-admin', icon: Activity },
+        { name: 'Gestion Clients', href: '/super-admin/tenants', icon: Users },
+        { name: 'Abonnements', href: '/super-admin/subscriptions', icon: CreditCard },
+        { name: 'Factures & Paiements', href: '/super-admin/invoices', icon: FileText }
+      ]
     }
   }
 
@@ -169,7 +185,8 @@ export default function Sidebar() {
 
   const renderSection = (sectionKey, section) => {
     if (section.roles && !hasAccess(section.roles)) return null
-    
+    if (section.requireSuperAdmin && !isSuperAdmin) return null
+
     const Icon = section.icon
     const isExpanded = expandedSections[sectionKey]
 
@@ -210,7 +227,10 @@ export default function Sidebar() {
             .map(item => renderNavItem(item))}
         </div>
 
-        {/* Sections */}
+        {/* Super-Admin TRINEXTA (visible seulement pour super-admins) */}
+        {renderSection('super_admin', navigation.super_admin)}
+
+        {/* Sections normales */}
         {renderSection('leads', navigation.leads)}
         {renderSection('campaigns', navigation.campaigns)}
         {renderSection('email', navigation.email)}
