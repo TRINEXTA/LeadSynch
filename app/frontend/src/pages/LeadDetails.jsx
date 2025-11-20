@@ -28,6 +28,10 @@ export default function LeadDetails() {
       setLoading(false);
     } catch (error) {
       console.error('Erreur chargement lead:', error);
+      // Si 404, le lead n'existe pas/plus
+      if (error.response?.status === 404) {
+        setLead(null);
+      }
       setLoading(false);
     }
   };
@@ -61,11 +65,29 @@ export default function LeadDetails() {
   if (!lead) {
     return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-          <p className="text-red-700 font-semibold">Lead introuvable</p>
-          <button onClick={() => navigate('/pipeline')} className="mt-4 text-purple-600 hover:underline">
-            Retour au Pipeline
-          </button>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-2xl mx-auto mt-12">
+          <div className="mb-4">
+            <Building className="w-16 h-16 text-red-400 mx-auto mb-3" />
+            <p className="text-red-700 font-bold text-xl mb-2">Lead introuvable</p>
+            <p className="text-red-600 text-sm">
+              Le lead avec l'ID <code className="bg-red-100 px-2 py-1 rounded">{leadId}</code> n'existe pas ou a été supprimé.
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center mt-6">
+            <button
+              onClick={() => navigate(-1)}
+              className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all font-semibold"
+            >
+              <ArrowLeft className="w-4 h-4 inline mr-2" />
+              Retour
+            </button>
+            <button
+              onClick={() => navigate('/pipeline')}
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-semibold"
+            >
+              Voir le Pipeline
+            </button>
+          </div>
         </div>
       </div>
     );

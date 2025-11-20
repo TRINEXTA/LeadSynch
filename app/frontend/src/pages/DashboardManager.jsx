@@ -168,6 +168,21 @@ export default function DashboardManager() {
     });
   };
 
+  // Vérifier et naviguer vers le lead
+  const handleViewLead = async (leadId) => {
+    try {
+      // Vérifier que le lead existe avant de naviguer
+      await api.get(`/leads/${leadId}`);
+      navigate(`/LeadDetails?id=${leadId}`);
+    } catch (error) {
+      if (error.response?.status === 404) {
+        toast.error('❌ Ce lead n\'existe plus ou a été supprimé');
+      } else {
+        toast.error('Erreur lors de la récupération du lead');
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -520,7 +535,7 @@ export default function DashboardManager() {
                     )}
                     {request.lead_id && (
                       <button
-                        onClick={() => navigate(`/LeadDetails?id=${request.lead_id}`)}
+                        onClick={() => handleViewLead(request.lead_id)}
                         className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold"
                       >
                         Voir Lead
