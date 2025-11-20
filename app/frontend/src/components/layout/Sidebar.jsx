@@ -25,7 +25,8 @@ import {
   Copy,
   GraduationCap,
   MapPin,
-  CheckCircle
+  CheckCircle,
+  Package
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -131,6 +132,7 @@ export default function Sidebar() {
         { name: 'Équipes', href: '/teams', icon: Users, roles: ['admin', 'manager'] },
         { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin'] }, // ❌ Seul admin peut gérer TOUS les users
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users, roles: ['admin', 'manager'] },
+        { name: 'Config Business', href: '/BusinessSettings', icon: Package, roles: ['admin', 'manager'] },
         { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin, roles: ['admin', 'manager'] },
         { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen, roles: ['admin', 'manager'] },
         { name: 'Migration Leads', href: '/MigrateLeads', icon: Database, roles: ['admin'] },

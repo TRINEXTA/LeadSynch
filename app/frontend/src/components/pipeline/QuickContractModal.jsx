@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, FileCheck, Save, Send, AlertCircle } from 'lucide-react';
 import api from '../../api/axios';
 
+// Fallback hardcoded offers (used if no custom products configured)
 const TRINEXTA_OFFERS = [
   {
     id: 'essentielle',
@@ -72,8 +73,67 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // State for dynamic products loaded from database
+  const [customProducts, setCustomProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [offers, setOffers] = useState(TRINEXTA_OFFERS); // Will be updated with custom products if available
+
+  // Load custom products from database
+  useEffect(() => {
+    const loadCustomProducts = async () => {
+      try {
+        setLoadingProducts(true);
+        const response = await api.get('/business-config/products?active_only=true');
+
+        if (response.data?.products && response.data.products.length > 0) {
+          // Convert database products to offer format
+          const formattedOffers = response.data.products.map(product => {
+            const offer = {
+              id: product.id,
+              name: product.name,
+              description: product.description || '',
+              services: Array.isArray(product.features) ? product.features : [],
+              url: product.url || null
+            };
+
+            // Handle pricing based on product type
+            if (product.type === 'quote') {
+              offer.price = null; // "Sur devis"
+            } else if (product.has_commitment_options && product.price_no_commitment) {
+              // Product with commitment options (like Essentielle)
+              offer.prices = {
+                sans_engagement: parseFloat(product.price_no_commitment),
+                avec_engagement_mensuel: parseFloat(product.price),
+                avec_engagement_annuel: parseFloat(product.price) // Same as monthly with commitment
+              };
+            } else {
+              // Simple fixed price
+              offer.price = parseFloat(product.price);
+            }
+
+            return offer;
+          });
+
+          setCustomProducts(formattedOffers);
+          setOffers(formattedOffers); // Use custom products instead of hardcoded
+        } else {
+          // No custom products, use fallback TRINEXTA offers
+          setOffers(TRINEXTA_OFFERS);
+        }
+      } catch (error) {
+        console.error('Error loading custom products:', error);
+        // On error, fallback to TRINEXTA offers
+        setOffers(TRINEXTA_OFFERS);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+
+    loadCustomProducts();
+  }, []);
+
   const getSelectedOfferDetails = () => {
-    return TRINEXTA_OFFERS.find(o => o.id === selectedOffer);
+    return offers.find(o => o.id === selectedOffer);
   };
 
   const calculatePrice = () => {
@@ -167,10 +227,16 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
           {/* Sélection Offre */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-3">
-              Sélectionner une offre Trinexta *
+              {customProducts.length > 0 ? 'Sélectionner un produit *' : 'Sélectionner une offre Trinexta *'}
             </label>
-            <div className="grid grid-cols-1 gap-3">
-              {TRINEXTA_OFFERS.map(offer => (
+            {loadingProducts ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+                <span className="ml-3 text-gray-600">Chargement des produits...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {offers.map(offer => (
                 <button
                   key={offer.id}
                   onClick={() => setSelectedOffer(offer.id)}
@@ -211,8 +277,9 @@ export default function QuickContractModal({ lead, onClose, onSuccess }) {
                     )}
                   </div>
                 </button>
-              ))}
-            </div>
+              )))}
+              </div>
+            )}
           </div>
 
           {/* Type de contrat (si Essentielle) */}

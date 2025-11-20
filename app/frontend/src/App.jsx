@@ -49,6 +49,9 @@ const TestMailing = lazy(() => import('./pages/TestMailing'));
 const SpamDiagnostic = lazy(() => import('./pages/SpamDiagnostic'));
 const Unsubscribe = lazy(() => import('./pages/Unsubscribe'));
 
+// Business Configuration
+const BusinessSettings = lazy(() => import('./pages/BusinessSettings'));
+
 // Génération de leads
 const LeadGeneration = lazy(() => import('./pages/LeadGeneration'));
 const CreateLeadSearch = lazy(() => import('./pages/CreateLeadSearch'));
@@ -168,6 +171,7 @@ function App() {
               <Route path="/EmailTemplates" element={<EmailTemplates />} />
               <Route path="/EmailCampaigns" element={<EmailCampaigns />} />
               <Route path="/MailingSettings" element={<MailingSettings />} />
+              <Route path="/BusinessSettings" element={<BusinessSettings />} />
               <Route path="/TestMailing" element={<TestMailing />} />
               <Route path="/SpamDiagnostic" element={<SpamDiagnostic />} />
 
