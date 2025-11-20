@@ -26,6 +26,10 @@ export default function MyTasks() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [completionNotes, setCompletionNotes] = useState('');
 
+  // Modal détails demande
+  const [showRequestDetailsModal, setShowRequestDetailsModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+
   useEffect(() => {
     fetchMyTasks();
   }, []);
@@ -229,7 +233,14 @@ export default function MyTasks() {
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto">
                 {myRequests.map((request) => (
-                  <div key={request.id} className="bg-white/80 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all">
+                  <div
+                    key={request.id}
+                    onClick={() => {
+                      setSelectedRequest(request);
+                      setShowRequestDetailsModal(true);
+                    }}
+                    className="bg-white/80 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all cursor-pointer hover:border-purple-400"
+                  >
                     <div className="flex items-center gap-2 mb-2">
                       {request.type === 'validation' ? (
                         <CheckCircle className="w-5 h-5 text-green-600" />
@@ -342,6 +353,223 @@ export default function MyTasks() {
               >
                 ✅ Valider
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Détails de la demande */}
+      {showRequestDetailsModal && selectedRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${
+                  selectedRequest.type === 'validation' ? 'bg-green-100' :
+                  selectedRequest.type === 'leadshow' ? 'bg-purple-100' :
+                  'bg-blue-100'
+                }`}>
+                  {selectedRequest.type === 'validation' ? (
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  ) : selectedRequest.type === 'leadshow' ? (
+                    <UserCog className="w-6 h-6 text-purple-600" />
+                  ) : (
+                    <MessageSquare className="w-6 h-6 text-blue-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Détails de la demande</h3>
+                  <p className="text-sm text-gray-600">
+                    {selectedRequest.type === 'validation' ? 'Demande de validation' :
+                     selectedRequest.type === 'leadshow' ? 'Lead Show / Escalade' :
+                     'Demande d\'aide'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRequestDetailsModal(false);
+                  setSelectedRequest(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <XCircle className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Statut et priorité */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                  selectedRequest.status === 'approved' ? 'bg-green-100 text-green-700' :
+                  selectedRequest.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                  selectedRequest.status === 'resolved' ? 'bg-blue-100 text-blue-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {selectedRequest.status === 'approved' ? '✅ Approuvée' :
+                   selectedRequest.status === 'rejected' ? '❌ Refusée' :
+                   selectedRequest.status === 'resolved' ? '✔️ Résolue' :
+                   '⏳ En attente'}
+                </span>
+
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                  selectedRequest.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                  selectedRequest.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {selectedRequest.priority === 'urgent' ? '🔥 Urgent' :
+                   selectedRequest.priority === 'high' ? '⚡ Prioritaire' :
+                   '📋 Normal'}
+                </span>
+              </div>
+
+              {/* Sujet */}
+              <div>
+                <h4 className="text-xl font-bold text-gray-900">
+                  {selectedRequest.subject}
+                </h4>
+              </div>
+
+              {/* Message de la demande */}
+              {selectedRequest.message && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">📝 Votre message</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {selectedRequest.message}
+                  </p>
+                </div>
+              )}
+
+              {/* Lead et campagne associés */}
+              {(selectedRequest.company_name || selectedRequest.campaign_name) && (
+                <div className="grid grid-cols-1 gap-3">
+                  {selectedRequest.company_name && (
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                      <p className="text-xs font-semibold text-blue-700 mb-1">🏢 Lead concerné</p>
+                      <p className="text-sm font-bold text-blue-900">
+                        {selectedRequest.company_name}
+                        {selectedRequest.contact_name && ` - ${selectedRequest.contact_name}`}
+                      </p>
+                      {selectedRequest.lead_id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/LeadDetails?id=${selectedRequest.lead_id}`);
+                          }}
+                          className="mt-2 text-xs text-blue-700 hover:text-blue-900 font-medium flex items-center gap-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          Voir le lead
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedRequest.campaign_name && (
+                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+                      <p className="text-xs font-semibold text-purple-700 mb-1">🎯 Campagne</p>
+                      <p className="text-sm font-bold text-purple-900">
+                        {selectedRequest.campaign_name}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Réponse du manager */}
+              {selectedRequest.manager_response && (
+                <div className={`rounded-lg p-4 border ${
+                  selectedRequest.status === 'approved' ? 'bg-green-50 border-green-200' :
+                  selectedRequest.status === 'rejected' ? 'bg-red-50 border-red-200' :
+                  'bg-blue-50 border-blue-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {selectedRequest.status === 'approved' ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : selectedRequest.status === 'rejected' ? (
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    ) : (
+                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                    )}
+                    <p className={`text-sm font-semibold ${
+                      selectedRequest.status === 'approved' ? 'text-green-700' :
+                      selectedRequest.status === 'rejected' ? 'text-red-700' :
+                      'text-blue-700'
+                    }`}>
+                      {selectedRequest.status === 'approved' ? '✅ Approuvée par le manager' :
+                       selectedRequest.status === 'rejected' ? '❌ Refusée par le manager' :
+                       '💬 Réponse du manager'}
+                    </p>
+                  </div>
+                  <p className={`text-sm whitespace-pre-wrap ${
+                    selectedRequest.status === 'approved' ? 'text-green-800' :
+                    selectedRequest.status === 'rejected' ? 'text-red-800' :
+                    'text-blue-800'
+                  }`}>
+                    {selectedRequest.manager_response}
+                  </p>
+                  {selectedRequest.reviewer_first_name && (
+                    <p className={`text-xs mt-2 ${
+                      selectedRequest.status === 'approved' ? 'text-green-600' :
+                      selectedRequest.status === 'rejected' ? 'text-red-600' :
+                      'text-blue-600'
+                    }`}>
+                      Par {selectedRequest.reviewer_first_name} {selectedRequest.reviewer_last_name}
+                      {selectedRequest.reviewed_at && ` le ${new Date(selectedRequest.reviewed_at).toLocaleDateString('fr-FR')}`}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Notes de résolution */}
+              {selectedRequest.resolution_notes && selectedRequest.resolution_notes !== selectedRequest.manager_response && (
+                <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                  <p className="text-sm font-semibold text-indigo-700 mb-2">📋 Notes de résolution</p>
+                  <p className="text-sm text-indigo-800 whitespace-pre-wrap">
+                    {selectedRequest.resolution_notes}
+                  </p>
+                </div>
+              )}
+
+              {/* Métadonnées */}
+              <div className="text-xs text-gray-500 pt-4 border-t space-y-1">
+                <p>
+                  Demande créée le {new Date(selectedRequest.created_at).toLocaleDateString('fr-FR')} à{' '}
+                  {new Date(selectedRequest.created_at).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+                {selectedRequest.assigned_first_name && (
+                  <p>
+                    Assignée à {selectedRequest.assigned_first_name} {selectedRequest.assigned_last_name}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-6 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowRequestDetailsModal(false);
+                  setSelectedRequest(null);
+                }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
+              >
+                Fermer
+              </button>
+              {selectedRequest.lead_id && (
+                <button
+                  onClick={() => {
+                    navigate(`/LeadDetails?id=${selectedRequest.lead_id}`);
+                  }}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  Voir le lead
+                </button>
+              )}
             </div>
           </div>
         </div>

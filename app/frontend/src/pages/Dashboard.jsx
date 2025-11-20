@@ -30,13 +30,21 @@ export default function Dashboard() {
         api.get("/stats/dashboard")
       ];
 
-      // Si manager/admin : charger les demandes de validation assignées à moi
+      // Si manager/admin : charger les demandes de validation
       if (user?.role === 'manager' || user?.role === 'admin') {
-        requests.push(api.get("/validation-requests?status=pending&assigned_to_me=true"));
+        // Admin voit TOUTES les demandes, Manager voit celles assignées à lui
+        const validationUrl = user.role === 'admin'
+          ? "/validation-requests?status=pending"  // Admin : TOUTES
+          : "/validation-requests?status=pending&assigned_to_me=true";  // Manager : assignées à moi
+        requests.push(api.get(validationUrl));
       }
 
-      // Charger les tâches de l'utilisateur
-      requests.push(api.get("/follow-ups?assigned_to_me=true&status=pending"));
+      // Charger les tâches
+      // Admin voit TOUTES les tâches en attente, autres rôles voient seulement les leurs
+      const followUpsUrl = user.role === 'admin'
+        ? "/follow-ups?status=pending"  // Admin : TOUTES
+        : "/follow-ups?assigned_to_me=true&status=pending";  // Autres : assignées à moi
+      requests.push(api.get(followUpsUrl));
 
       const results = await Promise.allSettled(requests);
 
@@ -481,7 +489,7 @@ export default function Dashboard() {
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-base">
                     <AlertCircle className="w-5 h-5 text-orange-600" />
-                    Demandes en attente
+                    {user.role === 'admin' ? 'Toutes les demandes en attente' : 'Demandes en attente'}
                   </span>
                   <span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
                     {validationRequests.length}
@@ -555,7 +563,7 @@ export default function Dashboard() {
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-base">
                   <FileText className="w-5 h-5 text-purple-600" />
-                  Mes Tâches
+                  {user?.role === 'admin' ? 'Toutes les tâches en attente' : 'Mes Tâches'}
                 </span>
                 <span className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">
                   {myTasks.length}

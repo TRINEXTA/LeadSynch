@@ -40,6 +40,8 @@ export default function DashboardManager() {
   // États pour gestion des tâches
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [showAssignTaskModal, setShowAssignTaskModal] = useState(false);
+  const [showTaskDetailsModal, setShowTaskDetailsModal] = useState(false);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskAssignedTo, setTaskAssignedTo] = useState('');
@@ -168,19 +170,14 @@ export default function DashboardManager() {
     });
   };
 
-  // Vérifier et naviguer vers le lead
-  const handleViewLead = async (leadId) => {
-    try {
-      // Vérifier que le lead existe avant de naviguer
-      await api.get(`/leads/${leadId}`);
-      navigate(`/LeadDetails?id=${leadId}`);
-    } catch (error) {
-      if (error.response?.status === 404) {
-        toast.error('❌ Ce lead n\'existe plus ou a été supprimé');
-      } else {
-        toast.error('Erreur lors de la récupération du lead');
-      }
+  // Naviguer vers le lead
+  const handleViewLead = (leadId) => {
+    if (!leadId) {
+      toast.error('❌ Aucun lead associé à cette demande');
+      return;
     }
+    // Navigation directe vers la page de détails du lead
+    navigate(`/LeadDetails?id=${leadId}`);
   };
 
   if (loading) {
@@ -352,7 +349,14 @@ export default function DashboardManager() {
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {sentTasks.map((task) => (
-                <div key={task.id} className="bg-white/80 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all">
+                <div
+                  key={task.id}
+                  onClick={() => {
+                    setSelectedTaskDetails(task);
+                    setShowTaskDetailsModal(true);
+                  }}
+                  className="bg-white/80 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all cursor-pointer hover:border-blue-400"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -1010,6 +1014,180 @@ export default function DashboardManager() {
               >
                 Attribuer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Détails de la tâche */}
+      {showTaskDetailsModal && selectedTaskDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${
+                  selectedTaskDetails.priority === 'urgent' ? 'bg-red-100' :
+                  selectedTaskDetails.priority === 'high' ? 'bg-orange-100' :
+                  'bg-blue-100'
+                }`}>
+                  <FileText className="w-6 h-6 text-gray-700" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Détails de la tâche</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowTaskDetailsModal(false);
+                  setSelectedTaskDetails(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <XCircle className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Titre et priorité */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    selectedTaskDetails.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                    selectedTaskDetails.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                    selectedTaskDetails.priority === 'medium' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {selectedTaskDetails.priority === 'urgent' ? '🔥 Urgent' :
+                     selectedTaskDetails.priority === 'high' ? '⚡ Haute' :
+                     selectedTaskDetails.priority === 'medium' ? '📋 Normale' : '📌 Basse'}
+                  </span>
+                  {selectedTaskDetails.completed ? (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+                      ✅ Terminée
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">
+                      ⏳ En attente
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-xl font-bold text-gray-900">
+                  {selectedTaskDetails.title || 'Tâche'}
+                </h4>
+              </div>
+
+              {/* Description */}
+              {selectedTaskDetails.notes && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">📝 Description</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {selectedTaskDetails.notes}
+                  </p>
+                </div>
+              )}
+
+              {/* Informations */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Calendar className="w-4 h-4 text-blue-600" />
+                    <p className="text-xs font-semibold text-blue-700">Échéance</p>
+                  </div>
+                  <p className="text-sm font-bold text-blue-900">
+                    {new Date(selectedTaskDetails.scheduled_date).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </p>
+                </div>
+
+                <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <UserCheck className="w-4 h-4 text-purple-600" />
+                    <p className="text-xs font-semibold text-purple-700">Assigné à</p>
+                  </div>
+                  <p className="text-sm font-bold text-purple-900">
+                    {selectedTaskDetails.user_name || 'Non assigné'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Lead associé */}
+              {selectedTaskDetails.lead_company && (
+                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Briefcase className="w-4 h-4 text-green-600" />
+                    <p className="text-xs font-semibold text-green-700">Lead associé</p>
+                  </div>
+                  <p className="text-sm font-bold text-green-900">
+                    {selectedTaskDetails.lead_company}
+                  </p>
+                  {selectedTaskDetails.lead_id && (
+                    <button
+                      onClick={() => navigate(`/LeadDetails?id=${selectedTaskDetails.lead_id}`)}
+                      className="mt-2 text-xs text-green-700 hover:text-green-900 font-medium flex items-center gap-1"
+                    >
+                      <Eye className="w-3 h-3" />
+                      Voir le lead
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Notes de complétion */}
+              {selectedTaskDetails.completed && selectedTaskDetails.completed_notes && (
+                <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                  <p className="text-sm font-semibold text-emerald-700 mb-2">
+                    ✅ Notes de complétion
+                  </p>
+                  <p className="text-sm text-emerald-800 whitespace-pre-wrap">
+                    {selectedTaskDetails.completed_notes}
+                  </p>
+                  {selectedTaskDetails.completed_at && (
+                    <p className="text-xs text-emerald-600 mt-2">
+                      Terminée le {new Date(selectedTaskDetails.completed_at).toLocaleDateString('fr-FR')} à{' '}
+                      {new Date(selectedTaskDetails.completed_at).toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Métadonnées */}
+              <div className="text-xs text-gray-500 pt-4 border-t">
+                <p>
+                  Créée le {new Date(selectedTaskDetails.created_at).toLocaleDateString('fr-FR')} à{' '}
+                  {new Date(selectedTaskDetails.created_at).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-6 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowTaskDetailsModal(false);
+                  setSelectedTaskDetails(null);
+                }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
+              >
+                Fermer
+              </button>
+              {selectedTaskDetails.lead_id && (
+                <button
+                  onClick={() => {
+                    navigate(`/LeadDetails?id=${selectedTaskDetails.lead_id}`);
+                  }}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  Voir le lead
+                </button>
+              )}
             </div>
           </div>
         </div>
