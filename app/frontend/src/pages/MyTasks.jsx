@@ -193,8 +193,9 @@ export default function MyTasks() {
                       </button>
                       {task.lead_id && (
                         <button
-                          onClick={() => navigate(`/leads/${task.lead_id}`)}
+                          onClick={() => navigate(`/LeadDetails?id=${task.lead_id}`)}
                           className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold"
+                          title="Voir le lead"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
