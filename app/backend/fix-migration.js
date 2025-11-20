@@ -26,11 +26,17 @@ async function fixMigration() {
 
     // Supprimer dans l'ordre inverse des dépendances
     const tables = [
+      // Partie 2 : Système Super-Admin
       'super_admin_activity_log',
       'payments',
       'invoices',
       'tenant_subscriptions',
-      'subscription_plans'
+      'subscription_plans',
+
+      // Partie 1 : Configuration Business Clients
+      'tenant_payment_links',
+      'tenant_legal_documents',
+      'tenant_products'
     ];
 
     for (const table of tables) {
