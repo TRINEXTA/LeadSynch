@@ -634,21 +634,28 @@ router.patch('/plans/:id', async (req, res) => {
 // GET /super-admin/subscriptions
 router.get('/subscriptions', async (req, res) => {
   try {
-    const { status, page = 1, limit = 50 } = req.query;
+    const { status, plan, page = 1, limit = 50 } = req.query;
     const offset = (page - 1) * limit;
 
     let whereClause = '1=1';
     const params = [];
+    let paramIndex = 1;
 
     if (status) {
-      whereClause += ` AND ts.status = $1`;
+      whereClause += ` AND ts.status = $${paramIndex++}`;
       params.push(status);
+    }
+
+    if (plan) {
+      whereClause += ` AND sp.slug = $${paramIndex++}`;
+      params.push(plan);
     }
 
     const { rows } = await q(
       `SELECT
         ts.*,
         t.name as tenant_name,
+        t.email as tenant_email,
         sp.name as plan_name
        FROM tenant_subscriptions ts
        LEFT JOIN tenants t ON ts.tenant_id = t.id
@@ -660,7 +667,10 @@ router.get('/subscriptions', async (req, res) => {
     );
 
     const { rows: countRows } = await q(
-      `SELECT COUNT(*) as total FROM tenant_subscriptions ts WHERE ${whereClause}`,
+      `SELECT COUNT(*) as total
+       FROM tenant_subscriptions ts
+       LEFT JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ${whereClause}`,
       params
     );
 
@@ -805,9 +815,13 @@ router.get('/invoices', async (req, res) => {
     const { rows } = await q(
       `SELECT
         i.*,
-        t.name as tenant_name
+        t.name as tenant_name,
+        t.email as tenant_email,
+        sp.name as plan_name
        FROM invoices i
-       LEFT JOIN tenants t ON i.tenant_id = t.id
+       LEFT JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
+       LEFT JOIN tenants t ON ts.tenant_id = t.id
+       LEFT JOIN subscription_plans sp ON ts.plan_id = sp.id
        WHERE ${whereClause}
        ORDER BY i.issue_date DESC
        LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
