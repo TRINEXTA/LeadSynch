@@ -505,6 +505,158 @@ router.post('/tenants/:id/activate', async (req, res) => {
   }
 });
 
+// PUT /super-admin/tenants/:id
+// Mettre à jour les informations d'un client
+router.put('/tenants/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, billing_email, phone, address, city, postal_code, country } = req.body;
+
+    const { rows } = await q(
+      `UPDATE tenants
+       SET name = COALESCE($1, name),
+           billing_email = COALESCE($2, billing_email),
+           phone = COALESCE($3, phone),
+           address = COALESCE($4, address),
+           city = COALESCE($5, city),
+           postal_code = COALESCE($6, postal_code),
+           country = COALESCE($7, country),
+           updated_at = NOW()
+       WHERE id = $8
+       RETURNING *`,
+      [name, billing_email, phone, address, city, postal_code, country, id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Tenant non trouvé' });
+    }
+
+    await req.logSuperAdminAction('update_tenant', 'tenant', id);
+
+    res.json({ success: true, tenant: rows[0], message: 'Client mis à jour' });
+
+  } catch (error) {
+    console.error('❌ Erreur mise à jour tenant:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /super-admin/tenants/:id
+// Supprimer définitivement un client et toutes ses données
+router.delete('/tenants/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Vérifier que le tenant existe
+    const tenant = await queryOne('SELECT * FROM tenants WHERE id = $1', [id]);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant non trouvé' });
+    }
+
+    // Supprimer le tenant (CASCADE supprimera toutes les données liées)
+    await q('DELETE FROM tenants WHERE id = $1', [id]);
+
+    await req.logSuperAdminAction('delete_tenant', 'tenant', id, {
+      tenant_name: tenant.name,
+      tenant_email: tenant.billing_email
+    });
+
+    res.json({ success: true, message: 'Client supprimé définitivement' });
+
+  } catch (error) {
+    console.error('❌ Erreur suppression tenant:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /super-admin/tenants/:id/gift-credits
+// Offrir des crédits gratuits à un client
+router.post('/tenants/:id/gift-credits', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Montant invalide' });
+    }
+
+    // Vérifier que le tenant existe
+    const tenant = await queryOne('SELECT * FROM tenants WHERE id = $1', [id]);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant non trouvé' });
+    }
+
+    // Ajouter les crédits
+    const { rows } = await q(
+      `UPDATE tenant_lead_credits
+       SET remaining_credits = remaining_credits + $1,
+           total_credits = total_credits + $1,
+           updated_at = NOW()
+       WHERE tenant_id = $2
+       RETURNING *`,
+      [amount, id]
+    );
+
+    // Si pas de ligne existante, créer
+    if (!rows.length) {
+      await q(
+        `INSERT INTO tenant_lead_credits (tenant_id, total_credits, remaining_credits, expires_at)
+         VALUES ($1, $2, $2, NOW() + INTERVAL '1 year')`,
+        [id, amount]
+      );
+    }
+
+    await req.logSuperAdminAction('gift_credits', 'tenant', id, {
+      amount,
+      tenant_name: tenant.name
+    });
+
+    res.json({ success: true, message: `${amount} crédits offerts à ${tenant.name}` });
+
+  } catch (error) {
+    console.error('❌ Erreur cadeau crédits:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /super-admin/tenants/:id/refund
+// Créer un remboursement pour un client
+router.post('/tenants/:id/refund', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, reason } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Montant invalide' });
+    }
+
+    // Vérifier que le tenant existe
+    const tenant = await queryOne('SELECT * FROM tenants WHERE id = $1', [id]);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant non trouvé' });
+    }
+
+    // Créer un paiement de remboursement
+    await q(
+      `INSERT INTO payments (tenant_id, amount, currency, method, status, notes, paid_at)
+       VALUES ($1, $2, 'EUR', 'refund', 'completed', $3, NOW())`,
+      [id, -Math.abs(amount), reason || 'Remboursement manuel']
+    );
+
+    await req.logSuperAdminAction('refund_client', 'tenant', id, {
+      amount,
+      reason,
+      tenant_name: tenant.name
+    });
+
+    res.json({ success: true, message: `Remboursement de ${amount}€ créé pour ${tenant.name}` });
+
+  } catch (error) {
+    console.error('❌ Erreur remboursement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========================================
 // GESTION PLANS D'ABONNEMENT
 // ========================================
