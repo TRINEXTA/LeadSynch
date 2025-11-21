@@ -94,6 +94,7 @@ const Services = lazy(() => import('./pages/Services'));
 // Super-Admin TRINEXTA
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
 const SuperAdminTenants = lazy(() => import('./pages/SuperAdminTenants'));
+const SuperAdminTenantDetails = lazy(() => import('./pages/SuperAdminTenantDetails'));
 const SuperAdminSubscriptions = lazy(() => import('./pages/SuperAdminSubscriptions'));
 const SuperAdminInvoices = lazy(() => import('./pages/SuperAdminInvoices'));
 
@@ -214,6 +215,7 @@ function App() {
               {/* Routes Super-Admin TRINEXTA */}
               <Route path="/super-admin" element={<SuperAdminDashboard />} />
               <Route path="/super-admin/tenants" element={<SuperAdminTenants />} />
+              <Route path="/super-admin/tenants/:id" element={<SuperAdminTenantDetails />} />
               <Route path="/super-admin/subscriptions" element={<SuperAdminSubscriptions />} />
               <Route path="/super-admin/invoices" element={<SuperAdminInvoices />} />
             </Route>

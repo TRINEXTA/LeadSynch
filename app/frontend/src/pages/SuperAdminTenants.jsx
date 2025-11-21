@@ -28,9 +28,24 @@ export default function SuperAdminTenants() {
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
+  const [newClient, setNewClient] = useState({
+    name: '',
+    billing_email: '',
+    phone: '',
+    address: '',
+    city: '',
+    postal_code: '',
+    country: 'France',
+    plan_id: '',
+    admin_first_name: '',
+    admin_last_name: '',
+    admin_email: ''
+  });
+  const [plans, setPlans] = useState([]);
 
   useEffect(() => {
     loadTenants();
+    loadPlans();
   }, [statusFilter]);
 
   const loadTenants = async () => {
@@ -53,6 +68,48 @@ export default function SuperAdminTenants() {
   const handleSearch = (e) => {
     e.preventDefault();
     loadTenants();
+  };
+
+  const loadPlans = async () => {
+    try {
+      const response = await api.get('/super-admin/plans');
+      setPlans(response.data.plans || []);
+    } catch (error) {
+      console.error('Erreur chargement plans:', error);
+    }
+  };
+
+  const handleCreateClient = async (e) => {
+    e.preventDefault();
+
+    // Validation
+    if (!newClient.name || !newClient.billing_email || !newClient.admin_email || !newClient.plan_id) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    try {
+      await api.post('/super-admin/tenants', newClient);
+      alert('✅ Client créé avec succès');
+      setShowCreateModal(false);
+      setNewClient({
+        name: '',
+        billing_email: '',
+        phone: '',
+        address: '',
+        city: '',
+        postal_code: '',
+        country: 'France',
+        plan_id: '',
+        admin_first_name: '',
+        admin_last_name: '',
+        admin_email: ''
+      });
+      loadTenants();
+    } catch (error) {
+      console.error('Erreur création client:', error);
+      alert('Erreur lors de la création du client');
+    }
   };
 
   const handleSuspend = async (tenantId) => {
@@ -235,18 +292,214 @@ export default function SuperAdminTenants() {
         </div>
       )}
 
-      {/* Modal Créer Client - Placeholder */}
+      {/* Modal Créer Client */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8">
-            <h2 className="text-2xl font-bold mb-4">Créer un nouveau client</h2>
-            <p className="text-gray-600 mb-4">Fonctionnalité en cours de développement...</p>
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="bg-gray-200 hover:bg-gray-300 px-6 py-2 rounded-xl font-bold"
-            >
-              Fermer
-            </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Plus className="w-6 h-6 text-blue-600" />
+                  Créer un nouveau client
+                </h2>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateClient} className="p-6 space-y-6">
+              {/* Informations Entreprise */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Building className="w-5 h-5 text-blue-600" />
+                  Informations Entreprise
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nom de l'entreprise *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newClient.name}
+                      onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Ex: ACME Corp"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email de facturation *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={newClient.billing_email}
+                      onChange={(e) => setNewClient({ ...newClient, billing_email: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="facturation@entreprise.fr"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Téléphone
+                    </label>
+                    <input
+                      type="tel"
+                      value={newClient.phone}
+                      onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="+33 1 23 45 67 89"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Adresse
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.address}
+                      onChange={(e) => setNewClient({ ...newClient, address: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="123 Rue de la Paix"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ville
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.city}
+                      onChange={(e) => setNewClient({ ...newClient, city: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Paris"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Code postal
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.postal_code}
+                      onChange={(e) => setNewClient({ ...newClient, postal_code: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="75001"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Administrateur */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  Compte Administrateur
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Prénom
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.admin_first_name}
+                      onChange={(e) => setNewClient({ ...newClient, admin_first_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Jean"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nom
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.admin_last_name}
+                      onChange={(e) => setNewClient({ ...newClient, admin_last_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Dupont"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={newClient.admin_email}
+                      onChange={(e) => setNewClient({ ...newClient, admin_email: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="admin@entreprise.fr"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Un email de bienvenue avec un mot de passe temporaire sera envoyé à cette adresse.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Plan d'abonnement */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Building className="w-5 h-5 text-blue-600" />
+                  Plan d'abonnement
+                </h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sélectionner un plan *
+                  </label>
+                  <select
+                    required
+                    value={newClient.plan_id}
+                    onChange={(e) => setNewClient({ ...newClient, plan_id: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">-- Choisir un plan --</option>
+                    {plans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} - {plan.price_monthly}€/mois
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Le client commencera avec un essai gratuit de 30 jours.
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Créer le client
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
