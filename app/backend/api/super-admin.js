@@ -655,7 +655,7 @@ router.get('/subscriptions', async (req, res) => {
       `SELECT
         ts.*,
         t.name as tenant_name,
-        t.email as tenant_email,
+        t.billing_email as tenant_email,
         sp.name as plan_name
        FROM tenant_subscriptions ts
        LEFT JOIN tenants t ON ts.tenant_id = t.id
@@ -816,7 +816,7 @@ router.get('/invoices', async (req, res) => {
       `SELECT
         i.*,
         t.name as tenant_name,
-        t.email as tenant_email,
+        t.billing_email as tenant_email,
         sp.name as plan_name
        FROM invoices i
        LEFT JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
@@ -1071,10 +1071,10 @@ router.get('/invoices/stats', async (req, res) => {
   try {
     const { rows } = await q(`
       SELECT
-        COALESCE(SUM(amount), 0)::decimal as total_billed,
-        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0)::decimal as total_paid,
-        COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0)::decimal as total_pending,
-        COALESCE(SUM(CASE WHEN status = 'overdue' THEN amount ELSE 0 END), 0)::decimal as total_overdue,
+        COALESCE(SUM(total), 0)::decimal as total_billed,
+        COALESCE(SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END), 0)::decimal as total_paid,
+        COALESCE(SUM(CASE WHEN status = 'pending' THEN total ELSE 0 END), 0)::decimal as total_pending,
+        COALESCE(SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END), 0)::decimal as total_overdue,
         COUNT(CASE WHEN status = 'paid' THEN 1 END)::int as count_paid,
         COUNT(CASE WHEN status = 'pending' THEN 1 END)::int as count_pending,
         COUNT(CASE WHEN status = 'overdue' THEN 1 END)::int as count_overdue
@@ -1095,11 +1095,10 @@ router.post('/invoices/:id/send-reminder', async (req, res) => {
 
     // Récupérer la facture avec infos tenant
     const { rows } = await q(
-      `SELECT i.*, t.name as tenant_name, u.email as tenant_email
+      `SELECT i.*, t.name as tenant_name, t.billing_email as tenant_email
        FROM invoices i
        JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
        JOIN tenants t ON ts.tenant_id = t.id
-       LEFT JOIN users u ON t.id = u.tenant_id AND u.role = 'admin'
        WHERE i.id = $1
        LIMIT 1`,
       [id]
@@ -1131,7 +1130,7 @@ router.get('/invoices/:id/pdf', async (req, res) => {
 
     // Récupérer la facture
     const { rows } = await q(
-      `SELECT i.*, t.name as tenant_name, t.email as tenant_email,
+      `SELECT i.*, t.name as tenant_name, t.billing_email as tenant_email,
               sp.name as plan_name
        FROM invoices i
        JOIN tenant_subscriptions ts ON i.subscription_id = ts.id

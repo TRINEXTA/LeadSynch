@@ -293,7 +293,7 @@ export default function SuperAdminInvoices() {
                         <div className="text-purple-300 text-sm">{invoice.tenant_email}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-white font-bold text-lg">{formatCurrency(invoice.amount)}</div>
+                        <div className="text-white font-bold text-lg">{formatCurrency(invoice.total)}</div>
                         <div className="text-purple-300 text-xs">{invoice.plan_name}</div>
                       </td>
                       <td className="px-6 py-4 text-purple-200 text-sm">
