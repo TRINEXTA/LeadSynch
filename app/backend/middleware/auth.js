@@ -29,8 +29,8 @@ export function authMiddleware(handlerOrReq, res, next) {
         
         // Charger les infos complètes de l'utilisateur depuis la DB
         const { rows } = await db.query(
-          `SELECT id, email, first_name, last_name, role, tenant_id 
-           FROM users 
+          `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin
+           FROM users
            WHERE id = $1`,
           [decoded.id]
         );
@@ -74,8 +74,8 @@ export function authMiddleware(handlerOrReq, res, next) {
       
       // Charger les infos complètes de l'utilisateur depuis la DB
       const { rows } = await db.query(
-        `SELECT id, email, first_name, last_name, role, tenant_id 
-         FROM users 
+        `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin
+         FROM users
          WHERE id = $1`,
         [decoded.id]
       );
@@ -120,7 +120,7 @@ export async function verifyAuth(req) {
 
     // Charger les infos complètes de l'utilisateur depuis la DB
     const { rows } = await db.query(
-      `SELECT id, email, first_name, last_name, role, tenant_id
+      `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin
        FROM users
        WHERE id = $1`,
       [decoded.id]
