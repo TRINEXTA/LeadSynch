@@ -60,11 +60,6 @@ export default function Sidebar() {
   const isCommercial = user?.role === 'commercial'
   const isSuperAdmin = user?.is_super_admin === true
 
-  // 🔍 DEBUG SUPER-ADMIN
-  console.log('🔍 [SIDEBAR] User object:', user)
-  console.log('🔍 [SIDEBAR] is_super_admin value:', user?.is_super_admin)
-  console.log('🔍 [SIDEBAR] isSuperAdmin computed:', isSuperAdmin)
-
   const navigation = {
     main: [
       { name: 'Centre de Contrôle Admin', href: '/dashboard-admin', icon: Shield, roles: ['admin'], badge: 'ADMIN' },
