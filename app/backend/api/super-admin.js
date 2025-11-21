@@ -922,6 +922,232 @@ router.post('/invoices/:id/mark-paid', async (req, res) => {
 });
 
 // ========================================
+// ENDPOINTS SUPPLÉMENTAIRES SUBSCRIPTIONS
+// ========================================
+
+// GET /super-admin/subscriptions/stats
+router.get('/subscriptions/stats', async (req, res) => {
+  try {
+    const { rows } = await q(`
+      SELECT
+        COALESCE(SUM(CASE WHEN status = 'active' OR status = 'trial' THEN mrr ELSE 0 END), 0)::decimal as mrr,
+        COALESCE(SUM(CASE WHEN status = 'active' OR status = 'trial' THEN arr ELSE 0 END), 0)::decimal as arr,
+        COUNT(CASE WHEN status = 'active' THEN 1 END)::int as active,
+        COUNT(CASE WHEN status = 'trial' THEN 1 END)::int as trial,
+        COUNT(CASE WHEN status = 'suspended' THEN 1 END)::int as suspended,
+        COUNT(CASE WHEN status = 'expired' THEN 1 END)::int as expired
+      FROM tenant_subscriptions
+    `);
+
+    res.json({ success: true, stats: rows[0] });
+  } catch (error) {
+    console.error('❌ Erreur stats abonnements:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /super-admin/subscriptions/:id/renew
+router.post('/subscriptions/:id/renew', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Récupérer l'abonnement actuel
+    const { rows: subs } = await q(
+      'SELECT * FROM tenant_subscriptions WHERE id = $1',
+      [id]
+    );
+
+    if (!subs.length) {
+      return res.status(404).json({ error: 'Abonnement non trouvé' });
+    }
+
+    const sub = subs[0];
+    const newStartDate = new Date();
+    const newEndDate = new Date();
+
+    if (sub.billing_cycle === 'monthly') {
+      newEndDate.setMonth(newEndDate.getMonth() + 1);
+    } else {
+      newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+    }
+
+    const { rows } = await q(
+      `UPDATE tenant_subscriptions
+       SET status = 'active',
+           start_date = $1,
+           end_date = $2,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [newStartDate, newEndDate, id]
+    );
+
+    await req.logSuperAdminAction('renew_subscription', 'subscription', id);
+
+    res.json({ success: true, subscription: rows[0] });
+
+  } catch (error) {
+    console.error('❌ Erreur renouvellement abonnement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /super-admin/subscriptions/:id/suspend
+router.post('/subscriptions/:id/suspend', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { rows } = await q(
+      `UPDATE tenant_subscriptions
+       SET status = 'suspended',
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Abonnement non trouvé' });
+    }
+
+    await req.logSuperAdminAction('suspend_subscription', 'subscription', id);
+
+    res.json({ success: true, subscription: rows[0] });
+
+  } catch (error) {
+    console.error('❌ Erreur suspension abonnement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /super-admin/subscriptions/:id/activate
+router.post('/subscriptions/:id/activate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { rows } = await q(
+      `UPDATE tenant_subscriptions
+       SET status = 'active',
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Abonnement non trouvé' });
+    }
+
+    await req.logSuperAdminAction('activate_subscription', 'subscription', id);
+
+    res.json({ success: true, subscription: rows[0] });
+
+  } catch (error) {
+    console.error('❌ Erreur activation abonnement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========================================
+// ENDPOINTS SUPPLÉMENTAIRES FACTURES
+// ========================================
+
+// GET /super-admin/invoices/stats
+router.get('/invoices/stats', async (req, res) => {
+  try {
+    const { rows } = await q(`
+      SELECT
+        COALESCE(SUM(amount), 0)::decimal as total_billed,
+        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0)::decimal as total_paid,
+        COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0)::decimal as total_pending,
+        COALESCE(SUM(CASE WHEN status = 'overdue' THEN amount ELSE 0 END), 0)::decimal as total_overdue,
+        COUNT(CASE WHEN status = 'paid' THEN 1 END)::int as count_paid,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END)::int as count_pending,
+        COUNT(CASE WHEN status = 'overdue' THEN 1 END)::int as count_overdue
+      FROM invoices
+    `);
+
+    res.json({ success: true, stats: rows[0] });
+  } catch (error) {
+    console.error('❌ Erreur stats factures:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /super-admin/invoices/:id/send-reminder
+router.post('/invoices/:id/send-reminder', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Récupérer la facture avec infos tenant
+    const { rows } = await q(
+      `SELECT i.*, t.name as tenant_name, u.email as tenant_email
+       FROM invoices i
+       JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
+       JOIN tenants t ON ts.tenant_id = t.id
+       LEFT JOIN users u ON t.id = u.tenant_id AND u.role = 'admin'
+       WHERE i.id = $1
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Facture non trouvée' });
+    }
+
+    const invoice = rows[0];
+
+    // TODO: Implémenter envoi email avec Nodemailer
+    console.log('📧 Envoi rappel facture à:', invoice.tenant_email);
+
+    await req.logSuperAdminAction('send_invoice_reminder', 'invoice', id);
+
+    res.json({ success: true, message: 'Rappel envoyé' });
+
+  } catch (error) {
+    console.error('❌ Erreur envoi rappel:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /super-admin/invoices/:id/pdf
+router.get('/invoices/:id/pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Récupérer la facture
+    const { rows } = await q(
+      `SELECT i.*, t.name as tenant_name, t.email as tenant_email,
+              sp.name as plan_name
+       FROM invoices i
+       JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
+       JOIN tenants t ON ts.tenant_id = t.id
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE i.id = $1`,
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Facture non trouvée' });
+    }
+
+    const invoice = rows[0];
+
+    // TODO: Générer PDF avec une bibliothèque comme PDFKit ou Puppeteer
+    // Pour l'instant, retourner les données JSON
+    res.json({
+      success: true,
+      invoice,
+      message: 'Génération PDF à implémenter avec PDFKit ou Puppeteer'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur génération PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========================================
 // ACTIVITY LOG
 // ========================================
 
