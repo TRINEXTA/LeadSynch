@@ -121,12 +121,14 @@ export default async function handler(req, res) {
     if (method === 'POST') {
       const data = createProposalSchema.parse(req.body);
 
-      // Generate reference
-      const refResult = await queryOne(
-        `SELECT generate_proposal_reference($1) as reference`,
-        [tenantId]
+      // Generate reference manually (simple format)
+      const year = new Date().getFullYear();
+      const countResult = await queryOne(
+        `SELECT COUNT(*) as count FROM proposals WHERE tenant_id = $1 AND reference LIKE $2`,
+        [tenantId, `DEV-${year}-%`]
       );
-      const reference = refResult?.reference || `DEV-${new Date().getFullYear()}-0001`;
+      const seq = (parseInt(countResult?.count) || 0) + 1;
+      const reference = `DEV-${year}-${String(seq).padStart(4, '0')}`;
 
       // Calculate totals
       const total_ht = data.total_ht || data.services.reduce((sum, s) => sum + (s.quantity * s.unit_price), 0);
