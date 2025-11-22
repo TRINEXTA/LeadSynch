@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Users, Search, Plus, Eye, Pause, Play, X, Mail,
+  Users, Search, Plus, Eye, Pause, Play, X, Mail, FileText,
   Building, Calendar, CheckCircle, XCircle, Clock, AlertCircle
 } from 'lucide-react';
 import api from '../api/axios';
@@ -36,17 +36,39 @@ export default function SuperAdminTenants() {
     city: '',
     postal_code: '',
     country: 'France',
+    siret: '',
+    siren: '',
+    vat_number: '',
+    vat_applicable: true,
     plan_id: '',
     admin_first_name: '',
     admin_last_name: '',
     admin_email: ''
   });
+  const [stats, setStats] = useState({ total: 0, active: 0, trial: 0, suspended: 0 });
   const [plans, setPlans] = useState([]);
 
   useEffect(() => {
     loadTenants();
     loadPlans();
+    loadStats();
   }, [statusFilter]);
+
+  const loadStats = async () => {
+    try {
+      const response = await api.get('/super-admin/dashboard/stats');
+      if (response.data.stats?.tenants) {
+        setStats({
+          total: parseInt(response.data.stats.tenants.total_count) || 0,
+          active: parseInt(response.data.stats.tenants.active_count) || 0,
+          trial: parseInt(response.data.stats.tenants.trial_count) || 0,
+          suspended: parseInt(response.data.stats.tenants.suspended_count) || 0
+        });
+      }
+    } catch (error) {
+      console.error('Erreur chargement stats:', error);
+    }
+  };
 
   const loadTenants = async () => {
     try {
@@ -100,12 +122,17 @@ export default function SuperAdminTenants() {
         city: '',
         postal_code: '',
         country: 'France',
+        siret: '',
+        siren: '',
+        vat_number: '',
+        vat_applicable: true,
         plan_id: '',
         admin_first_name: '',
         admin_last_name: '',
         admin_email: ''
       });
       loadTenants();
+      loadStats();
     } catch (error) {
       console.error('Erreur création client:', error);
       alert('Erreur lors de la création du client');
@@ -146,7 +173,7 @@ export default function SuperAdminTenants() {
 
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-2xl p-6 mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Users className="w-10 h-10 text-white" />
             <div>
@@ -161,6 +188,32 @@ export default function SuperAdminTenants() {
             <Plus className="w-5 h-5" />
             Nouveau Client
           </button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
+            <div className="text-white/80 text-sm">Total Clients</div>
+            <div className="text-3xl font-bold text-white">{stats.total}</div>
+          </div>
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
+            <div className="text-green-200 text-sm flex items-center gap-1">
+              <CheckCircle className="w-4 h-4" /> Actifs
+            </div>
+            <div className="text-3xl font-bold text-white">{stats.active}</div>
+          </div>
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
+            <div className="text-yellow-200 text-sm flex items-center gap-1">
+              <Clock className="w-4 h-4" /> En Trial
+            </div>
+            <div className="text-3xl font-bold text-white">{stats.trial}</div>
+          </div>
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4">
+            <div className="text-red-200 text-sm flex items-center gap-1">
+              <XCircle className="w-4 h-4" /> Suspendus
+            </div>
+            <div className="text-3xl font-bold text-white">{stats.suspended}</div>
+          </div>
         </div>
       </div>
 
@@ -397,6 +450,81 @@ export default function SuperAdminTenants() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="75001"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations Fiscales - SIRET/SIREN/TVA */}
+              <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-blue-800">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Informations Fiscales
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      SIRET (14 chiffres)
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.siret}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 14);
+                        setNewClient({
+                          ...newClient,
+                          siret: value,
+                          siren: value.slice(0, 9)
+                        });
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="123 456 789 00012"
+                      maxLength={14}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Le SIREN sera extrait automatiquement</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      SIREN (9 chiffres)
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.siren}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 9);
+                        setNewClient({ ...newClient, siren: value });
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                      placeholder="123 456 789"
+                      maxLength={9}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      N° TVA Intracommunautaire
+                    </label>
+                    <input
+                      type="text"
+                      value={newClient.vat_number}
+                      onChange={(e) => setNewClient({ ...newClient, vat_number: e.target.value.toUpperCase() })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="FR12345678901"
+                    />
+                  </div>
+
+                  <div className="flex items-center">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newClient.vat_applicable}
+                        onChange={(e) => setNewClient({ ...newClient, vat_applicable: e.target.checked })}
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Assujetti à la TVA
+                      </span>
+                    </label>
                   </div>
                 </div>
               </div>
