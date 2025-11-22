@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     // GET /api/proposals - List proposals
     // GET /api/proposals/:id - Get single proposal
     if (method === 'GET') {
-      const proposalId = req.query.id;
+      const proposalId = req.params?.id || req.query?.id;
 
       if (proposalId) {
         // Get single proposal
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
 
     // PUT /api/proposals/:id - Update proposal
     if (method === 'PUT') {
-      const proposalId = req.query.id;
+      const proposalId = req.params?.id || req.query?.id;
       if (!proposalId) {
         return res.status(400).json({ error: 'ID du devis requis' });
       }
@@ -238,7 +238,7 @@ export default async function handler(req, res) {
 
     // DELETE /api/proposals/:id
     if (method === 'DELETE') {
-      const proposalId = req.query.id;
+      const proposalId = req.params?.id || req.query?.id;
       if (!proposalId) {
         return res.status(400).json({ error: 'ID du devis requis' });
       }

@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     // GET /api/contracts - List contracts
     // GET /api/contracts/:id - Get single contract
     if (method === 'GET') {
-      const contractId = req.query.id;
+      const contractId = req.params?.id || req.query?.id;
 
       if (contractId) {
         // Get single contract
@@ -201,7 +201,7 @@ export default async function handler(req, res) {
 
     // PUT /api/contracts/:id - Update contract
     if (method === 'PUT') {
-      const contractId = req.query.id;
+      const contractId = req.params?.id || req.query?.id;
       if (!contractId) {
         return res.status(400).json({ error: 'ID du contrat requis' });
       }
@@ -269,7 +269,7 @@ export default async function handler(req, res) {
 
     // DELETE /api/contracts/:id
     if (method === 'DELETE') {
-      const contractId = req.query.id;
+      const contractId = req.params?.id || req.query?.id;
       if (!contractId) {
         return res.status(400).json({ error: 'ID du contrat requis' });
       }
