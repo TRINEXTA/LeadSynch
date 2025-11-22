@@ -20,7 +20,9 @@ import {
   Save,
   Edit,
   Package,
-  AlertCircle
+  AlertCircle,
+  Hash,
+  Percent
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -31,6 +33,7 @@ export default function SuperAdminTenantDetails() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
+  const [subscriptionId, setSubscriptionId] = useState(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [giftAmount, setGiftAmount] = useState(0);
@@ -52,8 +55,17 @@ export default function SuperAdminTenantDetails() {
         address: response.data.tenant.address || '',
         city: response.data.tenant.city || '',
         postal_code: response.data.tenant.postal_code || '',
-        country: response.data.tenant.country || 'France'
+        country: response.data.tenant.country || 'France',
+        company_siret: response.data.tenant.company_siret || '',
+        company_siren: response.data.tenant.company_siren || '',
+        company_vat: response.data.tenant.company_vat || '',
+        vat_applicable: response.data.tenant.vat_applicable !== false
       });
+      // Get active subscription ID for renewal
+      if (response.data.subscriptions?.length > 0) {
+        const activeSub = response.data.subscriptions.find(s => s.status === 'active' || s.status === 'trial');
+        if (activeSub) setSubscriptionId(activeSub.id);
+      }
     } catch (error) {
       console.error('Erreur chargement tenant:', error);
       alert('Erreur lors du chargement du client');
@@ -148,6 +160,23 @@ export default function SuperAdminTenantDetails() {
     } catch (error) {
       console.error('Erreur remboursement:', error);
       alert('Erreur lors du remboursement');
+    }
+  };
+
+  const handleRenewSubscription = async () => {
+    if (!subscriptionId) {
+      alert('Aucun abonnement actif à renouveler');
+      return;
+    }
+    if (!confirm('Renouveler l\'abonnement de ce client ?')) return;
+
+    try {
+      await api.post(`/super-admin/subscriptions/${subscriptionId}/renew`);
+      alert('Abonnement renouvelé avec succès');
+      loadTenantDetails();
+    } catch (error) {
+      console.error('Erreur renouvellement:', error);
+      alert('Erreur lors du renouvellement');
     }
   };
 
@@ -380,6 +409,79 @@ export default function SuperAdminTenantDetails() {
               />
             </div>
           </div>
+
+          {/* Section Informations Fiscales */}
+          <div className="mt-8 pt-6 border-t border-purple-400/30">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Hash className="w-5 h-5 text-yellow-400" />
+              Informations Fiscales
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-purple-200 text-sm font-medium mb-2">SIRET (14 chiffres)</label>
+                <input
+                  type="text"
+                  value={formData.company_siret || ''}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 14);
+                    setFormData({
+                      ...formData,
+                      company_siret: value,
+                      company_siren: value.slice(0, 9)
+                    });
+                  }}
+                  disabled={!editing}
+                  maxLength={14}
+                  className={`w-full px-4 py-3 bg-white/10 border border-purple-400/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${!editing && 'opacity-50 cursor-not-allowed'}`}
+                  placeholder="12345678901234"
+                />
+              </div>
+
+              <div>
+                <label className="block text-purple-200 text-sm font-medium mb-2">SIREN (9 chiffres)</label>
+                <input
+                  type="text"
+                  value={formData.company_siren || ''}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 9);
+                    setFormData({ ...formData, company_siren: value });
+                  }}
+                  disabled={!editing}
+                  maxLength={9}
+                  className={`w-full px-4 py-3 bg-white/10 border border-purple-400/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-gray-800/30 ${!editing && 'opacity-50 cursor-not-allowed'}`}
+                  placeholder="123456789"
+                />
+              </div>
+
+              <div>
+                <label className="block text-purple-200 text-sm font-medium mb-2">N° TVA Intracommunautaire</label>
+                <input
+                  type="text"
+                  value={formData.company_vat || ''}
+                  onChange={(e) => setFormData({ ...formData, company_vat: e.target.value.toUpperCase() })}
+                  disabled={!editing}
+                  className={`w-full px-4 py-3 bg-white/10 border border-purple-400/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${!editing && 'opacity-50 cursor-not-allowed'}`}
+                  placeholder="FR12345678901"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.vat_applicable !== false}
+                    onChange={(e) => setFormData({ ...formData, vat_applicable: e.target.checked })}
+                    disabled={!editing}
+                    className="w-5 h-5 text-yellow-500 border-purple-400/30 rounded focus:ring-yellow-500 bg-white/10"
+                  />
+                  <span className={`text-sm font-medium ${editing ? 'text-white' : 'text-purple-300'}`}>
+                    <Percent className="w-4 h-4 inline mr-1" />
+                    Assujetti à la TVA
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Abonnement Actuel */}
@@ -444,7 +546,9 @@ export default function SuperAdminTenantDetails() {
             </button>
 
             <button
-              className="p-6 bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 rounded-xl text-white transition-all shadow-lg flex flex-col items-center gap-3"
+              onClick={handleRenewSubscription}
+              disabled={!subscriptionId}
+              className={`p-6 bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 rounded-xl text-white transition-all shadow-lg flex flex-col items-center gap-3 ${!subscriptionId && 'opacity-50 cursor-not-allowed'}`}
             >
               <RefreshCw className="w-8 h-8" />
               <span className="font-semibold">Renouveler Abonnement</span>

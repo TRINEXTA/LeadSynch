@@ -259,11 +259,19 @@ router.get('/tenants/:id', async (req, res) => {
 const createTenantSchema = z.object({
   name: z.string().min(1, 'Nom requis'),
   billing_email: z.string().email('Email invalide'),
-  company_siret: z.string().optional(),
-  company_address: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  postal_code: z.string().optional(),
+  country: z.string().default('France'),
+  siret: z.string().max(14).optional(),
+  siren: z.string().max(9).optional(),
+  vat_number: z.string().optional(),
+  vat_applicable: z.boolean().default(true),
+  plan_id: z.string().uuid().optional(),
   admin_email: z.string().email('Email admin invalide'),
-  admin_first_name: z.string().min(1, 'Prénom admin requis'),
-  admin_last_name: z.string().min(1, 'Nom admin requis'),
+  admin_first_name: z.string().optional(),
+  admin_last_name: z.string().optional(),
   start_with_trial: z.boolean().default(true)
 });
 
@@ -271,13 +279,16 @@ router.post('/tenants', async (req, res) => {
   try {
     const data = createTenantSchema.parse(req.body);
 
-    // Récupérer le plan trial
-    const trialPlan = await queryOne(
-      `SELECT * FROM subscription_plans WHERE slug = 'trial'`
-    );
-
-    if (!trialPlan) {
-      return res.status(500).json({ error: 'Plan trial non configuré' });
+    // Récupérer le plan (soit celui spécifié, soit le plan trial par défaut)
+    let planId = data.plan_id;
+    if (!planId) {
+      const trialPlan = await queryOne(
+        `SELECT * FROM subscription_plans WHERE slug = 'trial'`
+      );
+      if (!trialPlan) {
+        return res.status(500).json({ error: 'Plan trial non configuré' });
+      }
+      planId = trialPlan.id;
     }
 
     // 1. Créer le tenant
@@ -286,10 +297,26 @@ router.post('/tenants', async (req, res) => {
 
     const tenant = await queryOne(
       `INSERT INTO tenants
-       (name, billing_email, company_siret, company_address, status, trial_ends_at, current_plan_id)
-       VALUES ($1, $2, $3, $4, 'trial', $5, $6)
+       (name, billing_email, phone, address, city, postal_code, country,
+        company_siret, company_siren, company_vat, vat_applicable,
+        status, trial_ends_at, current_plan_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'trial', $12, $13)
        RETURNING *`,
-      [data.name, data.billing_email, data.company_siret, data.company_address, trialEndsAt, trialPlan.id]
+      [
+        data.name,
+        data.billing_email,
+        data.phone || null,
+        data.address || null,
+        data.city || null,
+        data.postal_code || null,
+        data.country || 'France',
+        data.siret || null,
+        data.siren || null,
+        data.vat_number || null,
+        data.vat_applicable !== false,
+        trialEndsAt,
+        planId
+      ]
     );
 
     // 2. Créer l'admin user
@@ -311,7 +338,7 @@ router.post('/tenants', async (req, res) => {
        (tenant_id, plan_id, status, start_date, end_date, trial_ends_at, billing_cycle, price, mrr, arr, auto_renew)
        VALUES ($1, $2, 'active', CURRENT_DATE, $3, $3, 'monthly', 0, 0, 0, false)
        RETURNING *`,
-      [tenant.id, trialPlan.id, trialEndsAt]
+      [tenant.id, planId, trialEndsAt]
     );
 
     // Log l'action
@@ -510,7 +537,10 @@ router.post('/tenants/:id/activate', async (req, res) => {
 router.put('/tenants/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, billing_email, phone, address, city, postal_code, country } = req.body;
+    const {
+      name, billing_email, phone, address, city, postal_code, country,
+      company_siret, company_siren, company_vat, vat_applicable
+    } = req.body;
 
     const { rows } = await q(
       `UPDATE tenants
@@ -521,10 +551,15 @@ router.put('/tenants/:id', async (req, res) => {
            city = COALESCE($5, city),
            postal_code = COALESCE($6, postal_code),
            country = COALESCE($7, country),
+           company_siret = COALESCE($8, company_siret),
+           company_siren = COALESCE($9, company_siren),
+           company_vat = COALESCE($10, company_vat),
+           vat_applicable = COALESCE($11, vat_applicable),
            updated_at = NOW()
-       WHERE id = $8
+       WHERE id = $12
        RETURNING *`,
-      [name, billing_email, phone, address, city, postal_code, country, id]
+      [name, billing_email, phone, address, city, postal_code, country,
+       company_siret, company_siren, company_vat, vat_applicable, id]
     );
 
     if (!rows.length) {
@@ -1280,14 +1315,22 @@ router.get('/invoices/:id/pdf', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Récupérer la facture
+    // Récupérer la facture avec toutes les infos nécessaires
     const { rows } = await q(
-      `SELECT i.*, t.name as tenant_name, t.billing_email as tenant_email,
+      `SELECT i.*,
+              t.name as tenant_name,
+              t.billing_email as tenant_email,
+              t.address as tenant_address,
+              t.city as tenant_city,
+              t.postal_code as tenant_postal_code,
+              t.country as tenant_country,
+              t.company_siret as tenant_siret,
+              t.company_vat as tenant_vat,
               sp.name as plan_name
        FROM invoices i
-       JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
-       JOIN tenants t ON ts.tenant_id = t.id
-       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       LEFT JOIN tenant_subscriptions ts ON i.subscription_id = ts.id
+       LEFT JOIN tenants t ON i.tenant_id = t.id OR ts.tenant_id = t.id
+       LEFT JOIN subscription_plans sp ON ts.plan_id = sp.id
        WHERE i.id = $1`,
       [id]
     );
@@ -1297,14 +1340,138 @@ router.get('/invoices/:id/pdf', async (req, res) => {
     }
 
     const invoice = rows[0];
+    const items = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : (invoice.items || []);
 
-    // TODO: Générer PDF avec une bibliothèque comme PDFKit ou Puppeteer
-    // Pour l'instant, retourner les données JSON
-    res.json({
-      success: true,
-      invoice,
-      message: 'Génération PDF à implémenter avec PDFKit ou Puppeteer'
-    });
+    // Générer le HTML de la facture
+    const invoiceHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #333; font-size: 14px; }
+          .container { max-width: 800px; margin: 0 auto; padding: 40px; }
+          .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
+          .logo { font-size: 28px; font-weight: bold; color: #4F46E5; }
+          .invoice-title { font-size: 32px; color: #4F46E5; margin-bottom: 8px; }
+          .invoice-number { font-size: 16px; color: #666; }
+          .info-section { display: flex; justify-content: space-between; margin-bottom: 40px; }
+          .info-box { flex: 1; }
+          .info-box h3 { font-size: 12px; text-transform: uppercase; color: #666; margin-bottom: 8px; }
+          .info-box p { margin: 4px 0; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          .items-table th { background: #4F46E5; color: white; padding: 12px; text-align: left; }
+          .items-table td { padding: 12px; border-bottom: 1px solid #eee; }
+          .items-table .amount { text-align: right; }
+          .totals { text-align: right; margin-top: 20px; }
+          .totals .row { display: flex; justify-content: flex-end; margin: 8px 0; }
+          .totals .label { width: 150px; }
+          .totals .value { width: 120px; text-align: right; font-weight: bold; }
+          .totals .grand-total { font-size: 18px; color: #4F46E5; border-top: 2px solid #4F46E5; padding-top: 12px; }
+          .footer { margin-top: 60px; text-align: center; font-size: 12px; color: #666; }
+          .status-paid { background: #10B981; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; }
+          .status-pending { background: #F59E0B; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div>
+              <div class="logo">LeadSynch</div>
+              <p>TRINEXTA / TrusTech IT Support</p>
+              <p>SIRET: 94202008200015</p>
+            </div>
+            <div style="text-align: right;">
+              <div class="invoice-title">FACTURE</div>
+              <div class="invoice-number">${invoice.invoice_number}</div>
+              <div style="margin-top: 8px;">
+                <span class="${invoice.status === 'paid' ? 'status-paid' : 'status-pending'}">
+                  ${invoice.status === 'paid' ? 'PAYÉE' : 'EN ATTENTE'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-box">
+              <h3>Facturé à</h3>
+              <p><strong>${invoice.tenant_name || 'Client'}</strong></p>
+              <p>${invoice.tenant_address || ''}</p>
+              <p>${invoice.tenant_postal_code || ''} ${invoice.tenant_city || ''}</p>
+              <p>${invoice.tenant_country || 'France'}</p>
+              ${invoice.tenant_siret ? `<p>SIRET: ${invoice.tenant_siret}</p>` : ''}
+              ${invoice.tenant_vat ? `<p>TVA: ${invoice.tenant_vat}</p>` : ''}
+            </div>
+            <div class="info-box" style="text-align: right;">
+              <h3>Dates</h3>
+              <p><strong>Émission:</strong> ${new Date(invoice.issue_date).toLocaleDateString('fr-FR')}</p>
+              <p><strong>Échéance:</strong> ${new Date(invoice.due_date).toLocaleDateString('fr-FR')}</p>
+              ${invoice.paid_at ? `<p><strong>Payée le:</strong> ${new Date(invoice.paid_at).toLocaleDateString('fr-FR')}</p>` : ''}
+            </div>
+          </div>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th style="width: 80px;">Qté</th>
+                <th style="width: 100px;" class="amount">Prix unitaire</th>
+                <th style="width: 100px;" class="amount">Total HT</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.length > 0 ? items.map(item => `
+                <tr>
+                  <td>${item.description}</td>
+                  <td>${item.quantity}</td>
+                  <td class="amount">${parseFloat(item.unit_price || 0).toFixed(2)} €</td>
+                  <td class="amount">${parseFloat(item.total || 0).toFixed(2)} €</td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td>${invoice.plan_name || 'Abonnement LeadSynch'}</td>
+                  <td>1</td>
+                  <td class="amount">${parseFloat(invoice.subtotal || invoice.total || 0).toFixed(2)} €</td>
+                  <td class="amount">${parseFloat(invoice.subtotal || invoice.total || 0).toFixed(2)} €</td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="row">
+              <div class="label">Sous-total HT:</div>
+              <div class="value">${parseFloat(invoice.subtotal || invoice.total / 1.2 || 0).toFixed(2)} €</div>
+            </div>
+            <div class="row">
+              <div class="label">TVA (${invoice.tax_rate || 20}%):</div>
+              <div class="value">${parseFloat(invoice.tax_amount || invoice.total * 0.2 / 1.2 || 0).toFixed(2)} €</div>
+            </div>
+            <div class="row grand-total">
+              <div class="label">Total TTC:</div>
+              <div class="value">${parseFloat(invoice.total || 0).toFixed(2)} €</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>LeadSynch - Solution CRM & Lead Management</p>
+            <p>TRINEXTA / TrusTech IT Support - SIRET: 94202008200015</p>
+            <p>Email: facturation@leadsynch.com</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Générer le PDF avec Puppeteer
+    const { generatePDFFromHTML } = await import('../services/pdfGenerator.js');
+    const pdfBuffer = await generatePDFFromHTML(invoiceHTML);
+
+    // Envoyer le PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Facture_${invoice.invoice_number}.pdf"`);
+    res.send(pdfBuffer);
 
   } catch (error) {
     console.error('❌ Erreur génération PDF:', error);
