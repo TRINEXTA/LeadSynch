@@ -1,6 +1,8 @@
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
+import crypto from 'crypto';
+import { sendEmail } from '../services/elasticEmail.js';
 
 // Validation schemas
 const createContractSchema = z.object({
@@ -178,19 +180,59 @@ export default async function handler(req, res) {
       if (data.send_for_signature && data.lead_id) {
         // Get lead info for email
         const lead = await queryOne(
-          `SELECT email, company_name FROM leads WHERE id = $1`,
+          `SELECT email, company_name, contact_name FROM leads WHERE id = $1`,
           [data.lead_id]
         );
 
         if (lead?.email) {
+          // Generate unique signature token
+          const signatureToken = crypto.randomBytes(32).toString('hex');
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+          // Create signature record
+          await query(
+            `INSERT INTO contract_signatures
+             (contract_id, tenant_id, signer_email, signer_company, signature_token, status)
+             VALUES ($1, $2, $3, $4, $5, 'pending')`,
+            [contract.id, tenantId, lead.email, lead.company_name, signatureToken]
+          );
+
+          // Create secure token
+          await query(
+            `INSERT INTO signature_tokens (contract_id, token, expires_at)
+             VALUES ($1, $2, $3)`,
+            [contract.id, signatureToken, expiresAt]
+          );
+
           // Update contract with sent_at
           await execute(
             `UPDATE contracts SET sent_at = NOW() WHERE id = $1`,
             [contract.id]
           );
 
-          // TODO: Send signature email via signature service
-          // For now, just mark as sent
+          // Send signature email
+          const signatureLink = `${process.env.FRONTEND_URL || 'https://app.leadsynch.com'}/sign/${signatureToken}`;
+
+          await sendEmail({
+            to: lead.email,
+            subject: `Signature de contrat - ${reference}`,
+            htmlBody: `
+              <h2>Bonjour ${lead.contact_name || 'Client'},</h2>
+              <p>Votre contrat <strong>${data.offer_name}</strong> est prêt à être signé.</p>
+              <p><strong>Contrat N° ${reference}</strong></p>
+              <p>Montant: ${data.total_amount} € TTC</p>
+              <br>
+              <a href="${signatureLink}" style="display:inline-block;background:#4F46E5;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">
+                Signer le contrat
+              </a>
+              <br><br>
+              <p>Ce lien est valide pendant 7 jours.</p>
+              <br>
+              <p>Cordialement,<br>L'équipe LeadSynch</p>
+            `
+          });
+
+          console.log(`✅ Email de signature envoyé à ${lead.email} pour contrat ${reference}`);
         }
       }
 
