@@ -3,6 +3,7 @@ import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { sendEmail } from '../services/elasticEmail.js';
+import { generateContractPDF, savePDF } from '../services/pdfGenerator.js';
 
 // Validation schemas
 const createContractSchema = z.object({
@@ -50,14 +51,17 @@ export default async function handler(req, res) {
   try {
     // GET /api/contracts - List contracts
     // GET /api/contracts/:id - Get single contract
+    // GET /api/contracts/:id?action=pdf - Generate PDF
     if (method === 'GET') {
       const contractId = req.params?.id || req.query?.id;
+      const action = req.query?.action;
 
       if (contractId) {
-        // Get single contract
+        // Get single contract with full lead info
         const contract = await queryOne(
           `SELECT c.*, l.company_name, l.email as lead_email, l.phone as lead_phone,
-                  l.address as lead_address, l.city as lead_city,
+                  l.address as lead_address, l.city as lead_city, l.postal_code as lead_postal_code,
+                  l.contact_name as lead_contact_name,
                   u.first_name as created_by_name, u.last_name as created_by_lastname
            FROM contracts c
            LEFT JOIN leads l ON c.lead_id = l.id
@@ -68,6 +72,55 @@ export default async function handler(req, res) {
 
         if (!contract) {
           return res.status(404).json({ error: 'Contrat non trouvé' });
+        }
+
+        // Generate PDF if requested
+        if (action === 'pdf') {
+          // Get tenant info for PDF header
+          const tenant = await queryOne(
+            `SELECT t.*, bc.company_name as name, bc.siret, bc.tva_number,
+                    bc.address, bc.postal_code, bc.city, bc.phone, bc.email as company_email
+             FROM tenants t
+             LEFT JOIN billing_configs bc ON t.id = bc.tenant_id
+             WHERE t.id = $1`,
+            [tenantId]
+          );
+
+          // Build lead object for template
+          const lead = {
+            company_name: contract.company_name,
+            contact_name: contract.lead_contact_name,
+            email: contract.lead_email,
+            phone: contract.lead_phone,
+            address: contract.lead_address,
+            postal_code: contract.lead_postal_code,
+            city: contract.lead_city
+          };
+
+          // Parse services if JSON string
+          const contractData = {
+            ...contract,
+            services: typeof contract.services === 'string'
+              ? JSON.parse(contract.services)
+              : contract.services
+          };
+
+          // Generate PDF
+          const pdfBuffer = await generateContractPDF(contractData, lead, tenant);
+          const filename = `contrat-${contract.reference || contract.id.substring(0, 8)}.pdf`;
+          const pdfUrl = await savePDF(pdfBuffer, filename);
+
+          // Return PDF as base64 for frontend download
+          const pdfBase64 = pdfBuffer.toString('base64');
+
+          return res.json({
+            success: true,
+            pdf_url: pdfUrl,
+            pdf_base64: pdfBase64,
+            filename,
+            contract_id: contract.id,
+            reference: contract.reference
+          });
         }
 
         return res.json({ contract });

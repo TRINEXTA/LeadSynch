@@ -86,6 +86,10 @@ const GeographicSectors = lazy(() => import('./pages/GeographicSectors'));
 // Signature de contrats
 const SignContract = lazy(() => import('./pages/SignContract'));
 
+// Devis et contrats
+const Proposals = lazy(() => import('./pages/Proposals'));
+const Contracts = lazy(() => import('./pages/Contracts'));
+
 // Billing et crédits
 const Billing = lazy(() => import('./pages/Billing'));
 const LeadCredits = lazy(() => import('./pages/LeadCredits'));
@@ -171,6 +175,8 @@ function App() {
               <Route path="/Campaigns" element={<Campaigns />} />
               <Route path="/CampaignsManager" element={<CampaignsManager />} />
               <Route path="/pipeline" element={<Pipeline />} />
+              <Route path="/proposals" element={<Proposals />} />
+              <Route path="/contracts" element={<Contracts />} />
               <Route path="/CampaignDetails" element={<CampaignDetails />} />
               <Route path="/CampaignDetailsPhoning" element={<CampaignDetailsPhoning />} />
               <Route path="/CampaignAnalytics" element={<CampaignAnalytics />} />
