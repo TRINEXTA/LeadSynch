@@ -29,7 +29,8 @@ import {
   Package,
   Crown,
   Activity,
-  FileText
+  FileText,
+  FileCheck
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -88,6 +89,8 @@ export default function Sidebar() {
         { name: 'Mes Rappels', href: '/FollowUps', icon: Calendar, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mode Prospection', href: '/ProspectingMode', icon: Phone, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin', 'manager'] },
+        { name: 'Mes Devis', href: '/proposals', icon: FileText, roles: ['commercial', 'admin', 'manager'] },
+        { name: 'Contrats', href: '/contracts', icon: FileCheck, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Gestion Campagnes', href: '/CampaignsManager', icon: Target, roles: ['admin', 'manager'] },
         { name: 'Campagnes', href: '/Campaigns', icon: Mail, roles: ['admin', 'manager'] },
         { name: 'Statistiques', href: '/Statistics', icon: BarChart3, roles: ['admin'] }

@@ -1,6 +1,7 @@
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
+import { generateProposalPDF, savePDF } from '../services/pdfGenerator.js';
 
 // Validation schemas
 const createProposalSchema = z.object({
@@ -45,13 +46,16 @@ export default async function handler(req, res) {
   try {
     // GET /api/proposals - List proposals
     // GET /api/proposals/:id - Get single proposal
+    // GET /api/proposals/:id?action=pdf - Download PDF
     if (method === 'GET') {
       const proposalId = req.params?.id || req.query?.id;
+      const action = req.query?.action;
 
       if (proposalId) {
-        // Get single proposal
+        // Get single proposal with full lead and tenant info
         const proposal = await queryOne(
           `SELECT p.*, l.company_name, l.email as lead_email, l.phone as lead_phone,
+                  l.contact_name, l.address as lead_address, l.city as lead_city, l.postal_code as lead_postal_code,
                   u.first_name as created_by_name
            FROM proposals p
            LEFT JOIN leads l ON p.lead_id = l.id
@@ -61,7 +65,56 @@ export default async function handler(req, res) {
         );
 
         if (!proposal) {
-          return res.status(404).json({ error: 'Devis non trouvé' });
+          return res.status(404).json({ error: 'Devis non trouve' });
+        }
+
+        // Generate PDF if requested
+        if (action === 'pdf') {
+          // Get tenant info for PDF
+          const tenant = await queryOne(
+            `SELECT t.*, bc.company_name as name, bc.siret, bc.tva_number, bc.address, bc.postal_code, bc.city, bc.email as contact_email
+             FROM tenants t
+             LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+             WHERE t.id = $1`,
+            [tenantId]
+          );
+
+          // Parse services if string
+          const services = typeof proposal.services === 'string'
+            ? JSON.parse(proposal.services)
+            : proposal.services;
+
+          // Build lead object for PDF
+          const lead = {
+            company_name: proposal.company_name,
+            contact_name: proposal.contact_name,
+            email: proposal.lead_email,
+            phone: proposal.lead_phone,
+            address: proposal.lead_address,
+            city: proposal.lead_city,
+            postal_code: proposal.lead_postal_code
+          };
+
+          // Generate PDF
+          const pdfBuffer = await generateProposalPDF(
+            { ...proposal, services },
+            lead,
+            tenant
+          );
+
+          // Save PDF and return URL
+          const filename = `devis-${proposal.reference || proposal.id.substring(0, 8)}.pdf`;
+          const pdfUrl = await savePDF(pdfBuffer, filename);
+
+          // Also return base64 for direct download
+          const pdfBase64 = pdfBuffer.toString('base64');
+
+          return res.json({
+            success: true,
+            pdf_url: pdfUrl,
+            pdf_base64: pdfBase64,
+            filename: filename
+          });
         }
 
         return res.json({ proposal });
