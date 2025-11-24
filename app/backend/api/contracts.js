@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     // GET /api/contracts - List contracts
     // GET /api/contracts/:id - Get single contract
     if (method === 'GET') {
-      const contractId = req.query.id;
+      const contractId = req.params?.id || req.query?.id;
 
       if (contractId) {
         // Get single contract
@@ -125,12 +125,14 @@ export default async function handler(req, res) {
     if (method === 'POST') {
       const data = createContractSchema.parse(req.body);
 
-      // Generate reference
-      const refResult = await queryOne(
-        `SELECT generate_contract_reference($1) as reference`,
-        [tenantId]
+      // Generate reference manually (simple format)
+      const year = new Date().getFullYear();
+      const countResult = await queryOne(
+        `SELECT COUNT(*) as count FROM contracts WHERE tenant_id = $1 AND reference LIKE $2`,
+        [tenantId, `CTR-${year}-%`]
       );
-      const reference = refResult?.reference || `CTR-${new Date().getFullYear()}-0001`;
+      const seq = (parseInt(countResult?.count) || 0) + 1;
+      const reference = `CTR-${year}-${String(seq).padStart(4, '0')}`;
 
       // Calculate end date based on contract type
       let end_date = null;
@@ -201,7 +203,7 @@ export default async function handler(req, res) {
 
     // PUT /api/contracts/:id - Update contract
     if (method === 'PUT') {
-      const contractId = req.query.id;
+      const contractId = req.params?.id || req.query?.id;
       if (!contractId) {
         return res.status(400).json({ error: 'ID du contrat requis' });
       }
@@ -269,7 +271,7 @@ export default async function handler(req, res) {
 
     // DELETE /api/contracts/:id
     if (method === 'DELETE') {
-      const contractId = req.query.id;
+      const contractId = req.params?.id || req.query?.id;
       if (!contractId) {
         return res.status(400).json({ error: 'ID du contrat requis' });
       }

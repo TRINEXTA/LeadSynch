@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     // GET /api/proposals - List proposals
     // GET /api/proposals/:id - Get single proposal
     if (method === 'GET') {
-      const proposalId = req.query.id;
+      const proposalId = req.params?.id || req.query?.id;
 
       if (proposalId) {
         // Get single proposal
@@ -121,23 +121,23 @@ export default async function handler(req, res) {
     if (method === 'POST') {
       const data = createProposalSchema.parse(req.body);
 
-      // Generate reference
-      const refResult = await queryOne(
-        `SELECT generate_proposal_reference($1) as reference`,
-        [tenantId]
+      // Generate reference manually (simple format)
+      const year = new Date().getFullYear();
+      const countResult = await queryOne(
+        `SELECT COUNT(*) as count FROM proposals WHERE tenant_id = $1 AND reference LIKE $2`,
+        [tenantId, `DEV-${year}-%`]
       );
-      const reference = refResult?.reference || `DEV-${new Date().getFullYear()}-0001`;
+      const seq = (parseInt(countResult?.count) || 0) + 1;
+      const reference = `DEV-${year}-${String(seq).padStart(4, '0')}`;
 
       // Calculate totals
       const total_ht = data.total_ht || data.services.reduce((sum, s) => sum + (s.quantity * s.unit_price), 0);
-      const tax_rate = 20;
-      const total_ttc = total_ht * (1 + tax_rate / 100);
 
       const proposal = await queryOne(
         `INSERT INTO proposals (
           tenant_id, lead_id, pipeline_lead_id, reference, services,
-          total_ht, tax_rate, total_ttc, notes, valid_until, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          total_ht, notes, valid_until, created_by, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft')
         RETURNING *`,
         [
           tenantId,
@@ -146,8 +146,6 @@ export default async function handler(req, res) {
           reference,
           JSON.stringify(data.services),
           total_ht,
-          tax_rate,
-          total_ttc,
           data.notes || null,
           data.valid_until || null,
           userId
@@ -159,7 +157,7 @@ export default async function handler(req, res) {
 
     // PUT /api/proposals/:id - Update proposal
     if (method === 'PUT') {
-      const proposalId = req.query.id;
+      const proposalId = req.params?.id || req.query?.id;
       if (!proposalId) {
         return res.status(400).json({ error: 'ID du devis requis' });
       }
@@ -238,7 +236,7 @@ export default async function handler(req, res) {
 
     // DELETE /api/proposals/:id
     if (method === 'DELETE') {
-      const proposalId = req.query.id;
+      const proposalId = req.params?.id || req.query?.id;
       if (!proposalId) {
         return res.status(400).json({ error: 'ID du devis requis' });
       }
