@@ -132,14 +132,12 @@ export default async function handler(req, res) {
 
       // Calculate totals
       const total_ht = data.total_ht || data.services.reduce((sum, s) => sum + (s.quantity * s.unit_price), 0);
-      const tax_rate = 20;
-      const total_ttc = total_ht * (1 + tax_rate / 100);
 
       const proposal = await queryOne(
         `INSERT INTO proposals (
           tenant_id, lead_id, pipeline_lead_id, reference, services,
-          total_ht, tax_rate, total_ttc, notes, valid_until, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          total_ht, notes, valid_until, created_by, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft')
         RETURNING *`,
         [
           tenantId,
@@ -148,8 +146,6 @@ export default async function handler(req, res) {
           reference,
           JSON.stringify(data.services),
           total_ht,
-          tax_rate,
-          total_ttc,
           data.notes || null,
           data.valid_until || null,
           userId
