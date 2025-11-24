@@ -74,7 +74,7 @@ export default async function handler(req, res) {
           const tenant = await queryOne(
             `SELECT t.*, bc.company_name as name, bc.siret, bc.tva_number, bc.address, bc.postal_code, bc.city, bc.email as contact_email
              FROM tenants t
-             LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+             LEFT JOIN billing_configs bc ON t.id = bc.tenant_id
              WHERE t.id = $1`,
             [tenantId]
           );

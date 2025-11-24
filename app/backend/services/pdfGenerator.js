@@ -1,39 +1,16 @@
-import puppeteer from 'puppeteer';
+import PDFDocument from 'pdfkit';
 import fs from 'fs/promises';
 import path from 'path';
 
-export async function generatePDFFromHTML(htmlContent, options = {}) {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
-      format: options.format || 'A4',
-      printBackground: true,
-      margin: {
-        top: '20mm',
-        right: '15mm',
-        bottom: '20mm',
-        left: '15mm'
-      }
-    });
-
-    return pdfBuffer;
-  } catch (error) {
-    console.error('Erreur generation PDF:', error);
-    throw error;
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
-  }
-}
+// Colors
+const COLORS = {
+  primary: '#4F46E5',
+  secondary: '#6366F1',
+  text: '#333333',
+  textLight: '#666666',
+  border: '#E5E7EB',
+  background: '#F9FAFB'
+};
 
 export async function savePDF(pdfBuffer, filename) {
   try {
@@ -50,252 +27,201 @@ export async function savePDF(pdfBuffer, filename) {
   }
 }
 
-// Template HTML pour les devis
-const getProposalTemplate = (proposal, lead, tenant) => `
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; line-height: 1.6; padding: 40px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 3px solid #4F46E5; padding-bottom: 20px; }
-    .logo { font-size: 28px; font-weight: bold; color: #4F46E5; }
-    .logo span { color: #333; }
-    .company-info { text-align: right; font-size: 12px; color: #666; }
-    .document-title { text-align: center; margin: 30px 0; }
-    .document-title h1 { font-size: 24px; color: #4F46E5; margin-bottom: 5px; }
-    .document-title .reference { font-size: 14px; color: #666; }
-    .section { margin-bottom: 30px; }
-    .section-title { font-size: 14px; font-weight: bold; color: #4F46E5; margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 5px; }
-    .client-info { background: #f8f9fa; padding: 15px; border-radius: 8px; }
-    .client-info p { margin: 5px 0; }
-    .services-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    .services-table th { background: #4F46E5; color: white; padding: 12px; text-align: left; font-size: 12px; }
-    .services-table td { padding: 12px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
-    .services-table tr:nth-child(even) { background: #f8f9fa; }
-    .totals { margin-top: 20px; text-align: right; }
-    .totals-table { display: inline-block; text-align: left; }
-    .totals-table tr td { padding: 8px 20px; }
-    .totals-table tr td:first-child { color: #666; }
-    .totals-table tr td:last-child { font-weight: bold; }
-    .totals-table .total-ttc { font-size: 18px; color: #4F46E5; background: #f0f0ff; }
-    .validity { margin-top: 30px; padding: 15px; background: #fff3cd; border-radius: 8px; font-size: 13px; }
-    .notes { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 13px; }
-    .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #e0e0e0; padding-top: 20px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="logo">Lead<span>Synch</span></div>
-      <p style="font-size: 12px; color: #666; margin-top: 5px;">${tenant?.name || 'Votre entreprise'}</p>
-    </div>
-    <div class="company-info">
-      <p><strong>${tenant?.name || ''}</strong></p>
-      <p>${tenant?.address || ''}</p>
-      <p>${tenant?.postal_code || ''} ${tenant?.city || ''}</p>
-      <p>SIRET: ${tenant?.siret || ''}</p>
-      <p>Email: ${tenant?.email || ''}</p>
-    </div>
-  </div>
-  <div class="document-title">
-    <h1>DEVIS</h1>
-    <p class="reference">Ref: ${proposal.reference} | Date: ${new Date(proposal.created_at).toLocaleDateString('fr-FR')}</p>
-  </div>
-  <div class="section">
-    <div class="section-title">CLIENT</div>
-    <div class="client-info">
-      <p><strong>${lead?.company_name || 'Client'}</strong></p>
-      <p>${lead?.contact_name || ''}</p>
-      <p>${lead?.address || ''}</p>
-      <p>${lead?.postal_code || ''} ${lead?.city || ''}</p>
-      <p>Email: ${lead?.email || ''}</p>
-      <p>Tel: ${lead?.phone || ''}</p>
-    </div>
-  </div>
-  <div class="section">
-    <div class="section-title">PRESTATIONS</div>
-    <table class="services-table">
-      <thead>
-        <tr>
-          <th style="width: 50%">Description</th>
-          <th style="width: 15%">Quantite</th>
-          <th style="width: 17%">Prix unitaire</th>
-          <th style="width: 18%">Total HT</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${(proposal.services || []).map(s => `
-          <tr>
-            <td>
-              <strong>${s.name || 'Service'}</strong>
-              ${s.description ? `<br><span style="color: #666; font-size: 11px;">${s.description}</span>` : ''}
-            </td>
-            <td>${s.quantity || 1}</td>
-            <td>${(s.unit_price || 0).toFixed(2)} EUR</td>
-            <td>${((s.quantity || 1) * (s.unit_price || 0)).toFixed(2)} EUR</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>
-  <div class="totals">
-    <table class="totals-table">
-      <tr><td>Total HT</td><td>${(proposal.total_ht || 0).toFixed(2)} EUR</td></tr>
-      <tr><td>TVA (${proposal.tax_rate || 20}%)</td><td>${(proposal.total_tva || 0).toFixed(2)} EUR</td></tr>
-      <tr class="total-ttc"><td>Total TTC</td><td>${(proposal.total_ttc || 0).toFixed(2)} EUR</td></tr>
-    </table>
-  </div>
-  ${proposal.valid_until ? `<div class="validity"><strong>Validite:</strong> Ce devis est valable jusqu'au ${new Date(proposal.valid_until).toLocaleDateString('fr-FR')}.</div>` : ''}
-  ${proposal.notes ? `<div class="notes"><strong>Notes:</strong><br>${proposal.notes}</div>` : ''}
-  <div class="footer">
-    <p>${tenant?.name || ''} - ${tenant?.address || ''} ${tenant?.postal_code || ''} ${tenant?.city || ''}</p>
-    <p>SIRET: ${tenant?.siret || ''} | TVA: ${tenant?.tva_number || ''}</p>
-  </div>
-</body>
-</html>
-`;
-
-// Template HTML pour les contrats
-const getContractTemplate = (contract, lead, tenant) => `
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; line-height: 1.6; padding: 40px; font-size: 12px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 3px solid #4F46E5; padding-bottom: 20px; }
-    .logo { font-size: 24px; font-weight: bold; color: #4F46E5; }
-    .logo span { color: #333; }
-    .company-info { text-align: right; font-size: 11px; color: #666; }
-    .document-title { text-align: center; margin: 20px 0; }
-    .document-title h1 { font-size: 22px; color: #4F46E5; margin-bottom: 5px; }
-    .parties { display: flex; gap: 30px; margin-bottom: 25px; }
-    .party { flex: 1; padding: 15px; border-radius: 8px; }
-    .party.provider { background: #f0f0ff; }
-    .party.client { background: #f8f9fa; }
-    .party-title { font-weight: bold; color: #4F46E5; margin-bottom: 8px; font-size: 13px; }
-    .section { margin-bottom: 20px; }
-    .section-title { font-size: 13px; font-weight: bold; color: #4F46E5; margin-bottom: 8px; border-bottom: 1px solid #e0e0e0; padding-bottom: 5px; }
-    .contract-details { background: #f8f9fa; padding: 15px; border-radius: 8px; }
-    .contract-details table { width: 100%; }
-    .contract-details td { padding: 5px 0; }
-    .contract-details td:first-child { color: #666; width: 40%; }
-    .services-list { padding-left: 20px; }
-    .services-list li { margin: 5px 0; }
-    .price-box { background: #4F46E5; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
-    .price-box .amount { font-size: 28px; font-weight: bold; }
-    .price-box .period { font-size: 12px; opacity: 0.9; }
-    .terms { font-size: 11px; color: #666; margin-top: 20px; }
-    .terms h4 { color: #333; margin-bottom: 10px; }
-    .terms ol { padding-left: 20px; }
-    .terms li { margin: 8px 0; }
-    .signature-section { margin-top: 40px; display: flex; gap: 50px; }
-    .signature-box { flex: 1; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; min-height: 120px; }
-    .signature-box .label { font-size: 11px; color: #666; margin-bottom: 10px; }
-    .signature-box .date { margin-top: 60px; font-size: 11px; }
-    .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #e0e0e0; padding-top: 15px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="logo">Lead<span>Synch</span></div>
-      <p style="font-size: 11px; color: #666; margin-top: 5px;">${tenant?.name || ''}</p>
-    </div>
-    <div class="company-info">
-      <p><strong>Ref: ${contract.reference || contract.id?.substring(0, 8)}</strong></p>
-      <p>Date: ${new Date(contract.created_at).toLocaleDateString('fr-FR')}</p>
-    </div>
-  </div>
-  <div class="document-title">
-    <h1>CONTRAT DE PRESTATION DE SERVICES</h1>
-    <p style="font-size: 12px; color: #666;">${contract.offer_name || 'Contrat'}</p>
-  </div>
-  <div class="parties">
-    <div class="party provider">
-      <div class="party-title">LE PRESTATAIRE</div>
-      <p><strong>${tenant?.name || ''}</strong></p>
-      <p>${tenant?.address || ''}</p>
-      <p>${tenant?.postal_code || ''} ${tenant?.city || ''}</p>
-      <p>SIRET: ${tenant?.siret || ''}</p>
-    </div>
-    <div class="party client">
-      <div class="party-title">LE CLIENT</div>
-      <p><strong>${lead?.company_name || ''}</strong></p>
-      <p>${lead?.contact_name || ''}</p>
-      <p>${lead?.address || ''}</p>
-      <p>${lead?.postal_code || ''} ${lead?.city || ''}</p>
-    </div>
-  </div>
-  <div class="section">
-    <div class="section-title">OBJET DU CONTRAT</div>
-    <div class="contract-details">
-      <table>
-        <tr><td>Offre</td><td><strong>${contract.offer_name || ''}</strong></td></tr>
-        <tr><td>Type de contrat</td><td>${contract.contract_type === 'avec_engagement_12' ? 'Avec engagement 12 mois' : 'Sans engagement'}</td></tr>
-        <tr><td>Frequence de paiement</td><td>${contract.payment_frequency === 'mensuel' ? 'Mensuel' : 'Annuel'}</td></tr>
-        <tr><td>Nombre d\'utilisateurs</td><td>${contract.user_count || 1}</td></tr>
-        <tr><td>Date de debut</td><td>${contract.start_date ? new Date(contract.start_date).toLocaleDateString('fr-FR') : '-'}</td></tr>
-        ${contract.end_date ? `<tr><td>Date de fin</td><td>${new Date(contract.end_date).toLocaleDateString('fr-FR')}</td></tr>` : ''}
-      </table>
-    </div>
-  </div>
-  ${contract.services && contract.services.length > 0 ? `
-  <div class="section">
-    <div class="section-title">SERVICES INCLUS</div>
-    <ul class="services-list">
-      ${(typeof contract.services === 'string' ? JSON.parse(contract.services) : contract.services).map(s => `<li>${s}</li>`).join('')}
-    </ul>
-  </div>
-  ` : ''}
-  <div class="price-box">
-    <div class="amount">${(contract.monthly_price || 0).toFixed(2)} EUR</div>
-    <div class="period">par mois ${contract.payment_frequency === 'annuel' ? `(${(contract.total_amount || 0).toFixed(2)} EUR/an)` : ''}</div>
-  </div>
-  <div class="terms">
-    <h4>CONDITIONS GENERALES</h4>
-    <ol>
-      <li><strong>Duree:</strong> ${contract.contract_type === 'avec_engagement_12' ? 'Le present contrat est conclu pour une duree de 12 mois.' : 'Le present contrat est conclu sans engagement de duree minimale.'}</li>
-      <li><strong>Paiement:</strong> Le paiement s\'effectue ${contract.payment_frequency === 'mensuel' ? 'mensuellement' : 'annuellement'} par prelevement automatique.</li>
-      <li><strong>Resiliation:</strong> ${contract.contract_type === 'avec_engagement_12' ? 'Toute resiliation anticipee entrainera le paiement des mensualites restantes.' : 'Le contrat peut etre resilie a tout moment avec un preavis de 30 jours.'}</li>
-    </ol>
-  </div>
-  ${contract.notes ? `<div class="section" style="margin-top: 20px;"><div class="section-title">NOTES</div><p>${contract.notes}</p></div>` : ''}
-  <div class="signature-section">
-    <div class="signature-box">
-      <div class="label">Le Prestataire<br><small>${tenant?.name || ''}</small></div>
-      <div class="date">Date: ____/____/________</div>
-    </div>
-    <div class="signature-box">
-      <div class="label">Le Client<br><small>${lead?.company_name || ''}</small></div>
-      <div class="date">Date: ____/____/________</div>
-    </div>
-  </div>
-  <div class="footer">
-    <p>${tenant?.name || ''} - SIRET: ${tenant?.siret || ''}</p>
-  </div>
-</body>
-</html>
-`;
-
-// Generer PDF de devis
+// Generate Proposal/Quote PDF
 export async function generateProposalPDF(proposal, lead, tenant) {
-  const html = getProposalTemplate(proposal, lead, tenant);
-  return generatePDFFromHTML(html);
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const chunks = [];
+
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Header
+      doc.fontSize(24).fillColor(COLORS.primary).text(tenant?.name || 'TRINEXTA', 50, 50);
+      doc.fontSize(10).fillColor(COLORS.textLight);
+      doc.text(tenant?.address || '', 50, 80);
+      doc.text(`${tenant?.postal_code || ''} ${tenant?.city || ''}`, 50, 95);
+      doc.text(`SIRET: ${tenant?.siret || 'N/A'}`, 50, 110);
+
+      // Document Title
+      doc.fontSize(20).fillColor(COLORS.primary).text('DEVIS', 400, 50, { align: 'right' });
+      doc.fontSize(12).fillColor(COLORS.text);
+      doc.text(`Référence: ${proposal.reference || 'N/A'}`, 400, 80, { align: 'right' });
+      doc.text(`Date: ${new Date(proposal.created_at || Date.now()).toLocaleDateString('fr-FR')}`, 400, 100, { align: 'right' });
+      if (proposal.valid_until) {
+        doc.text(`Valable jusqu'au: ${new Date(proposal.valid_until).toLocaleDateString('fr-FR')}`, 400, 120, { align: 'right' });
+      }
+
+      // Line separator
+      doc.moveTo(50, 150).lineTo(545, 150).strokeColor(COLORS.primary).lineWidth(2).stroke();
+
+      // Client info
+      doc.fontSize(12).fillColor(COLORS.primary).text('CLIENT', 50, 170);
+      doc.fontSize(11).fillColor(COLORS.text);
+      doc.text(lead?.company_name || 'Client', 50, 190);
+      if (lead?.contact_name) doc.text(`À l'attention de: ${lead.contact_name}`, 50, 205);
+      if (lead?.address) doc.text(lead.address, 50, 220);
+      if (lead?.postal_code || lead?.city) doc.text(`${lead?.postal_code || ''} ${lead?.city || ''}`, 50, 235);
+      if (lead?.email) doc.text(`Email: ${lead.email}`, 50, 250);
+
+      // Services table
+      let yPos = 290;
+      doc.fontSize(12).fillColor(COLORS.primary).text('PRESTATIONS', 50, yPos);
+      yPos += 25;
+
+      // Table header
+      doc.rect(50, yPos, 495, 25).fill(COLORS.primary);
+      doc.fontSize(10).fillColor('white');
+      doc.text('Description', 55, yPos + 7);
+      doc.text('Qté', 350, yPos + 7, { width: 50, align: 'center' });
+      doc.text('Prix unit. HT', 400, yPos + 7, { width: 70, align: 'right' });
+      doc.text('Total HT', 475, yPos + 7, { width: 65, align: 'right' });
+      yPos += 25;
+
+      // Table rows
+      const services = proposal.services || [];
+      doc.fillColor(COLORS.text).fontSize(10);
+
+      services.forEach((service, index) => {
+        const bgColor = index % 2 === 0 ? 'white' : COLORS.background;
+        doc.rect(50, yPos, 495, 25).fill(bgColor);
+        doc.fillColor(COLORS.text);
+        doc.text(service.name || service.description || 'Service', 55, yPos + 7, { width: 290 });
+        doc.text(String(service.quantity || 1), 350, yPos + 7, { width: 50, align: 'center' });
+        doc.text(`${(service.unit_price || 0).toFixed(2)} €`, 400, yPos + 7, { width: 70, align: 'right' });
+        doc.text(`${((service.quantity || 1) * (service.unit_price || 0)).toFixed(2)} €`, 475, yPos + 7, { width: 65, align: 'right' });
+        yPos += 25;
+      });
+
+      // Totals
+      yPos += 20;
+      const totalHT = proposal.total_ht || services.reduce((sum, s) => sum + (s.quantity || 1) * (s.unit_price || 0), 0);
+      const tva = proposal.total_tva || totalHT * 0.20;
+      const totalTTC = proposal.total_ttc || totalHT + tva;
+
+      doc.fontSize(11);
+      doc.text('Total HT:', 380, yPos).text(`${totalHT.toFixed(2)} €`, 475, yPos, { width: 65, align: 'right' });
+      yPos += 18;
+      doc.text('TVA (20%):', 380, yPos).text(`${tva.toFixed(2)} €`, 475, yPos, { width: 65, align: 'right' });
+      yPos += 18;
+      doc.fontSize(13).fillColor(COLORS.primary).font('Helvetica-Bold');
+      doc.text('Total TTC:', 380, yPos).text(`${totalTTC.toFixed(2)} €`, 475, yPos, { width: 65, align: 'right' });
+
+      // Notes
+      if (proposal.notes) {
+        yPos += 40;
+        doc.font('Helvetica').fontSize(10).fillColor(COLORS.textLight);
+        doc.text('Notes:', 50, yPos);
+        doc.text(proposal.notes, 50, yPos + 15, { width: 495 });
+      }
+
+      // Footer
+      doc.fontSize(9).fillColor(COLORS.textLight);
+      doc.text('Ce devis est valable 30 jours à compter de sa date d\'émission.', 50, 750, { align: 'center', width: 495 });
+      doc.text(`${tenant?.name || 'TRINEXTA'} - SIRET: ${tenant?.siret || 'N/A'}`, 50, 765, { align: 'center', width: 495 });
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
-// Generer PDF de contrat
+// Generate Contract PDF
 export async function generateContractPDF(contract, lead, tenant) {
-  const html = getContractTemplate(contract, lead, tenant);
-  return generatePDFFromHTML(html);
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const chunks = [];
+
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Header
+      doc.fontSize(24).fillColor(COLORS.primary).text(tenant?.name || 'TRINEXTA', 50, 50);
+      doc.fontSize(10).fillColor(COLORS.textLight);
+      doc.text(tenant?.address || '', 50, 80);
+      doc.text(`${tenant?.postal_code || ''} ${tenant?.city || ''}`, 50, 95);
+      doc.text(`SIRET: ${tenant?.siret || 'N/A'}`, 50, 110);
+
+      // Document Title
+      doc.fontSize(20).fillColor('#EA580C').text('CONTRAT', 400, 50, { align: 'right' });
+      doc.fontSize(12).fillColor(COLORS.text);
+      doc.text(`Référence: ${contract.reference || 'N/A'}`, 400, 80, { align: 'right' });
+      doc.text(`Date: ${new Date(contract.created_at || Date.now()).toLocaleDateString('fr-FR')}`, 400, 100, { align: 'right' });
+
+      // Line separator
+      doc.moveTo(50, 140).lineTo(545, 140).strokeColor('#EA580C').lineWidth(2).stroke();
+
+      // Client info
+      doc.fontSize(12).fillColor('#EA580C').text('CLIENT', 50, 160);
+      doc.fontSize(11).fillColor(COLORS.text);
+      doc.text(lead?.company_name || contract.company_name || 'Client', 50, 180);
+      if (lead?.contact_name) doc.text(`À l'attention de: ${lead.contact_name}`, 50, 195);
+      if (lead?.address) doc.text(lead.address, 50, 210);
+      if (lead?.postal_code || lead?.city) doc.text(`${lead?.postal_code || ''} ${lead?.city || ''}`, 50, 225);
+      if (lead?.email) doc.text(`Email: ${lead.email}`, 50, 240);
+
+      // Contract details
+      let yPos = 280;
+      doc.fontSize(12).fillColor('#EA580C').text('DÉTAILS DU CONTRAT', 50, yPos);
+      yPos += 25;
+
+      doc.fontSize(11).fillColor(COLORS.text);
+      doc.text(`Offre: ${contract.offer_name || 'N/A'}`, 50, yPos);
+      yPos += 18;
+      doc.text(`Type: ${contract.contract_type === 'avec_engagement_12' ? 'Avec engagement 12 mois' : 'Sans engagement'}`, 50, yPos);
+      yPos += 18;
+      doc.text(`Date de début: ${new Date(contract.start_date || Date.now()).toLocaleDateString('fr-FR')}`, 50, yPos);
+      yPos += 18;
+      doc.text(`Paiement: ${contract.payment_frequency === 'annuel' ? 'Annuel' : 'Mensuel'}`, 50, yPos);
+
+      // Services
+      yPos += 35;
+      doc.fontSize(12).fillColor('#EA580C').text('SERVICES INCLUS', 50, yPos);
+      yPos += 20;
+
+      const services = contract.services || [];
+      doc.fontSize(10).fillColor(COLORS.text);
+      services.forEach(service => {
+        doc.text(`• ${service}`, 60, yPos, { width: 480 });
+        yPos += 15;
+      });
+
+      // Pricing
+      yPos += 25;
+      doc.rect(50, yPos, 495, 60).fill(COLORS.background).stroke(COLORS.border);
+      doc.fontSize(14).fillColor('#EA580C').font('Helvetica-Bold');
+      doc.text('TARIFICATION', 60, yPos + 10);
+      doc.fontSize(12).fillColor(COLORS.text);
+      doc.text(`Mensuel HT: ${(contract.monthly_price || 0).toFixed(2)} €`, 60, yPos + 30);
+      doc.text(`Total annuel HT: ${((contract.monthly_price || 0) * 12).toFixed(2)} €`, 300, yPos + 30);
+
+      // Signatures
+      yPos += 100;
+      doc.font('Helvetica').fontSize(10).fillColor(COLORS.textLight);
+      doc.text('Signature du prestataire:', 50, yPos);
+      doc.text('Signature du client:', 300, yPos);
+
+      // Signature boxes
+      doc.rect(50, yPos + 15, 200, 60).stroke(COLORS.border);
+      doc.rect(300, yPos + 15, 200, 60).stroke(COLORS.border);
+
+      doc.text('Date:', 50, yPos + 85);
+      doc.text('Date:', 300, yPos + 85);
+
+      // Footer
+      doc.fontSize(9).fillColor(COLORS.textLight);
+      doc.text(`${tenant?.name || 'TRINEXTA'} - SIRET: ${tenant?.siret || 'N/A'}`, 50, 750, { align: 'center', width: 495 });
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
-export default {
-  generatePDFFromHTML,
-  savePDF,
-  generateProposalPDF,
-  generateContractPDF
-};
+export default { generateProposalPDF, generateContractPDF, savePDF };
