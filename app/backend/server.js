@@ -165,6 +165,8 @@ import trackRoutes from './api/track.js';
 import leadDatabasesRoute from './api/lead-databases.js';
 import pipelineLeadsRoute from './api/pipeline-leads.js';
 import signaturesRoute from './api/signatures.js';
+import proposalsRoute from './api/proposals.js';
+import contractsRoute from './api/contracts.js';
 import campaignDetailedStatsRoute from './api/campaign-detailed-stats.js';
 import validationRequestsRoute from './api/validation-requests.js';
 import leadSectorAssignmentRoute from './api/lead-sector-assignment.js';
@@ -251,6 +253,12 @@ app.use('/api/geographic-sectors', geographicSectorsRoute);
 
 // ========== ?? ROUTES SIGNATURES CONTRATS ==========
 app.use('/api/sign', signaturesRoute);
+
+// ========== ?? ROUTES DEVIS & CONTRATS ==========
+app.all('/api/proposals', proposalsRoute);
+app.all('/api/proposals/:id', proposalsRoute);
+app.all('/api/contracts', contractsRoute);
+app.all('/api/contracts/:id', contractsRoute);
 
 // ========== ?? ROUTES MAILING SETTINGS ==========
 app.get('/api/mailing-settings', authMiddleware, getMailingSettings);
