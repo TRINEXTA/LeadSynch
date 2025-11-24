@@ -147,9 +147,9 @@ export default async function handler(req, res) {
         `INSERT INTO contracts (
           tenant_id, lead_id, pipeline_lead_id, proposal_id, reference,
           title, offer_type, offer_name, services, contract_type,
-          payment_frequency, user_count, monthly_price, amount, total_amount,
+          payment_frequency, user_count, monthly_price, total_amount,
           start_date, end_date, notes, status, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *`,
         [
           tenantId,
@@ -165,7 +165,6 @@ export default async function handler(req, res) {
           data.payment_frequency,
           data.user_count,
           data.monthly_price,
-          data.monthly_price, // amount = monthly_price for compatibility
           data.total_amount,
           data.start_date,
           end_date,
