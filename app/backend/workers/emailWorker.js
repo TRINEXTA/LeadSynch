@@ -165,11 +165,29 @@ const processCampaign = async (campaign) => {
     // Envoyer les emails
     for (const emailData of emailsToSend) {
       try {
-        // Personnaliser le template
-        let htmlBody = template.html_body
+        // Personnaliser le template avec gestion intelligente des salutations
+        let htmlBody = template.html_body;
+
+        // Gérer les patterns de salutation spéciaux
+        // "Bonjour {{contact_name}}," -> "Bonjour," si contact_name n'existe pas
+        const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{contact_name\}\}\s*([,!]?)/gi;
+        htmlBody = htmlBody.replace(greetingPattern, (match, greeting, punctuation) => {
+          if (emailData.contact_name && emailData.contact_name.trim()) {
+            return `${greeting} ${emailData.contact_name}${punctuation}`;
+          }
+          return `${greeting}${punctuation}`;
+        });
+
+        // Remplacer les autres occurrences de {{contact_name}} restantes
+        htmlBody = htmlBody.replace(/\{\{contact_name\}\}/g, emailData.contact_name || '');
+
+        // Remplacer les autres variables
+        htmlBody = htmlBody
           .replace(/\{\{company\}\}/g, emailData.company || 'Entreprise')
-          .replace(/\{\{contact_name\}\}/g, emailData.contact_name || 'Cher contact')
           .replace(/\{\{lead_email\}\}/g, emailData.email);
+
+        // Nettoyer les espaces multiples
+        htmlBody = htmlBody.replace(/  +/g, ' ');
 
         // Ajouter pixel de tracking si activé
         if (campaign.track_clicks) {

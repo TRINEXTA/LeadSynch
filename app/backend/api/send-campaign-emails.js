@@ -75,14 +75,35 @@ async function handler(req, res) {
       }
       
       try {
-        const personalizedSubject = (campaign.subject || template.subject || 'Sans objet')
-          .replace(/\{company_name\}/g, lead.company_name || 'votre entreprise')
-          .replace(/\{contact_name\}/g, lead.contact_name || 'Bonjour');
-        
-        const personalizedBody = (template.html_body || template.html_content || '')
-          .replace(/\{company_name\}/g, lead.company_name || 'votre entreprise')
-          .replace(/\{contact_name\}/g, lead.contact_name || 'Bonjour')
-          .replace(/\{email\}/g, lead.email);
+        // Fonction pour personnaliser le contenu avec gestion intelligente des salutations
+        const personalizeContent = (content) => {
+          let result = content;
+
+          // Gérer les patterns de salutation spéciaux
+          // "Bonjour {contact_name}," -> "Bonjour," si contact_name n'existe pas
+          const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{contact_name\}\s*([,!]?)/gi;
+          result = result.replace(greetingPattern, (match, greeting, punctuation) => {
+            if (lead.contact_name && lead.contact_name.trim()) {
+              return `${greeting} ${lead.contact_name}${punctuation}`;
+            }
+            return `${greeting}${punctuation}`;
+          });
+
+          // Remplacer les autres occurrences de {contact_name} restantes
+          result = result.replace(/\{contact_name\}/g, lead.contact_name || '');
+
+          // Remplacer les autres variables
+          result = result.replace(/\{company_name\}/g, lead.company_name || 'votre entreprise');
+          result = result.replace(/\{email\}/g, lead.email);
+
+          // Nettoyer les espaces multiples
+          result = result.replace(/  +/g, ' ');
+
+          return result;
+        };
+
+        const personalizedSubject = personalizeContent(campaign.subject || template.subject || 'Sans objet');
+        const personalizedBody = personalizeContent(template.html_body || template.html_content || '');
         
         // Envoi de l'email via Elastic Email
         const emailResult = await sendEmail({
