@@ -14,8 +14,60 @@ router.post('/count-multi', async (req, res) => {
       return res.json({ success: true, count: 0 });
     }
 
-    // On construit un OR de blocs (par base), avec jointure sur lead_databases
-    // pour garantir que la base appartient bien au tenant
+    console.log('📊 Comptage multi avec filtres:', JSON.stringify(filters));
+
+    // D'abord récupérer les bases de données avec leur segmentation
+    const dbIds = filters.map(f => f.database_id).filter(Boolean);
+    if (dbIds.length === 0) {
+      return res.json({ success: true, count: 0 });
+    }
+
+    const placeholders = dbIds.map((_, i) => `$${i + 2}`).join(',');
+    const { rows: databases } = await query(
+      `SELECT id, segmentation FROM lead_databases WHERE id IN (${placeholders}) AND tenant_id = $1`,
+      [tenantId, ...dbIds]
+    );
+
+    console.log('📊 Bases trouvées:', databases.length);
+
+    // Créer un map des bases par ID
+    const dbMap = {};
+    for (const db of databases) {
+      dbMap[db.id] = db;
+    }
+
+    // Calculer le total en utilisant le JSON segmentation
+    let totalFromSegmentation = 0;
+    let hasSegmentation = false;
+
+    for (const filter of filters) {
+      const db = dbMap[filter.database_id];
+      if (!db) continue;
+
+      if (db.segmentation && Object.keys(db.segmentation).length > 0) {
+        hasSegmentation = true;
+
+        if (Array.isArray(filter.sectors) && filter.sectors.length > 0) {
+          // Compter seulement les secteurs sélectionnés
+          for (const sector of filter.sectors) {
+            totalFromSegmentation += parseInt(db.segmentation[sector] || 0);
+          }
+        } else {
+          // Compter tous les secteurs de cette base
+          for (const count of Object.values(db.segmentation)) {
+            totalFromSegmentation += parseInt(count || 0);
+          }
+        }
+      }
+    }
+
+    // Si on a des données de segmentation, les utiliser
+    if (hasSegmentation && totalFromSegmentation > 0) {
+      console.log('✅ Comptage via segmentation:', totalFromSegmentation);
+      return res.json({ success: true, count: totalFromSegmentation });
+    }
+
+    // Sinon, essayer le comptage via la table leads
     const conditions = [];
     const params = [tenantId];
     let paramIndex = 2;
@@ -28,11 +80,11 @@ router.post('/count-multi', async (req, res) => {
       paramIndex++;
 
       if (Array.isArray(filter.sectors) && filter.sectors.length > 0) {
-        const placeholders = filter.sectors.map(() => `$${paramIndex++}`).join(',');
-        condition += ` AND l.sector IN (${placeholders})`;
+        const sectorPlaceholders = filter.sectors.map(() => `$${paramIndex++}`).join(',');
+        condition += ` AND l.sector IN (${sectorPlaceholders})`;
         params.push(...filter.sectors);
       }
-      
+
       condition += ')';
       conditions.push(condition);
     }
@@ -52,15 +104,13 @@ router.post('/count-multi', async (req, res) => {
     `;
 
     console.log('🔍 SQL:', sql);
-    console.log('🔍 PARAMS:', params);
-
     const { rows } = await query(sql, params);
-    
-    console.log('🔍 RÉSULTAT:', rows[0]);
 
-    return res.json({ 
-      success: true, 
-      count: rows[0]?.count ?? 0 
+    console.log('✅ Comptage via leads table:', rows[0]?.count);
+
+    return res.json({
+      success: true,
+      count: rows[0]?.count ?? 0
     });
   } catch (err) {
     console.error('❌ Erreur count multi:', err);

@@ -85,18 +85,35 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
 
     console.log(`📊 Récupération secteurs pour base ${id}`);
 
-    // D'abord vérifier que la base appartient au tenant
-    const { rows: dbCheck } = await q(
-      'SELECT id FROM lead_databases WHERE id = $1 AND tenant_id = $2',
+    // Récupérer la base avec son champ segmentation
+    const { rows: dbRows } = await q(
+      'SELECT id, segmentation FROM lead_databases WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
 
-    if (!dbCheck.length) {
+    if (!dbRows.length) {
       return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    // Utiliser leads.database_id pour un comptage fiable
-    // Le tenant est vérifié via la base, pas via leads.tenant_id
+    const database = dbRows[0];
+
+    // Si segmentation existe (JSON stocké lors de l'import), l'utiliser
+    if (database.segmentation && Object.keys(database.segmentation).length > 0) {
+      const sectors = Object.entries(database.segmentation).map(([sector, count]) => ({
+        sector,
+        lead_count: count
+      })).sort((a, b) => b.lead_count - a.lead_count);
+
+      console.log(`✅ ${sectors.length} secteurs trouvés via segmentation`);
+
+      return res.json({
+        success: true,
+        sectors,
+        total: sectors.reduce((sum, s) => sum + parseInt(s.lead_count), 0)
+      });
+    }
+
+    // Sinon, essayer de compter depuis la table leads
     const { rows } = await q(
       `SELECT
         sector,
@@ -110,7 +127,7 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
       [id]
     );
 
-    console.log(`✅ ${rows.length} secteurs trouvés`);
+    console.log(`✅ ${rows.length} secteurs trouvés via leads table`);
 
     return res.json({
       success: true,
