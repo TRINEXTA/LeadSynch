@@ -79,22 +79,26 @@ async function handler(req, res) {
         const personalizeContent = (content) => {
           let result = content;
 
-          // Gérer les patterns de salutation spéciaux
-          // "Bonjour {contact_name}," -> "Bonjour," si contact_name n'existe pas
-          const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{contact_name\}\s*([,!]?)/gi;
-          result = result.replace(greetingPattern, (match, greeting, punctuation) => {
+          // Liste des synonymes pour les variables de prénom/nom
+          // Supporte {{PRENOM}}, {{prenom}}, {contact_name}, {{contact_first_name}}, etc.
+          const nameVariablePattern = /\{\{?(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}?\}/gi;
+
+          // Gérer les patterns de salutation spéciaux (simple et double accolades)
+          // "Bonjour {{PRENOM}}," -> "Bonjour," si prenom n'existe pas
+          const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{?(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}?\}\s*([,!]?)/gi;
+          result = result.replace(greetingPattern, (match, greeting, variable, punctuation) => {
             if (lead.contact_name && lead.contact_name.trim()) {
               return `${greeting} ${lead.contact_name}${punctuation}`;
             }
             return `${greeting}${punctuation}`;
           });
 
-          // Remplacer les autres occurrences de {contact_name} restantes
-          result = result.replace(/\{contact_name\}/g, lead.contact_name || '');
+          // Remplacer les autres occurrences de variables de nom restantes
+          result = result.replace(nameVariablePattern, lead.contact_name || '');
 
-          // Remplacer les autres variables
-          result = result.replace(/\{company_name\}/g, lead.company_name || 'votre entreprise');
-          result = result.replace(/\{email\}/g, lead.email);
+          // Remplacer les autres variables (simple et double accolades)
+          result = result.replace(/\{\{?(company_name|COMPANY_NAME|company|COMPANY|entreprise|ENTREPRISE)\}?\}/gi, lead.company_name || 'votre entreprise');
+          result = result.replace(/\{\{?(email|EMAIL|mail|MAIL)\}?\}/gi, lead.email);
 
           // Nettoyer les espaces multiples
           result = result.replace(/  +/g, ' ');
