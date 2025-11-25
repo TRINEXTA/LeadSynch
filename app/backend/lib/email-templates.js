@@ -418,6 +418,50 @@ Chaleureusement,
 };
 
 /**
+ * Mapping des synonymes de variables pour les prénoms/noms de contact
+ * Permet de supporter {{PRENOM}}, {{prenom}}, {{contact_name}}, {{firstname}}, etc.
+ */
+const NAME_SYNONYMS = [
+  'prenom', 'PRENOM', 'Prenom',
+  'firstname', 'first_name', 'firstName',
+  'contact_name', 'contact_first_name', 'contactName',
+  'name', 'nom', 'NOM'
+];
+
+/**
+ * Résout la valeur d'une variable en cherchant dans les synonymes si nécessaire
+ * @param {string} variable - Nom de la variable dans le template
+ * @param {object} data - Données disponibles
+ * @returns {string|null} - Valeur trouvée ou null
+ */
+function resolveVariable(variable, data) {
+  // D'abord essayer la variable exacte
+  if (data[variable] !== undefined && data[variable] !== null && data[variable] !== '') {
+    return data[variable];
+  }
+
+  // Essayer en minuscules
+  const lowerVar = variable.toLowerCase();
+  if (data[lowerVar] !== undefined && data[lowerVar] !== null && data[lowerVar] !== '') {
+    return data[lowerVar];
+  }
+
+  // Si c'est une variable de type "prénom", chercher dans les synonymes
+  if (NAME_SYNONYMS.some(syn => syn.toLowerCase() === lowerVar)) {
+    for (const synonym of NAME_SYNONYMS) {
+      if (data[synonym] !== undefined && data[synonym] !== null && data[synonym] !== '') {
+        return data[synonym];
+      }
+    }
+    // Chercher aussi contact_name qui est le champ standard
+    if (data.contact_name) return data.contact_name;
+    if (data.contact_first_name) return data.contact_first_name;
+  }
+
+  return null;
+}
+
+/**
  * Remplace les variables dans un template
  * @param {string} template - Template avec variables {{var}}
  * @param {object} data - Objet contenant les valeurs des variables
@@ -427,7 +471,7 @@ export function replaceTemplateVariables(template, data) {
   let result = template;
 
   // D'abord, gérer les patterns de salutation spéciaux
-  // "Bonjour {{prenom}}," -> "Bonjour," si prenom n'existe pas
+  // "Bonjour {{PRENOM}}," -> "Bonjour," si prenom n'existe pas
   // "Bonjour {{prenom}}" -> "Bonjour" si prenom n'existe pas
   const greetingPatterns = [
     /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{(\w+)\}\}\s*([,!]?)/gi,
@@ -435,8 +479,8 @@ export function replaceTemplateVariables(template, data) {
 
   for (const pattern of greetingPatterns) {
     result = result.replace(pattern, (match, greeting, variable, punctuation) => {
-      const value = data[variable] || data[variable.toLowerCase()];
-      if (value && value.trim()) {
+      const value = resolveVariable(variable, data);
+      if (value && String(value).trim()) {
         return `${greeting} ${value}${punctuation}`;
       }
       // Si pas de valeur, retourner juste la salutation avec la ponctuation
@@ -447,8 +491,8 @@ export function replaceTemplateVariables(template, data) {
   // Ensuite, remplacer les autres variables
   // Si la variable n'existe pas, la supprimer (chaîne vide) au lieu de garder {{variable}}
   result = result.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
-    const value = data[variable] || data[variable.toLowerCase()];
-    return value !== undefined && value !== null ? value : '';
+    const value = resolveVariable(variable, data);
+    return value !== undefined && value !== null ? String(value) : '';
   });
 
   // Nettoyer les espaces multiples créés par les suppressions

@@ -168,23 +168,27 @@ const processCampaign = async (campaign) => {
         // Personnaliser le template avec gestion intelligente des salutations
         let htmlBody = template.html_body;
 
+        // Liste des synonymes pour les variables de prénom/nom
+        // Supporte {{PRENOM}}, {{prenom}}, {{contact_name}}, {{contact_first_name}}, etc.
+        const nameVariablePattern = /\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}\}/gi;
+
         // Gérer les patterns de salutation spéciaux
-        // "Bonjour {{contact_name}}," -> "Bonjour," si contact_name n'existe pas
-        const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{contact_name\}\}\s*([,!]?)/gi;
-        htmlBody = htmlBody.replace(greetingPattern, (match, greeting, punctuation) => {
+        // "Bonjour {{PRENOM}}," -> "Bonjour," si prenom n'existe pas
+        const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}\}\s*([,!]?)/gi;
+        htmlBody = htmlBody.replace(greetingPattern, (match, greeting, variable, punctuation) => {
           if (emailData.contact_name && emailData.contact_name.trim()) {
             return `${greeting} ${emailData.contact_name}${punctuation}`;
           }
           return `${greeting}${punctuation}`;
         });
 
-        // Remplacer les autres occurrences de {{contact_name}} restantes
-        htmlBody = htmlBody.replace(/\{\{contact_name\}\}/g, emailData.contact_name || '');
+        // Remplacer les autres occurrences de variables de nom restantes
+        htmlBody = htmlBody.replace(nameVariablePattern, emailData.contact_name || '');
 
         // Remplacer les autres variables
         htmlBody = htmlBody
-          .replace(/\{\{company\}\}/g, emailData.company || 'Entreprise')
-          .replace(/\{\{lead_email\}\}/g, emailData.email);
+          .replace(/\{\{(company|COMPANY|company_name|COMPANY_NAME|entreprise|ENTREPRISE)\}\}/gi, emailData.company || 'Entreprise')
+          .replace(/\{\{(lead_email|email|EMAIL|mail|MAIL)\}\}/gi, emailData.email);
 
         // Nettoyer les espaces multiples
         htmlBody = htmlBody.replace(/  +/g, ' ');
