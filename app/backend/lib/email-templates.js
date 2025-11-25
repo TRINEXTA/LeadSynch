@@ -424,9 +424,37 @@ Chaleureusement,
  * @returns {string} - Template avec variables remplacées
  */
 export function replaceTemplateVariables(template, data) {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
-    return data[variable] || match;
+  let result = template;
+
+  // D'abord, gérer les patterns de salutation spéciaux
+  // "Bonjour {{prenom}}," -> "Bonjour," si prenom n'existe pas
+  // "Bonjour {{prenom}}" -> "Bonjour" si prenom n'existe pas
+  const greetingPatterns = [
+    /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{(\w+)\}\}\s*([,!]?)/gi,
+  ];
+
+  for (const pattern of greetingPatterns) {
+    result = result.replace(pattern, (match, greeting, variable, punctuation) => {
+      const value = data[variable] || data[variable.toLowerCase()];
+      if (value && value.trim()) {
+        return `${greeting} ${value}${punctuation}`;
+      }
+      // Si pas de valeur, retourner juste la salutation avec la ponctuation
+      return `${greeting}${punctuation}`;
+    });
+  }
+
+  // Ensuite, remplacer les autres variables
+  // Si la variable n'existe pas, la supprimer (chaîne vide) au lieu de garder {{variable}}
+  result = result.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
+    const value = data[variable] || data[variable.toLowerCase()];
+    return value !== undefined && value !== null ? value : '';
   });
+
+  // Nettoyer les espaces multiples créés par les suppressions
+  result = result.replace(/  +/g, ' ');
+
+  return result;
 }
 
 /**
