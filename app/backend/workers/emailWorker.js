@@ -52,16 +52,17 @@ const processCampaign = async (campaign) => {
   try {
     console.log(`\n🔍 [EMAIL WORKER] Traitement campagne: ${campaign.name}`);
 
-    // Vérifier si on est dans les horaires d'envoi
+    // Utiliser le timezone Paris pour les horaires
     const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+    const parisTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const currentHour = parisTime.getHours();
+    const currentMinute = parisTime.getMinutes();
     const currentTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-    const currentDay = now.getDay(); // 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
+    const currentDay = parisTime.getDay(); // 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
 
-    console.log(`🕐 [EMAIL WORKER] Maintenant: ${now.toLocaleString('fr-FR')}`);
-    console.log(`📅 [EMAIL WORKER] Jour actuel (getDay): ${currentDay} (0=Dim, 1=Lun, 2=Mar, 3=Mer, 4=Jeu, 5=Ven, 6=Sam)`);
-    console.log(`⏰ [EMAIL WORKER] Heure actuelle: ${currentTime}`);
+    console.log(`🕐 [EMAIL WORKER] Heure Paris: ${parisTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
+    console.log(`📅 [EMAIL WORKER] Jour actuel: ${currentDay} (0=Dim, 1=Lun, 2=Mar, 3=Mer, 4=Jeu, 5=Ven, 6=Sam)`);
+    console.log(`⏰ [EMAIL WORKER] Heure: ${currentTime}`);
 
     const [startHour, startMin] = campaign.send_time_start.split(':').map(Number);
     const [endHour, endMin] = campaign.send_time_end.split(':').map(Number);
@@ -113,6 +114,34 @@ const processCampaign = async (campaign) => {
     }
 
     console.log(`✅ [EMAIL WORKER] Heure OK ! On peut envoyer.`);
+
+    // ==================== VÉRIFIER INTERVALLE ENTRE LES VAGUES ====================
+    const cycleIntervalMinutes = campaign.cycle_interval_minutes || 10; // Par défaut 10 minutes
+
+    // Vérifier quand le dernier email a été envoyé pour cette campagne
+    const lastSentEmail = await queryOne(
+      `SELECT sent_at FROM email_queue
+       WHERE campaign_id = $1 AND status = 'sent'
+       ORDER BY sent_at DESC LIMIT 1`,
+      [campaign.id]
+    );
+
+    if (lastSentEmail && lastSentEmail.sent_at) {
+      const lastSentTime = new Date(lastSentEmail.sent_at);
+      const minutesSinceLastBatch = (now.getTime() - lastSentTime.getTime()) / (1000 * 60);
+
+      console.log(`⏱️ [EMAIL WORKER] Dernier envoi: ${lastSentTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
+      console.log(`⏱️ [EMAIL WORKER] Minutes depuis dernier batch: ${minutesSinceLastBatch.toFixed(1)} / ${cycleIntervalMinutes} min requis`);
+
+      if (minutesSinceLastBatch < cycleIntervalMinutes) {
+        const waitMinutes = (cycleIntervalMinutes - minutesSinceLastBatch).toFixed(1);
+        console.log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Attente entre les vagues`);
+        console.log(`   ⏳ Prochain envoi dans ${waitMinutes} minute(s)`);
+        return;
+      }
+    }
+
+    console.log(`✅ [EMAIL WORKER] Intervalle OK ! Envoi de la vague de ${campaign.emails_per_cycle || 50} emails.`);
 
     // Récupérer le template
     const template = await queryOne(
