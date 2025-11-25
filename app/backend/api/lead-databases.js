@@ -12,11 +12,12 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
 
-    // Utiliser leads.database_id pour un comptage fiable (supporte l'ancien ET le nouveau système)
+    // Utiliser leads.database_id pour un comptage fiable
+    // Vérifier le tenant via la base (pas via leads.tenant_id qui peut être null pour d'anciens imports)
     const { rows } = await q(
       `SELECT
         ld.*,
-        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id AND l.tenant_id = $1) as lead_count
+        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id) as lead_count
        FROM lead_databases ld
        WHERE ld.tenant_id = $1
        ORDER BY ld.created_at DESC`,
@@ -37,10 +38,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // 1. Récupérer les infos de la base avec comptage via database_id
+    // Vérifier le tenant via la base (pas via leads.tenant_id)
     const { rows: dbRows } = await q(
       `SELECT
         ld.*,
-        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id AND l.tenant_id = $2) as lead_count
+        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id) as lead_count
        FROM lead_databases ld
        WHERE ld.id = $1 AND ld.tenant_id = $2`,
       [id, tenantId]
@@ -51,13 +53,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // 2. Récupérer les leads de cette base via database_id
+    // Le tenant est vérifié via la base, pas directement sur les leads
     const { rows: leadRows } = await q(
       `SELECT *
        FROM leads
        WHERE database_id = $1
-         AND tenant_id = $2
        ORDER BY created_at DESC`,
-      [id, tenantId]
+      [id]
     );
 
     console.log(`✅ Base ${id}: ${leadRows.length} leads trouvés`);
@@ -83,19 +85,29 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
 
     console.log(`📊 Récupération secteurs pour base ${id}`);
 
+    // D'abord vérifier que la base appartient au tenant
+    const { rows: dbCheck } = await q(
+      'SELECT id FROM lead_databases WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId]
+    );
+
+    if (!dbCheck.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
+    }
+
     // Utiliser leads.database_id pour un comptage fiable
+    // Le tenant est vérifié via la base, pas via leads.tenant_id
     const { rows } = await q(
       `SELECT
         sector,
         COUNT(*) as lead_count
        FROM leads
        WHERE database_id = $1
-         AND tenant_id = $2
          AND sector IS NOT NULL
          AND sector != ''
        GROUP BY sector
        ORDER BY lead_count DESC`,
-      [id, tenantId]
+      [id]
     );
 
     console.log(`✅ ${rows.length} secteurs trouvés`);
