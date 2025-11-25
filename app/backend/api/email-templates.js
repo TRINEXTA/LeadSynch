@@ -103,10 +103,55 @@ async function deleteTemplateHandler(req, res) {
   }
 }
 
+async function updateTemplateHandler(req, res) {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user.tenant_id;
+    const userId = req.user.id;
+
+    // Vérifier que le template existe et appartient au tenant
+    const checkResult = await pool.query(
+      'SELECT id FROM email_templates WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    // Valider les données
+    let validatedData;
+    try {
+      validatedData = createTemplateSchema.parse(req.body);
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Données invalides',
+        details: error.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+      });
+    }
+
+    const { name, subject, html_body, template_type, is_active, metadata } = validatedData;
+
+    const result = await pool.query(
+      `UPDATE email_templates
+       SET name = $1, subject = $2, html_body = $3, template_type = $4, is_active = $5, metadata = $6, updated_by = $7, updated_at = NOW()
+       WHERE id = $8 AND tenant_id = $9
+       RETURNING *`,
+      [name, subject, html_body, template_type, is_active, metadata ? JSON.stringify(metadata) : null, userId, id, tenantId]
+    );
+
+    res.json({ message: 'Template mis à jour', template: result.rows[0] });
+  } catch (error) {
+    console.error('Erreur PUT template:', error);
+    res.status(500).json({ error: 'Erreur mise à jour' });
+  }
+}
+
 // Routes avec authMiddleware
 router.get('/', authMiddleware, getTemplatesHandler);
 router.get('/:id', authMiddleware, getTemplateByIdHandler);
 router.post('/', authMiddleware, createTemplateHandler);
+router.put('/:id', authMiddleware, updateTemplateHandler);
 router.delete('/:id', authMiddleware, deleteTemplateHandler);      
 
 export default router;
