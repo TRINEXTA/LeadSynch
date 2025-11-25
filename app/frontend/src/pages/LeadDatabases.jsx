@@ -60,7 +60,7 @@ export default function LeadDatabases() {
   };
 
   const calculateGlobalStats = (dbList) => {
-    const totalLeads = dbList.reduce((sum, db) => sum + (parseInt(db.total_leads) || 0), 0);
+    const totalLeads = dbList.reduce((sum, db) => sum + (parseInt(db.lead_count) || parseInt(db.total_leads) || 0), 0);
     
     const bySector = {};
     const bySource = {};
@@ -288,7 +288,7 @@ export default function LeadDatabases() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Leads totaux</span>
                       <span className="text-2xl font-bold text-blue-600">
-                        {(database.total_leads || 0).toLocaleString()}
+                        {(database.lead_count || database.total_leads || 0).toLocaleString()}
                       </span>
                     </div>
                   </div>
