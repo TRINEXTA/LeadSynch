@@ -12,10 +12,11 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
 
+    // Utiliser leads.database_id pour un comptage fiable (supporte l'ancien ET le nouveau système)
     const { rows } = await q(
-      `SELECT 
+      `SELECT
         ld.*,
-        (SELECT COUNT(*) FROM lead_database_relations ldr WHERE ldr.database_id = ld.id) as lead_count
+        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id AND l.tenant_id = $1) as lead_count
        FROM lead_databases ld
        WHERE ld.tenant_id = $1
        ORDER BY ld.created_at DESC`,
@@ -35,11 +36,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
 
-    // 1. Récupérer les infos de la base
+    // 1. Récupérer les infos de la base avec comptage via database_id
     const { rows: dbRows } = await q(
       `SELECT
         ld.*,
-        (SELECT COUNT(*) FROM lead_database_relations ldr WHERE ldr.database_id = ld.id) as lead_count
+        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id AND l.tenant_id = $2) as lead_count
        FROM lead_databases ld
        WHERE ld.id = $1 AND ld.tenant_id = $2`,
       [id, tenantId]
@@ -49,14 +50,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    // 2. Récupérer les leads de cette base
+    // 2. Récupérer les leads de cette base via database_id
     const { rows: leadRows } = await q(
-      `SELECT DISTINCT l.*
-       FROM leads l
-       JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-       WHERE ldr.database_id = $1
-         AND l.tenant_id = $2
-       ORDER BY l.created_at DESC`,
+      `SELECT *
+       FROM leads
+       WHERE database_id = $1
+         AND tenant_id = $2
+       ORDER BY created_at DESC`,
       [id, tenantId]
     );
 
@@ -83,25 +83,25 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
 
     console.log(`📊 Récupération secteurs pour base ${id}`);
 
+    // Utiliser leads.database_id pour un comptage fiable
     const { rows } = await q(
-      `SELECT 
-        l.sector,
+      `SELECT
+        sector,
         COUNT(*) as lead_count
-       FROM leads l
-       JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-       WHERE ldr.database_id = $1 
-         AND l.tenant_id = $2
-         AND l.sector IS NOT NULL
-         AND l.sector != ''
-       GROUP BY l.sector
+       FROM leads
+       WHERE database_id = $1
+         AND tenant_id = $2
+         AND sector IS NOT NULL
+         AND sector != ''
+       GROUP BY sector
        ORDER BY lead_count DESC`,
       [id, tenantId]
     );
 
     console.log(`✅ ${rows.length} secteurs trouvés`);
 
-    return res.json({ 
-      success: true, 
+    return res.json({
+      success: true,
       sectors: rows,
       total: rows.reduce((sum, s) => sum + parseInt(s.lead_count), 0)
     });
