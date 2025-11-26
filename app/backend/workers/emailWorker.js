@@ -119,18 +119,21 @@ const processCampaign = async (campaign) => {
     const cycleIntervalMinutes = campaign.cycle_interval_minutes || 10; // Par défaut 10 minutes
 
     // Vérifier quand le dernier email a été envoyé pour cette campagne
+    // Calcul fait directement en SQL pour éviter les problèmes de timezone JS/PostgreSQL
     const lastSentEmail = await queryOne(
-      `SELECT sent_at FROM email_queue
-       WHERE campaign_id = $1 AND status = 'sent'
+      `SELECT
+         sent_at,
+         EXTRACT(EPOCH FROM (NOW() - sent_at)) / 60 AS minutes_since_sent
+       FROM email_queue
+       WHERE campaign_id = $1 AND status = 'sent' AND sent_at IS NOT NULL
        ORDER BY sent_at DESC LIMIT 1`,
       [campaign.id]
     );
 
-    if (lastSentEmail && lastSentEmail.sent_at) {
-      const lastSentTime = new Date(lastSentEmail.sent_at);
-      const minutesSinceLastBatch = (now.getTime() - lastSentTime.getTime()) / (1000 * 60);
+    if (lastSentEmail && lastSentEmail.minutes_since_sent !== null) {
+      const minutesSinceLastBatch = parseFloat(lastSentEmail.minutes_since_sent);
 
-      console.log(`⏱️ [EMAIL WORKER] Dernier envoi: ${lastSentTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
+      console.log(`⏱️ [EMAIL WORKER] Dernier envoi: ${new Date(lastSentEmail.sent_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
       console.log(`⏱️ [EMAIL WORKER] Minutes depuis dernier batch: ${minutesSinceLastBatch.toFixed(1)} / ${cycleIntervalMinutes} min requis`);
 
       if (minutesSinceLastBatch < cycleIntervalMinutes) {
