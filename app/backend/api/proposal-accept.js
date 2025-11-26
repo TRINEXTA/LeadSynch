@@ -49,7 +49,7 @@ async function getProposalForAcceptance(req, res, token) {
      FROM proposals p
      LEFT JOIN leads l ON p.lead_id = l.id
      LEFT JOIN tenants t ON p.tenant_id = t.id
-     LEFT JOIN tenant_business_config bc ON p.tenant_id = bc.tenant_id
+     LEFT JOIN billing_configs bc ON p.tenant_id = bc.tenant_id
      WHERE p.acceptance_token = $1`,
     [token]
   );

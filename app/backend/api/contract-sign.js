@@ -59,7 +59,7 @@ async function getContractForSigning(req, res, token) {
      FROM contracts c
      LEFT JOIN leads l ON c.lead_id = l.id
      LEFT JOIN tenants t ON c.tenant_id = t.id
-     LEFT JOIN tenant_business_config bc ON c.tenant_id = bc.tenant_id
+     LEFT JOIN billing_configs bc ON c.tenant_id = bc.tenant_id
      WHERE c.signature_token = $1`,
     [token]
   );
@@ -136,7 +136,7 @@ async function sendVerificationCode(req, res, token) {
     `SELECT c.*, l.company_name, bc.company_name as provider_name
      FROM contracts c
      LEFT JOIN leads l ON c.lead_id = l.id
-     LEFT JOIN tenant_business_config bc ON c.tenant_id = bc.tenant_id
+     LEFT JOIN billing_configs bc ON c.tenant_id = bc.tenant_id
      WHERE c.signature_token = $1`,
     [token]
   );

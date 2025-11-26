@@ -242,7 +242,7 @@ export default async function handler(req, res) {
         const tenant = await queryOne(
           `SELECT t.name as tenant_name, bc.company_name as provider_name
            FROM tenants t
-           LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+           LEFT JOIN billing_configs bc ON t.id = bc.tenant_id
            WHERE t.id = $1`,
           [tenantId]
         );
@@ -414,7 +414,7 @@ export default async function handler(req, res) {
         const tenant = await queryOne(
           `SELECT t.name as tenant_name, bc.company_name as provider_name
            FROM tenants t
-           LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+           LEFT JOIN billing_configs bc ON t.id = bc.tenant_id
            WHERE t.id = $1`,
           [tenantId]
         );
