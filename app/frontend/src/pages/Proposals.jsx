@@ -102,7 +102,7 @@ export default function Proposals() {
 
 Entreprise destinataire: ${proposal.company_name || 'Client'}
 Référence devis: ${proposal.reference}
-Montant HT: ${(proposal.total_ht || 0).toFixed(2)}€
+Montant HT: ${parseFloat(proposal.total_ht || 0).toFixed(2)}€
 
 L'email doit:
 - Être professionnel et chaleureux
@@ -121,7 +121,7 @@ Réponds uniquement avec le corps de l'email.`
 
 Veuillez trouver ci-joint notre devis ${proposal.reference}.
 
-Montant total HT: ${(proposal.total_ht || 0).toFixed(2)}€
+Montant total HT: ${parseFloat(proposal.total_ht || 0).toFixed(2)}€
 
 N'hésitez pas à nous contacter pour toute question.
 
@@ -287,7 +287,7 @@ L'équipe Trinexta`;
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-bold text-gray-900">
-                        {(proposal.total_ht || 0).toFixed(2)} €
+                        {parseFloat(proposal.total_ht || 0).toFixed(2)} €
                       </span>
                     </td>
                     <td className="px-6 py-4">
