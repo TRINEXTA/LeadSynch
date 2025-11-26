@@ -83,10 +83,11 @@ const Formation = lazy(() => import('./pages/Formation'));
 // Secteurs géographiques
 const GeographicSectors = lazy(() => import('./pages/GeographicSectors'));
 
-// Signature de contrats
+// Signature de contrats et acceptation de propositions
 const SignContract = lazy(() => import('./pages/SignContract'));
+const AcceptProposal = lazy(() => import('./pages/AcceptProposal'));
 
-// Devis et contrats
+// Propositions et contrats
 const Proposals = lazy(() => import('./pages/Proposals'));
 const Contracts = lazy(() => import('./pages/Contracts'));
 
@@ -147,6 +148,7 @@ function App() {
             {/* Routes PUBLIQUES (pas d'auth) */}
             <Route path="/unsubscribe/:lead_id" element={<Unsubscribe />} />
             <Route path="/sign/:token" element={<SignContract />} />
+            <Route path="/accept/:token" element={<AcceptProposal />} />
 
             {/* Login */}
             <Route path="/login" element={<Login />} />

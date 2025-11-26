@@ -35,7 +35,8 @@ const updateContractSchema = z.object({
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   notes: z.string().optional(),
-  status: z.enum(['draft', 'sent', 'signed', 'cancelled', 'expired']).optional()
+  status: z.enum(['draft', 'sent', 'signed', 'cancelled', 'expired']).optional(),
+  send_for_signature: z.boolean().optional()
 });
 
 export default async function handler(req, res) {
@@ -237,55 +238,81 @@ export default async function handler(req, res) {
           [data.lead_id]
         );
 
+        // Get tenant/business info
+        const tenant = await queryOne(
+          `SELECT t.name as tenant_name, bc.company_name as provider_name
+           FROM tenants t
+           LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+           WHERE t.id = $1`,
+          [tenantId]
+        );
+
         if (lead?.email) {
           // Generate unique signature token
           const signatureToken = crypto.randomBytes(32).toString('hex');
-          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-          // Create signature record
-          await query(
-            `INSERT INTO contract_signatures
-             (contract_id, tenant_id, signer_email, signer_company, signature_token, status)
-             VALUES ($1, $2, $3, $4, $5, 'pending')`,
-            [contract.id, tenantId, lead.email, lead.company_name, signatureToken]
-          );
-
-          // Create secure token
-          await query(
-            `INSERT INTO signature_tokens (contract_id, token, expires_at)
-             VALUES ($1, $2, $3)`,
-            [contract.id, signatureToken, expiresAt]
-          );
-
-          // Update contract with sent_at
+          // Update contract with signature token and sent_at
           await execute(
-            `UPDATE contracts SET sent_at = NOW() WHERE id = $1`,
-            [contract.id]
+            `UPDATE contracts SET signature_token = $1, sent_at = NOW(), public_link_sent_at = NOW() WHERE id = $2`,
+            [signatureToken, contract.id]
           );
 
-          // Send signature email
+          const providerName = tenant?.provider_name || tenant?.tenant_name || 'Votre prestataire';
           const signatureLink = `${process.env.FRONTEND_URL || 'https://app.leadsynch.com'}/sign/${signatureToken}`;
 
-          await sendEmail({
-            to: lead.email,
-            subject: `Signature de contrat - ${reference}`,
-            htmlBody: `
-              <h2>Bonjour ${lead.contact_name || 'Client'},</h2>
-              <p>Votre contrat <strong>${data.offer_name}</strong> est prêt à être signé.</p>
-              <p><strong>Contrat N° ${reference}</strong></p>
-              <p>Montant: ${data.total_amount} € TTC</p>
-              <br>
-              <a href="${signatureLink}" style="display:inline-block;background:#4F46E5;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">
-                Signer le contrat
-              </a>
-              <br><br>
-              <p>Ce lien est valide pendant 7 jours.</p>
-              <br>
-              <p>Cordialement,<br>L'équipe LeadSynch</p>
-            `
-          });
+          const htmlBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #1f2937;">Bonjour ${lead.contact_name || 'Madame, Monsieur'},</h2>
 
-          console.log(`✅ Email de signature envoyé à ${lead.email} pour contrat ${reference}`);
+              <p>Suite à notre échange, nous avons le plaisir de vous transmettre votre contrat pour signature.</p>
+
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #4f46e5;">Contrat N° ${reference}</h3>
+                <p><strong>Client :</strong> ${lead.company_name || 'N/A'}</p>
+                <p><strong>Offre :</strong> ${data.offer_name}</p>
+                <p><strong>Montant TTC :</strong> ${parseFloat(data.total_amount || 0).toFixed(2)} €</p>
+                <p><strong>Date de début :</strong> ${new Date(data.start_date).toLocaleDateString('fr-FR')}</p>
+              </div>
+
+              <p>Pour signer ce contrat électroniquement, veuillez cliquer sur le bouton ci-dessous :</p>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${signatureLink}"
+                   style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                  ✍️ Signer le contrat
+                </a>
+              </div>
+
+              <p style="color: #6b7280; font-size: 14px;">
+                <strong>Processus de signature sécurisé :</strong><br>
+                1. Consultez les détails du contrat<br>
+                2. Acceptez les conditions générales<br>
+                3. Un code de vérification vous sera envoyé par email<br>
+                4. Entrez le code pour valider votre signature
+              </p>
+
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+              <p>Cordialement,<br><strong>${providerName}</strong></p>
+
+              <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">
+                Ce message a été envoyé automatiquement. Si vous n'êtes pas à l'origine de cette demande, veuillez ignorer cet email.
+              </p>
+            </div>
+          `;
+
+          try {
+            await sendEmail({
+              to: lead.email,
+              subject: `Contrat à signer N° ${reference} - ${providerName}`,
+              htmlBody,
+              fromName: providerName
+            });
+            console.log(`📧 [CONTRACT] Email de signature envoyé à ${lead.email} pour contrat ${reference}`);
+          } catch (emailError) {
+            console.error(`❌ [CONTRACT] Erreur envoi email:`, emailError);
+            // Don't fail the request, just log the error
+          }
         }
       }
 
@@ -345,7 +372,22 @@ export default async function handler(req, res) {
         updateParams.push(JSON.stringify(data.services));
       }
 
-      if (data.status === 'sent') {
+      // Handle send_for_signature action
+      let newSignatureToken = null;
+      if (data.send_for_signature) {
+        // Generate signature token if not exists
+        if (!existing.signature_token) {
+          newSignatureToken = crypto.randomBytes(32).toString('hex');
+          updates.push(`signature_token = $${updateIndex++}`);
+          updateParams.push(newSignatureToken);
+        } else {
+          newSignatureToken = existing.signature_token;
+        }
+        updates.push(`status = $${updateIndex++}`);
+        updateParams.push('sent');
+        updates.push(`sent_at = NOW()`);
+        updates.push(`public_link_sent_at = NOW()`);
+      } else if (data.status === 'sent') {
         updates.push(`sent_at = NOW()`);
       } else if (data.status === 'signed') {
         updates.push(`signed_at = NOW()`);
@@ -359,6 +401,88 @@ export default async function handler(req, res) {
          RETURNING *`,
         [...updateParams, contractId, tenantId]
       );
+
+      // Send signature email if send_for_signature was requested
+      if (data.send_for_signature && newSignatureToken) {
+        // Get lead info for email
+        const lead = await queryOne(
+          `SELECT company_name, contact_name, email FROM leads WHERE id = $1`,
+          [existing.lead_id]
+        );
+
+        // Get tenant/business info
+        const tenant = await queryOne(
+          `SELECT t.name as tenant_name, bc.company_name as provider_name
+           FROM tenants t
+           LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+           WHERE t.id = $1`,
+          [tenantId]
+        );
+
+        if (lead?.email) {
+          const providerName = tenant?.provider_name || tenant?.tenant_name || 'Votre prestataire';
+          const signatureLink = `${process.env.FRONTEND_URL || 'https://app.leadsynch.com'}/sign/${newSignatureToken}`;
+
+          const htmlBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #1f2937;">Bonjour ${lead.contact_name || 'Madame, Monsieur'},</h2>
+
+              <p>Suite à notre échange, nous avons le plaisir de vous transmettre votre contrat pour signature.</p>
+
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #4f46e5;">Contrat N° ${contract.reference}</h3>
+                <p><strong>Client :</strong> ${lead.company_name || 'N/A'}</p>
+                <p><strong>Offre :</strong> ${contract.offer_name}</p>
+                <p><strong>Montant TTC :</strong> ${parseFloat(contract.total_amount || 0).toFixed(2)} €</p>
+                ${contract.start_date ? `<p><strong>Date de début :</strong> ${new Date(contract.start_date).toLocaleDateString('fr-FR')}</p>` : ''}
+              </div>
+
+              <p>Pour signer ce contrat électroniquement, veuillez cliquer sur le bouton ci-dessous :</p>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${signatureLink}"
+                   style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                  ✍️ Signer le contrat
+                </a>
+              </div>
+
+              <p style="color: #6b7280; font-size: 14px;">
+                <strong>Processus de signature sécurisé :</strong><br>
+                1. Consultez les détails du contrat<br>
+                2. Acceptez les conditions générales<br>
+                3. Un code de vérification vous sera envoyé par email<br>
+                4. Entrez le code pour valider votre signature
+              </p>
+
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+              <p>Cordialement,<br><strong>${providerName}</strong></p>
+
+              <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">
+                Ce message a été envoyé automatiquement. Si vous n'êtes pas à l'origine de cette demande, veuillez ignorer cet email.
+              </p>
+            </div>
+          `;
+
+          try {
+            await sendEmail({
+              to: lead.email,
+              subject: `Contrat à signer N° ${contract.reference} - ${providerName}`,
+              htmlBody,
+              fromName: providerName
+            });
+            console.log(`📧 [CONTRACT] Email de signature envoyé à ${lead.email} pour contrat ${contract.reference}`);
+          } catch (emailError) {
+            console.error(`❌ [CONTRACT] Erreur envoi email:`, emailError);
+          }
+        }
+
+        return res.json({
+          contract,
+          message: 'Contrat envoyé pour signature',
+          signature_link_sent: true
+        });
+      }
 
       return res.json({ contract, message: 'Contrat mis à jour' });
     }

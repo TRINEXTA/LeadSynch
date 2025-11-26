@@ -13,10 +13,10 @@ const STATUS_CONFIG = {
 };
 
 const TABS = [
-  { id: 'all', label: 'Tous les devis' },
+  { id: 'all', label: 'Toutes les propositions' },
   { id: 'draft', label: 'Brouillons' },
-  { id: 'sent', label: 'Envoyés' },
-  { id: 'accepted', label: 'Validés' }
+  { id: 'sent', label: 'Envoyées' },
+  { id: 'accepted', label: 'Acceptées' }
 ];
 
 export default function Proposals() {
@@ -72,7 +72,7 @@ export default function Proposals() {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = response.data.filename || `devis-${proposalId}.pdf`;
+        link.download = response.data.filename || `proposition-${proposalId}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -94,19 +94,19 @@ export default function Proposals() {
 
       // Generate email with Asefi
       let emailBody = '';
-      let emailSubject = `Devis ${proposal.reference} - ${proposal.company_name || 'Client'}`;
+      let emailSubject = `Proposition ${proposal.reference} - ${proposal.company_name || 'Client'}`;
 
       try {
         const asefiResponse = await api.post('/asefi', {
-          prompt: `Génère un email professionnel court pour accompagner l'envoi d'un devis.
+          prompt: `Génère un email professionnel court pour accompagner l'envoi d'une proposition commerciale.
 
 Entreprise destinataire: ${proposal.company_name || 'Client'}
-Référence devis: ${proposal.reference}
+Référence proposition: ${proposal.reference}
 Montant HT: ${parseFloat(proposal.total_ht || 0).toFixed(2)}€
 
 L'email doit:
 - Être professionnel et chaleureux
-- Mentionner le devis en pièce jointe
+- Mentionner la proposition en pièce jointe
 - Inviter à prendre contact pour toute question
 - Être signé "L'équipe Trinexta"
 
@@ -119,7 +119,7 @@ Réponds uniquement avec le corps de l'email.`
       } catch (asefiError) {
         emailBody = `Bonjour,
 
-Veuillez trouver ci-joint notre devis ${proposal.reference}.
+Veuillez trouver ci-joint notre proposition ${proposal.reference}.
 
 Montant total HT: ${parseFloat(proposal.total_ht || 0).toFixed(2)}€
 
@@ -157,7 +157,7 @@ L'équipe Trinexta`;
   };
 
   const handleDelete = async (proposalId) => {
-    if (!confirm('Supprimer ce devis ?')) return;
+    if (!confirm('Supprimer cette proposition ?')) return;
 
     try {
       await api.delete(`/proposals/${proposalId}`);
@@ -194,9 +194,9 @@ L'équipe Trinexta`;
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mes Devis</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Mes Propositions</h1>
           <p className="text-gray-600 mt-1">
-            {isManager ? 'Gérez tous les devis de votre équipe' : 'Gérez vos devis commerciaux'}
+            {isManager ? 'Gérez toutes les propositions de votre équipe' : 'Gérez vos propositions commerciales'}
           </p>
         </div>
         <button
@@ -252,9 +252,9 @@ L'équipe Trinexta`;
         ) : filteredProposals.length === 0 ? (
           <div className="p-8 text-center">
             <FileText className="w-12 h-12 mx-auto text-gray-400" />
-            <p className="text-gray-600 mt-2">Aucun devis trouvé</p>
+            <p className="text-gray-600 mt-2">Aucune proposition trouvée</p>
             <p className="text-sm text-gray-500 mt-1">
-              Créez un devis depuis le Pipeline
+              Créez une proposition depuis le Pipeline
             </p>
           </div>
         ) : (

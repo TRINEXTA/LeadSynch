@@ -7,7 +7,7 @@ const TASK_TYPES = [
   { value: 'email', label: '📧 Email', icon: '📧' },
   { value: 'meeting', label: '🤝 Réunion', icon: '🤝' },
   { value: 'demo', label: '🎬 Démo', icon: '🎬' },
-  { value: 'quote', label: '💰 Devis', icon: '💰' },
+  { value: 'quote', label: '💰 Proposition', icon: '💰' },
   { value: 'other', label: '📋 Autre', icon: '📋' }
 ];
 

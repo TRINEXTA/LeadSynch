@@ -279,7 +279,7 @@ L'équipe Trinexta`;
             <FileCheck className="w-12 h-12 mx-auto text-gray-400" />
             <p className="text-gray-600 mt-2">Aucun contrat trouvé</p>
             <p className="text-sm text-gray-500 mt-1">
-              Créez un contrat depuis le Pipeline ou convertissez un devis accepté
+              Créez un contrat depuis le Pipeline ou convertissez une proposition acceptée
             </p>
           </div>
         ) : (

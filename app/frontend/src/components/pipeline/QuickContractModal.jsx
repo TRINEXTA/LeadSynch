@@ -156,7 +156,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
     const offer = getSelectedOfferDetails();
     if (!offer) return 0;
 
-    if (offer.id === 'impulsion' || offer.price === null) return 'Sur devis';
+    if (offer.id === 'impulsion' || offer.price === null) return 'Sur proposition';
 
     if (offer.prices) {
       const engagement = contractType === 'sans_engagement' ? 'sans_engagement' :
@@ -176,8 +176,8 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
     const offer = getSelectedOfferDetails();
     const price = calculatePrice();
 
-    if (price === 'Sur devis') {
-      alert('Cette offre nécessite un devis personnalisé. Veuillez créer un devis d\'abord.');
+    if (price === 'Sur proposition') {
+      alert('Cette offre nécessite une proposition personnalisée. Veuillez créer une proposition d\'abord.');
       return;
     }
 
