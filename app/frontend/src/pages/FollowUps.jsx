@@ -19,7 +19,7 @@ const FOLLOWUP_TYPES = [
   { value: 'email', label: 'Envoi email', icon: '📧' },
   { value: 'meeting', label: 'Rendez-vous', icon: '🤝' },
   { value: 'demo', label: 'Démo produit', icon: '🎯' },
-  { value: 'quote', label: 'Envoi devis', icon: '💰' },
+  { value: 'quote', label: 'Envoi proposition', icon: '💰' },
   { value: 'other', label: 'Autre', icon: '📝' }
 ];
 

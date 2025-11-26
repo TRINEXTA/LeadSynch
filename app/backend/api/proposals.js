@@ -1,7 +1,14 @@
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { generateProposalPDF, savePDF } from '../services/pdfGenerator.js';
+import { sendEmail } from '../services/elasticEmail.js';
+
+// Generate unique acceptance token
+function generateAcceptanceToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
 
 // Validation schemas
 const createProposalSchema = z.object({
@@ -65,7 +72,7 @@ export default async function handler(req, res) {
         );
 
         if (!proposal) {
-          return res.status(404).json({ error: 'Devis non trouve' });
+          return res.status(404).json({ error: 'Proposition non trouvée' });
         }
 
         // Generate PDF if requested
@@ -103,7 +110,7 @@ export default async function handler(req, res) {
           );
 
           // Save PDF and return URL
-          const filename = `devis-${proposal.reference || proposal.id.substring(0, 8)}.pdf`;
+          const filename = `proposition-${proposal.reference || proposal.id.substring(0, 8)}.pdf`;
           const pdfUrl = await savePDF(pdfBuffer, filename);
 
           // Also return base64 for direct download
@@ -211,14 +218,14 @@ export default async function handler(req, res) {
         ]
       );
 
-      return res.status(201).json({ proposal, message: 'Devis créé avec succès' });
+      return res.status(201).json({ proposal, message: 'Proposition créée avec succès' });
     }
 
     // PUT /api/proposals/:id - Update proposal
     if (method === 'PUT') {
       const proposalId = req.params?.id || req.query?.id;
       if (!proposalId) {
-        return res.status(400).json({ error: 'ID du devis requis' });
+        return res.status(400).json({ error: 'ID de la proposition requis' });
       }
 
       const data = updateProposalSchema.parse(req.body);
@@ -230,7 +237,7 @@ export default async function handler(req, res) {
       );
 
       if (!existing) {
-        return res.status(404).json({ error: 'Devis non trouvé' });
+        return res.status(404).json({ error: 'Proposition non trouvée' });
       }
 
       // Build update query
@@ -260,12 +267,33 @@ export default async function handler(req, res) {
         updateParams.push(data.valid_until);
       }
 
-      if (data.status) {
+      // Handle send_with_link action - send proposal with acceptance link
+      let newAcceptanceToken = null;
+      if (data.send_with_link) {
+        // Generate acceptance token if not exists
+        if (!existing.acceptance_token) {
+          newAcceptanceToken = generateAcceptanceToken();
+          updates.push(`acceptance_token = $${updateIndex++}`);
+          updateParams.push(newAcceptanceToken);
+        } else {
+          newAcceptanceToken = existing.acceptance_token;
+        }
+        updates.push(`status = $${updateIndex++}`);
+        updateParams.push('sent');
+        updates.push(`sent_at = NOW()`);
+        updates.push(`public_link_sent_at = NOW()`);
+      } else if (data.status) {
         updates.push(`status = $${updateIndex++}`);
         updateParams.push(data.status);
 
         // Track status changes
         if (data.status === 'sent') {
+          // Generate acceptance token when sending
+          if (!existing.acceptance_token) {
+            const token = generateAcceptanceToken();
+            updates.push(`acceptance_token = $${updateIndex++}`);
+            updateParams.push(token);
+          }
           updates.push(`sent_at = NOW()`);
         } else if (data.status === 'accepted') {
           updates.push(`accepted_at = NOW()`);
@@ -290,14 +318,93 @@ export default async function handler(req, res) {
         [...updateParams, proposalId, tenantId]
       );
 
-      return res.json({ proposal, message: 'Devis mis à jour' });
+      // Send email with acceptance link if send_with_link was requested
+      if (data.send_with_link && newAcceptanceToken) {
+        // Get lead info for email
+        const lead = await queryOne(
+          `SELECT company_name, contact_name, email FROM leads WHERE id = $1`,
+          [existing.lead_id]
+        );
+
+        // Get tenant/business info for email
+        const tenant = await queryOne(
+          `SELECT t.name as tenant_name, bc.company_name as provider_name
+           FROM tenants t
+           LEFT JOIN tenant_business_config bc ON t.id = bc.tenant_id
+           WHERE t.id = $1`,
+          [tenantId]
+        );
+
+        if (lead?.email) {
+          const acceptanceLink = `${process.env.FRONTEND_URL || 'https://app.leadsynch.com'}/accept/${newAcceptanceToken}`;
+          const providerName = tenant?.provider_name || tenant?.tenant_name || 'Votre prestataire';
+
+          const htmlBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #1f2937;">Bonjour ${lead.contact_name || 'Madame, Monsieur'},</h2>
+
+              <p>Nous avons le plaisir de vous transmettre notre proposition commerciale.</p>
+
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #4f46e5;">Proposition N° ${proposal.reference}</h3>
+                <p><strong>Client :</strong> ${lead.company_name || 'N/A'}</p>
+                <p><strong>Montant HT :</strong> ${parseFloat(proposal.total_ht || 0).toFixed(2)} €</p>
+                <p><strong>Montant TTC :</strong> ${(parseFloat(proposal.total_ht || 0) * 1.2).toFixed(2)} €</p>
+                ${proposal.valid_until ? `<p><strong>Valide jusqu'au :</strong> ${new Date(proposal.valid_until).toLocaleDateString('fr-FR')}</p>` : ''}
+              </div>
+
+              <p>Pour accepter cette proposition, veuillez cliquer sur le bouton ci-dessous :</p>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${acceptanceLink}"
+                   style="display: inline-block; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                  ✅ Consulter et accepter la proposition
+                </a>
+              </div>
+
+              <p style="color: #6b7280; font-size: 14px;">
+                Ce lien est sécurisé et vous permet de consulter les détails de la proposition et de donner votre accord ("Bon pour accord").
+              </p>
+
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+              <p>Cordialement,<br><strong>${providerName}</strong></p>
+
+              <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">
+                Ce message a été envoyé automatiquement. Si vous n'êtes pas à l'origine de cette demande, veuillez ignorer cet email.
+              </p>
+            </div>
+          `;
+
+          try {
+            await sendEmail({
+              to: lead.email,
+              subject: `Proposition commerciale N° ${proposal.reference} - ${providerName}`,
+              htmlBody,
+              fromName: providerName
+            });
+            console.log(`📧 [PROPOSAL] Email avec lien d'acceptation envoyé à ${lead.email} pour proposition ${proposal.reference}`);
+          } catch (emailError) {
+            console.error(`❌ [PROPOSAL] Erreur envoi email:`, emailError);
+            // Don't fail the request, just log the error
+          }
+        }
+
+        return res.json({
+          proposal,
+          message: 'Proposition envoyée avec lien d\'acceptation',
+          acceptance_link_sent: true
+        });
+      }
+
+      return res.json({ proposal, message: 'Proposition mise à jour' });
     }
 
     // DELETE /api/proposals/:id
     if (method === 'DELETE') {
       const proposalId = req.params?.id || req.query?.id;
       if (!proposalId) {
-        return res.status(400).json({ error: 'ID du devis requis' });
+        return res.status(400).json({ error: 'ID de la proposition requis' });
       }
 
       const result = await execute(
@@ -306,10 +413,10 @@ export default async function handler(req, res) {
       );
 
       if (result.rowCount === 0) {
-        return res.status(404).json({ error: 'Devis non trouvé' });
+        return res.status(404).json({ error: 'Proposition non trouvée' });
       }
 
-      return res.json({ message: 'Devis supprimé' });
+      return res.json({ message: 'Proposition supprimée' });
     }
 
     return res.status(405).json({ error: 'Méthode non autorisée' });

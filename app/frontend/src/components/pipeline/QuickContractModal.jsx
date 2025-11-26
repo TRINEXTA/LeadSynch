@@ -156,7 +156,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
     const offer = getSelectedOfferDetails();
     if (!offer) return 0;
 
-    if (offer.id === 'impulsion' || offer.price === null) return 'Sur devis';
+    if (offer.id === 'impulsion' || offer.price === null) return 'Sur proposition';
 
     if (offer.prices) {
       const engagement = contractType === 'sans_engagement' ? 'sans_engagement' :
@@ -176,13 +176,14 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
     const offer = getSelectedOfferDetails();
     const price = calculatePrice();
 
-    if (price === 'Sur devis') {
-      alert('Cette offre nécessite un devis personnalisé. Veuillez créer un devis d\'abord.');
+    if (price === 'Sur proposition') {
+      alert('Cette offre nécessite une proposition personnalisée. Veuillez créer une proposition d\'abord.');
       return;
     }
 
     setSaving(true);
     try {
+      const numericPrice = Number(price) || 0;
       const contractData = {
         pipeline_lead_id: lead.id,
         lead_id: lead.lead_id || lead.id,
@@ -192,9 +193,9 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
         services: offer.services,
         contract_type: contractType,
         payment_frequency: paymentFrequency,
-        user_count: userCount,
-        monthly_price: price,
-        total_amount: paymentFrequency === 'annuel' ? price * 12 : price,
+        user_count: Number(userCount) || 1,
+        monthly_price: numericPrice,
+        total_amount: paymentFrequency === 'annuel' ? numericPrice * 12 : numericPrice,
         start_date: startDate,
         notes,
         send_for_signature: false // Will be handled separately

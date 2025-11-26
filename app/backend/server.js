@@ -169,6 +169,8 @@ import pipelineLeadsRoute from './api/pipeline-leads.js';
 import signaturesRoute from './api/signatures.js';
 import proposalsRoute from './api/proposals.js';
 import contractsRoute from './api/contracts.js';
+import proposalAcceptRoute from './api/proposal-accept.js';
+import contractSignRoute from './api/contract-sign.js';
 import campaignDetailedStatsRoute from './api/campaign-detailed-stats.js';
 import validationRequestsRoute from './api/validation-requests.js';
 import leadSectorAssignmentRoute from './api/lead-sector-assignment.js';
@@ -261,6 +263,14 @@ app.all('/api/proposals', proposalsRoute);
 app.all('/api/proposals/:id', proposalsRoute);
 app.all('/api/contracts', contractsRoute);
 app.all('/api/contracts/:id', contractsRoute);
+
+// ========== ?? ROUTES PUBLIQUES E-SIGNATURE (pas d'auth) ==========
+// Acceptation proposition (bon pour accord)
+app.get('/api/proposal-accept/:token', proposalAcceptRoute);
+app.post('/api/proposal-accept/:token', proposalAcceptRoute);
+// Signature contrat avec code email
+app.get('/api/contract-sign/:token', contractSignRoute);
+app.post('/api/contract-sign/:token', contractSignRoute);
 
 // ========== ?? ROUTES MAILING SETTINGS ==========
 app.get('/api/mailing-settings', authMiddleware, getMailingSettings);

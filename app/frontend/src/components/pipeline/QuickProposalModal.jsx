@@ -42,11 +42,11 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
 
     if (selectedService) {
       const service = TRINEXTA_SERVICES.find(s => s.id === selectedService);
-      if (service && service.price > 0) total += service.price;
+      if (service && service.price > 0) total += Number(service.price) || 0;
     }
 
     customLines.forEach(line => {
-      total += (line.quantity || 0) * (line.unit_price || 0);
+      total += (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
     });
 
     return total;
@@ -73,12 +73,12 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
       }
 
       customLines.forEach(line => {
-        if (line.description && line.unit_price > 0) {
+        if (line.description && Number(line.unit_price) > 0) {
           services.push({
             name: line.description,
             description: line.description,
-            quantity: line.quantity,
-            unit_price: line.unit_price
+            quantity: Number(line.quantity) || 1,
+            unit_price: Number(line.unit_price) || 0
           });
         }
       });
