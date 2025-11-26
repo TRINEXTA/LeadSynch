@@ -118,6 +118,8 @@ const processCampaign = async (campaign) => {
     // ==================== VÉRIFIER INTERVALLE ENTRE LES VAGUES ====================
     const cycleIntervalMinutes = campaign.cycle_interval_minutes || 10; // Par défaut 10 minutes
 
+    console.log(`🔧 [EMAIL WORKER] Config: ${campaign.emails_per_cycle || 50} emails/vague, ${cycleIntervalMinutes} min intervalle`);
+
     // Vérifier quand le dernier email a été envoyé pour cette campagne
     // Calcul fait directement en SQL pour éviter les problèmes de timezone JS/PostgreSQL
     const lastSentEmail = await queryOne(
@@ -130,7 +132,9 @@ const processCampaign = async (campaign) => {
       [campaign.id]
     );
 
-    if (lastSentEmail && lastSentEmail.minutes_since_sent !== null) {
+    console.log(`🔍 [EMAIL WORKER] DEBUG lastSentEmail:`, JSON.stringify(lastSentEmail));
+
+    if (lastSentEmail && lastSentEmail.minutes_since_sent != null) {
       const minutesSinceLastBatch = parseFloat(lastSentEmail.minutes_since_sent);
 
       console.log(`⏱️ [EMAIL WORKER] Dernier envoi: ${new Date(lastSentEmail.sent_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
@@ -142,6 +146,9 @@ const processCampaign = async (campaign) => {
         console.log(`   ⏳ Prochain envoi dans ${waitMinutes} minute(s)`);
         return;
       }
+      console.log(`✅ [EMAIL WORKER] ${minutesSinceLastBatch.toFixed(1)} min écoulées >= ${cycleIntervalMinutes} min, on peut envoyer`);
+    } else {
+      console.log(`ℹ️ [EMAIL WORKER] Aucun email envoyé avant, première vague`);
     }
 
     console.log(`✅ [EMAIL WORKER] Intervalle OK ! Envoi de la vague de ${campaign.emails_per_cycle || 50} emails.`);
