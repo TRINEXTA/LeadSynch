@@ -137,7 +137,7 @@ export default function Contracts() {
 Entreprise destinataire: ${contract.company_name || 'Client'}
 Référence contrat: ${contract.reference}
 Offre: ${contract.offer_name}
-Montant mensuel HT: ${(contract.monthly_price || 0).toFixed(2)}€
+Montant mensuel HT: ${parseFloat(contract.monthly_price || 0).toFixed(2)}€
 
 L'email doit:
 - Être professionnel et chaleureux
@@ -157,7 +157,7 @@ Réponds uniquement avec le corps de l'email.`
 
 Veuillez trouver ci-joint votre contrat ${contract.reference} pour l'${contract.offer_name}.
 
-Montant: ${(contract.monthly_price || 0).toFixed(2)}€ HT/mois
+Montant: ${parseFloat(contract.monthly_price || 0).toFixed(2)}€ HT/mois
 
 Merci de bien vouloir le signer et nous le retourner.
 
@@ -320,7 +320,7 @@ L'équipe Trinexta`;
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-bold text-gray-900">
-                        {(contract.monthly_price || 0).toFixed(2)} €/mois
+                        {parseFloat(contract.monthly_price || 0).toFixed(2)} €/mois
                       </span>
                     </td>
                     <td className="px-6 py-4">
