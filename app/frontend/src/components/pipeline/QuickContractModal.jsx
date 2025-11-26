@@ -183,6 +183,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
 
     setSaving(true);
     try {
+      const numericPrice = Number(price) || 0;
       const contractData = {
         pipeline_lead_id: lead.id,
         lead_id: lead.lead_id || lead.id,
@@ -192,9 +193,9 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
         services: offer.services,
         contract_type: contractType,
         payment_frequency: paymentFrequency,
-        user_count: userCount,
-        monthly_price: price,
-        total_amount: paymentFrequency === 'annuel' ? price * 12 : price,
+        user_count: Number(userCount) || 1,
+        monthly_price: numericPrice,
+        total_amount: paymentFrequency === 'annuel' ? numericPrice * 12 : numericPrice,
         start_date: startDate,
         notes,
         send_for_signature: false // Will be handled separately
