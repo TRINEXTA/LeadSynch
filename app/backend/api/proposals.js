@@ -79,9 +79,9 @@ export default async function handler(req, res) {
         if (action === 'pdf') {
           // Get tenant info for PDF
           const tenant = await queryOne(
-            `SELECT t.*, bc.company_name as name, bc.siret, bc.tva_number, bc.address, bc.postal_code, bc.city, bc.email as contact_email
+            `SELECT t.*, bi.company_name as name, bi.siret, bi.tva_number, bi.address_line1 as address, bi.postal_code, bi.city
              FROM tenants t
-             LEFT JOIN billing_configs bc ON t.id = bc.tenant_id
+             LEFT JOIN billing_info bi ON t.id = bi.tenant_id
              WHERE t.id = $1`,
             [tenantId]
           );
@@ -328,9 +328,9 @@ export default async function handler(req, res) {
 
         // Get tenant/business info for email
         const tenant = await queryOne(
-          `SELECT t.name as tenant_name, bc.company_name as provider_name
+          `SELECT t.name as tenant_name, bi.company_name as provider_name
            FROM tenants t
-           LEFT JOIN billing_configs bc ON t.id = bc.tenant_id
+           LEFT JOIN billing_info bi ON t.id = bi.tenant_id
            WHERE t.id = $1`,
           [tenantId]
         );
