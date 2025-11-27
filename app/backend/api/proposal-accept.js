@@ -43,13 +43,13 @@ async function getProposalForAcceptance(req, res, token) {
             l.company_name, l.contact_name, l.email as lead_email, l.phone as lead_phone,
             l.address as lead_address, l.city as lead_city, l.postal_code as lead_postal_code,
             t.name as tenant_name,
-            bc.company_name as provider_name, bc.siret, bc.tva_number,
-            bc.address as provider_address, bc.postal_code as provider_postal_code,
-            bc.city as provider_city, bc.phone as provider_phone, bc.email as provider_email
+            bi.company_name as provider_name, bi.siret, bi.tva_number,
+            bi.address_line1 as provider_address, bi.postal_code as provider_postal_code,
+            bi.city as provider_city
      FROM proposals p
      LEFT JOIN leads l ON p.lead_id = l.id
      LEFT JOIN tenants t ON p.tenant_id = t.id
-     LEFT JOIN tenant_business_config bc ON p.tenant_id = bc.tenant_id
+     LEFT JOIN billing_info bi ON p.tenant_id = bi.tenant_id
      WHERE p.acceptance_token = $1`,
     [token]
   );
