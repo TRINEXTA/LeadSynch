@@ -2,6 +2,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Loader, Pause, Play, Square, Clock, CheckCircle2 } from "lucide-react";
+import toast from "react-hot-toast";
+
+// URL de l'API backend
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:3000'
+  : 'https://leadsynch-api.onrender.com';
 
 export default function LeadGeneration() {
   const [sector, setSector] = useState("informatique");
@@ -38,7 +44,14 @@ export default function LeadGeneration() {
 
   const handleGenerate = async () => {
     if (!sector || !city || quantity < 1) {
-      alert("Veuillez remplir tous les champs");
+      toast.error("Veuillez remplir tous les champs");
+      return;
+    }
+
+    // Récupérer le token (localStorage ou sessionStorage)
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (!token) {
+      toast.error("Session expirée. Veuillez vous reconnecter.");
       return;
     }
 
@@ -55,22 +68,21 @@ export default function LeadGeneration() {
 
     const searchId = Date.now().toString();
     searchIdRef.current = searchId;
-    const token = localStorage.getItem("token");
 
     try {
       console.log("Appel API generate-leads-stream...");
-      const response = await fetch("/api/generate-leads-stream", {
+      const response = await fetch(`${API_BASE}/api/generate-leads-stream`, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json", 
-          "Authorization": `Bearer ${token}` 
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          sector, 
-          city, 
-          radius: parseInt(radius), 
-          quantity: parseInt(quantity), 
-          searchId 
+        body: JSON.stringify({
+          sector,
+          city,
+          radius: parseInt(radius),
+          quantity: parseInt(quantity),
+          searchId
         })
       });
 
@@ -127,7 +139,7 @@ export default function LeadGeneration() {
                 case 'error':
                   setIsGenerating(false);
                   setMessage(`Erreur: ${data.message}`);
-                  alert(`Erreur: ${data.message}`);
+                  toast.error(data.message);
                   break;
               }
             } catch (e) {
@@ -140,13 +152,13 @@ export default function LeadGeneration() {
       console.error("Erreur generation:", error);
       setIsGenerating(false);
       setMessage("Erreur de connexion");
-      alert(`Erreur: ${error.message}`);
+      toast.error(error.message || "Erreur de connexion");
     }
   };
 
   const handlePause = async () => {
-    const token = localStorage.getItem("token");
-    await fetch("/api/pause-search", {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    await fetch(`${API_BASE}/api/pause-search`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ searchId: searchIdRef.current })
@@ -156,8 +168,8 @@ export default function LeadGeneration() {
   };
 
   const handleResume = async () => {
-    const token = localStorage.getItem("token");
-    await fetch("/api/resume-search", {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    await fetch(`${API_BASE}/api/resume-search`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ searchId: searchIdRef.current })
@@ -167,8 +179,8 @@ export default function LeadGeneration() {
   };
 
   const handleStop = async () => {
-    const token = localStorage.getItem("token");
-    await fetch("/api/stop-search", {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    await fetch(`${API_BASE}/api/stop-search`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ searchId: searchIdRef.current })
