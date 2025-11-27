@@ -88,7 +88,7 @@ export default function ChatbotAsefi() {
 
     } catch (error) {
       console.error('Erreur Asefi:', error);
-      return "Désolé, je rencontre un problème technique. \n\nVous pouvez :\n Réessayer dans quelques instants\n Nous contacter à contact@leadsync.fr\n Créer un compte pour discuter avec notre équipe\n\nNotre équipe vous répondra rapidement ! ";
+      return "Désolé, je rencontre un problème technique. \n\nVous pouvez :\n Réessayer dans quelques instants\n Nous contacter à contact@leadsynch.com\n Créer un compte pour discuter avec notre équipe\n\nNotre équipe vous répondra rapidement ! ";
     }
   };
 

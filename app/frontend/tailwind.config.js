@@ -4,6 +4,17 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Safelist pour garantir la génération des classes dynamiques
+  safelist: [
+    // Backgrounds
+    { pattern: /^bg-(gray|blue|purple|green|red|orange|yellow|amber|pink|indigo|emerald|teal|cyan|rose)-(50|100|200|300|400|500|600|700|800|900)$/ },
+    // Text colors
+    { pattern: /^text-(gray|blue|purple|green|red|orange|yellow|amber|pink|indigo|emerald|teal|cyan|rose)-(50|100|200|300|400|500|600|700|800|900)$/ },
+    // Border colors
+    { pattern: /^border-(gray|blue|purple|green|red|orange|yellow|amber|pink|indigo|emerald|teal|cyan|rose)-(50|100|200|300|400|500|600|700|800|900)$/ },
+    // Ring colors
+    { pattern: /^ring-(gray|blue|purple|green|red|orange|yellow|amber|pink|indigo|emerald|teal|cyan|rose)-(50|100|200|300|400|500|600|700|800|900)$/ },
+  ],
   theme: {
     extend: {
       colors: {

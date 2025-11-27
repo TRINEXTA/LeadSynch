@@ -21,7 +21,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true, // Activé temporairement pour debug
+    sourcemap: process.env.NODE_ENV === 'development', // Désactivé en production pour sécurité
     minify: 'esbuild', // Plus stable que terser pour les dépendances React
 
     chunkSizeWarningLimit: 1000,
