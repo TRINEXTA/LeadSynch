@@ -1,4 +1,4 @@
-﻿# LeadSych
+﻿# LeadSynch
 
 CRM & Lead Management Platform
 

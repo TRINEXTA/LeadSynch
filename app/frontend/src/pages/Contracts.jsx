@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { FileCheck, Download, Mail, Eye, Trash2, Search, CheckCircle, Clock, Send, XCircle, Loader2, Sparkles, RefreshCw, Shield, PenTool } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
-  draft: { label: 'Brouillon', color: 'gray', icon: Clock },
-  pending_validation: { label: 'En attente validation', color: 'amber', icon: Shield },
-  sent: { label: 'Envoyé', color: 'blue', icon: Send },
-  signed: { label: 'Signé', color: 'green', icon: PenTool },
-  cancelled: { label: 'Annulé', color: 'red', icon: XCircle },
-  expired: { label: 'Expiré', color: 'orange', icon: Clock }
+  draft: { label: 'Brouillon', icon: Clock, bgClass: 'bg-gray-100', textClass: 'text-gray-700' },
+  pending_validation: { label: 'En attente validation', icon: Shield, bgClass: 'bg-amber-100', textClass: 'text-amber-700' },
+  sent: { label: 'Envoyé', icon: Send, bgClass: 'bg-blue-100', textClass: 'text-blue-700' },
+  signed: { label: 'Signé', icon: PenTool, bgClass: 'bg-green-100', textClass: 'text-green-700' },
+  cancelled: { label: 'Annulé', icon: XCircle, bgClass: 'bg-red-100', textClass: 'text-red-700' },
+  expired: { label: 'Expiré', icon: Clock, bgClass: 'bg-orange-100', textClass: 'text-orange-700' }
 };
 
 const TABS = [
@@ -82,7 +83,7 @@ export default function Contracts() {
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      alert('Erreur lors du téléchargement');
+      toast.error('Erreur lors du téléchargement');
     } finally {
       setDownloading(null);
     }
@@ -110,11 +111,11 @@ export default function Contracts() {
         console.warn('Could not create task');
       }
 
-      alert('Contrat validé avec succès !');
+      toast.success('Contrat validé avec succès !');
       loadContracts();
     } catch (error) {
       console.error('Error:', error);
-      alert('Erreur lors de la validation');
+      toast.error('Erreur lors de la validation');
     } finally {
       setValidating(null);
     }
@@ -181,15 +182,35 @@ L'équipe Trinexta`;
   };
 
   const handleDelete = async (contractId) => {
-    if (!confirm('Supprimer ce contrat ?')) return;
-
-    try {
-      await api.delete(`/contracts/${contractId}`);
-      loadContracts();
-    } catch (error) {
-      console.error('Error:', error);
-      alert(error.response?.data?.error || 'Erreur lors de la suppression');
-    }
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-medium">Supprimer ce contrat ?</p>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await api.delete(`/contracts/${contractId}`);
+                toast.success('Contrat supprimé');
+                loadContracts();
+              } catch (error) {
+                console.error('Error:', error);
+                toast.error(error.response?.data?.error || 'Erreur lors de la suppression');
+              }
+            }}
+            className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+          >
+            Supprimer
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+    ), { duration: 10000 });
   };
 
   const filteredContracts = contracts.filter(c => {
@@ -324,7 +345,7 @@ L'équipe Trinexta`;
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-${statusConfig.color}-100 text-${statusConfig.color}-700`}>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${statusConfig.bgClass} ${statusConfig.textClass}`}>
                         <StatusIcon className="w-3.5 h-3.5" />
                         {statusConfig.label}
                       </span>

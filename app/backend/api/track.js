@@ -41,7 +41,7 @@ router.get("/click", async (req, res) => {
   `, [lead_id, campaign_id]);
 
   // Redirection vers le lien réel
-  res.redirect(decodeURIComponent(url || "https://leadsych.com"));
+  res.redirect(decodeURIComponent(url || "https://leadsynch.com"));
 });
 
 export default router;
