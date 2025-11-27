@@ -1,7 +1,8 @@
 ﻿import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Loader, Pause, Play, Square, Clock, CheckCircle2 } from "lucide-react";
+import { Sparkles, Loader, Pause, Play, Square, Clock, CheckCircle2, ShoppingCart, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 
 // URL de l'API backend
@@ -10,6 +11,7 @@ const API_BASE = window.location.hostname === 'localhost'
   : 'https://leadsynch-api.onrender.com';
 
 export default function LeadGeneration() {
+  const navigate = useNavigate();
   const [sector, setSector] = useState("informatique");
   const [city, setCity] = useState("");
   const [radius, setRadius] = useState(10);
@@ -22,6 +24,7 @@ export default function LeadGeneration() {
   const [stats, setStats] = useState({ found: 0, generated: 0, total: 0 });
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState(null);
+  const [quotaError, setQuotaError] = useState(null);
   const searchIdRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -65,6 +68,7 @@ export default function LeadGeneration() {
     setTimeElapsed(0);
     setEstimatedTime(null);
     setMessage("Demarrage...");
+    setQuotaError(null);
 
     const searchId = Date.now().toString();
     searchIdRef.current = searchId;
@@ -89,6 +93,19 @@ export default function LeadGeneration() {
       console.log("Response status:", response.status);
 
       if (!response.ok) {
+        // Gérer les erreurs de quota (403)
+        if (response.status === 403) {
+          try {
+            const errorData = await response.json();
+            setQuotaError(errorData);
+            setIsGenerating(false);
+            setMessage(errorData.message || "Quota insuffisant");
+            toast.error(errorData.message || "Quota insuffisant", { duration: 5000 });
+            return;
+          } catch (e) {
+            throw new Error("Quota insuffisant");
+          }
+        }
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -268,6 +285,50 @@ export default function LeadGeneration() {
           )}
         </CardContent>
       </Card>
+
+      {/* Affichage erreur de quota */}
+      {quotaError && (
+        <Card className="mb-6 border-2 border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50 shadow-lg">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-orange-100 rounded-full">
+                <CreditCard className="w-8 h-8 text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-orange-800 mb-2">
+                  {quotaError.error === 'Quota insuffisant' ? '⚠️ Crédits insuffisants' : '⚠️ Abonnement requis'}
+                </h3>
+                <p className="text-gray-700 mb-4">{quotaError.message}</p>
+                {quotaError.available !== undefined && (
+                  <div className="flex gap-4 mb-4 text-sm">
+                    <span className="bg-white px-3 py-1 rounded-full border border-orange-200">
+                      <strong>Disponibles:</strong> {quotaError.available} crédits
+                    </span>
+                    <span className="bg-white px-3 py-1 rounded-full border border-orange-200">
+                      <strong>Demandés:</strong> {quotaError.requested} crédits
+                    </span>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => navigate(quotaError.redirect || '/settings/billing')}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold rounded-lg shadow-md flex items-center gap-2 transition-all"
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    {quotaError.action === 'subscribe' ? 'Voir les plans' : 'Acheter des crédits'}
+                  </button>
+                  <button
+                    onClick={() => setQuotaError(null)}
+                    className="px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isGenerating && (
         <Card className="mb-6 border-4 border-blue-500 shadow-2xl animate-pulse">
