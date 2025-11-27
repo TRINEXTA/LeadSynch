@@ -396,6 +396,52 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'Parametres manquants' });
       }
 
+      // Vérifier si l'utilisateur est super admin (pas de limite de quota)
+      const isSuperAdmin = req.user.is_super_admin === true;
+
+      // Vérification quota (sauf pour super admin)
+      if (!isSuperAdmin) {
+        const quotaCheck = await queryAll(
+          `SELECT
+            s.google_leads_quota,
+            s.google_leads_used,
+            (s.google_leads_quota - s.google_leads_used +
+             COALESCE(SUM(p.google_leads_remaining), 0)) AS available
+          FROM subscriptions s
+          LEFT JOIN one_shot_packs p ON s.tenant_id = p.tenant_id
+            AND p.status = 'active'
+            AND p.expires_at >= CURRENT_DATE
+          WHERE s.tenant_id = $1
+          GROUP BY s.id`,
+          [tenant_id]
+        );
+
+        if (quotaCheck.length === 0) {
+          return res.status(403).json({
+            error: 'Aucun abonnement actif',
+            message: 'Vous n\'avez pas d\'abonnement actif. Veuillez souscrire à un plan pour générer des leads.',
+            action: 'subscribe',
+            redirect: '/pricing'
+          });
+        }
+
+        const available = parseInt(quotaCheck[0].available) || 0;
+        console.log(`💳 Quota disponible pour ${req.user.email}: ${available} leads Google`);
+
+        if (available < quantity) {
+          return res.status(403).json({
+            error: 'Quota insuffisant',
+            message: `Vous avez ${available} crédit(s) restant(s) mais vous demandez ${quantity} leads. Achetez des crédits supplémentaires pour continuer.`,
+            available,
+            requested: quantity,
+            action: 'buy_credits',
+            redirect: '/settings/billing'
+          });
+        }
+      } else {
+        console.log(`👑 Super admin ${req.user.email} - pas de limite de quota`);
+      }
+
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
