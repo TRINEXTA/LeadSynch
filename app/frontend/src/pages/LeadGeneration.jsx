@@ -74,7 +74,10 @@ export default function LeadGeneration() {
     searchIdRef.current = searchId;
 
     try {
-      console.log("Appel API generate-leads-stream...");
+      console.log("🚀 Appel API generate-leads-stream...");
+      console.log("📍 URL:", `${API_BASE}/api/generate-leads-stream`);
+      console.log("📋 Params:", { sector, city, radius: parseInt(radius), quantity: parseInt(quantity) });
+
       const response = await fetch(`${API_BASE}/api/generate-leads-stream`, {
         method: "POST",
         headers: {
@@ -90,23 +93,28 @@ export default function LeadGeneration() {
         })
       });
 
-      console.log("Response status:", response.status);
+      console.log("✅ Response status:", response.status);
+      console.log("✅ Response ok:", response.ok);
 
       if (!response.ok) {
         // Gérer les erreurs de quota (403)
         if (response.status === 403) {
+          console.warn("⚠️ 403 Forbidden - Quota error");
           try {
             const errorData = await response.json();
+            console.log("📊 Error data:", errorData);
             setQuotaError(errorData);
             setIsGenerating(false);
             setMessage(errorData.message || "Quota insuffisant");
-            toast.error(errorData.message || "Quota insuffisant", { duration: 5000 });
+            toast.error(errorData.message || "Quota insuffisant", { duration: 5000, id: 'quota-error' });
             return;
           } catch (e) {
+            console.error("❌ Error parsing 403 response:", e);
             throw new Error("Quota insuffisant");
           }
         }
-        throw new Error(`HTTP ${response.status}`);
+        console.error("❌ HTTP Error:", response.status);
+        throw new Error(`Erreur HTTP ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -166,10 +174,16 @@ export default function LeadGeneration() {
         }
       }
     } catch (error) {
-      console.error("Erreur generation:", error);
+      console.error("❌ Erreur generation (catch block):", error);
+      console.error("❌ Error name:", error.name);
+      console.error("❌ Error message:", error.message);
+      console.error("❌ Error stack:", error.stack);
       setIsGenerating(false);
-      setMessage("Erreur de connexion");
-      toast.error(error.message || "Erreur de connexion");
+
+      // Afficher un message plus informatif
+      const errorMsg = error.message || "Erreur de connexion";
+      setMessage(errorMsg);
+      toast.error(errorMsg, { id: 'generation-error', duration: 5000 });
     }
   };
 
