@@ -11,11 +11,36 @@ export default function ForgotPassword() {
     e.preventDefault();
     setIsLoading(true);
 
-    // TODO: Appel API backend pour envoyer l'email
-    setTimeout(() => {
+    const API_URL = import.meta.env.VITE_API_URL;
+    if (!API_URL) {
+      console.error('VITE_API_URL non configuree');
       setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsSubmitted(true);
+      } else {
+        console.error('Erreur:', data.error);
+        // On affiche quand meme le message de succes pour la securite (ne pas reveler si l'email existe)
+        setIsSubmitted(true);
+      }
+    } catch (error) {
+      console.error('Erreur reseau:', error);
+      // Afficher quand meme le message de succes pour la securite
       setIsSubmitted(true);
-    }, 1500);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSubmitted) {
