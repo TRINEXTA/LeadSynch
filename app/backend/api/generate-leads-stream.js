@@ -499,7 +499,9 @@ async function handler(req, res) {
       try {
         sendProgress({ type: 'start', message: 'Demarrage...' });
         sendProgress({ type: 'progress', percent: 10, message: 'Recherche en base...' });
-        
+
+        console.log(`🔍 Recherche: sector=${sector}, city=${city}, quantity=${quantity}`);
+
         const existingLeads = await queryAll(
           `SELECT * FROM global_leads WHERE industry = $1 AND city ILIKE $2 ORDER BY last_verified_at DESC LIMIT $3`,
           [sector, `%${city}%`, quantity]
@@ -508,14 +510,27 @@ async function handler(req, res) {
         const foundCount = existingLeads.length;
         const missingCount = quantity - foundCount;
 
+        console.log(`📊 Résultat cache: foundCount=${foundCount}, missingCount=${missingCount}`);
+        console.log(`🔑 GOOGLE_API_KEY configurée: ${GOOGLE_API_KEY ? 'OUI (' + GOOGLE_API_KEY.substring(0, 10) + '...)' : 'NON ❌'}`);
+
         sendProgress({ type: 'cache_results', percent: 30, found: foundCount, missing: missingCount, leads: existingLeads });
 
         // Déclaration en dehors du bloc if pour être accessible partout
         let generated = 0;
 
         if (missingCount > 0 && searchState.active) {
+          console.log(`🌐 Lancement recherche Google Maps (${missingCount} leads manquants)`);
+
+          if (!GOOGLE_API_KEY) {
+            console.error('❌ GOOGLE_API_KEY non configurée - impossible de chercher sur Google Maps');
+            sendProgress({ type: 'error', message: 'Clé API Google Maps non configurée' });
+            res.end();
+            return;
+          }
+
           const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
-          
+          console.log(`📍 Types Google à rechercher: ${googleTypes.join(', ')}`);
+
           for (const type of googleTypes) {
             if (!searchState.active || generated >= missingCount) break;
 
@@ -523,9 +538,13 @@ async function handler(req, res) {
               await new Promise(resolve => setTimeout(resolve, 500));
             }
 
+            console.log(`🔎 Recherche Google: "${type} ${city}" (rayon: ${radius}km)`);
+
             const response = await googleMapsClient.textSearch({
               params: { query: `${type} ${city}`, radius: radius * 1000, key: GOOGLE_API_KEY, language: 'fr' }
             });
+
+            console.log(`✅ Google retourne ${response.data.results?.length || 0} résultats pour "${type}"`)
 
             for (const place of (response.data.results || [])) {
               if (!searchState.active || generated >= missingCount) break;
@@ -560,6 +579,12 @@ async function handler(req, res) {
               }
             }
           }
+        }
+
+        if (missingCount <= 0) {
+          console.log(`✅ Tous les leads demandés (${quantity}) trouvés en cache, pas besoin de Google Maps`);
+        } else {
+          console.log(`📈 Génération terminée: ${generated} nouveaux leads générés via Google Maps`);
         }
 
         sendProgress({ type: 'complete', percent: 100, total: foundCount + (missingCount > 0 ? generated : 0) });
