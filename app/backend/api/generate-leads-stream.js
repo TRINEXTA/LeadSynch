@@ -540,13 +540,27 @@ async function handler(req, res) {
 
             console.log(`🔎 Recherche Google: "${type} ${city}" (rayon: ${radius}km)`);
 
-            const response = await googleMapsClient.textSearch({
-              params: { query: `${type} ${city}`, radius: radius * 1000, key: GOOGLE_API_KEY, language: 'fr' }
-            });
+            let googleResults = [];
+            try {
+              const response = await googleMapsClient.textSearch({
+                params: { query: `${type} ${city}`, radius: radius * 1000, key: GOOGLE_API_KEY, language: 'fr' }
+              });
+              googleResults = response.data.results || [];
+              console.log(`✅ Google retourne ${googleResults.length} résultats pour "${type}"`);
+            } catch (googleError) {
+              console.error(`❌ Erreur Google Maps API pour "${type}":`, googleError.message);
+              if (googleError.response?.status === 403 || googleError.message.includes('403')) {
+                console.error('❌ Google Maps 403 - Clé API invalide ou Places API non activée');
+                console.error('   Clé utilisée:', GOOGLE_API_KEY?.substring(0, 15) + '...');
+                sendProgress({ type: 'error', message: 'Erreur Google Maps API (403) - Vérifiez que votre clé API est valide et que l\'API Places est activée dans la Google Cloud Console' });
+                res.end();
+                return;
+              }
+              // Continuer avec les autres types si erreur non fatale
+              continue;
+            }
 
-            console.log(`✅ Google retourne ${response.data.results?.length || 0} résultats pour "${type}"`)
-
-            for (const place of (response.data.results || [])) {
+            for (const place of googleResults) {
               if (!searchState.active || generated >= missingCount) break;
 
               while (searchState.paused && searchState.active) {
@@ -592,7 +606,29 @@ async function handler(req, res) {
         return;
 
       } catch (error) {
-        sendProgress({ type: 'error', message: error.message });
+        console.error('❌ ERREUR GENERATION:', error.message);
+        console.error('❌ Stack:', error.stack);
+
+        // Identifier la source de l'erreur pour un message plus clair
+        let userMessage = error.message;
+
+        if (error.message.includes('403')) {
+          if (error.config?.url?.includes('maps.googleapis.com')) {
+            userMessage = 'Erreur Google Maps API (403) - Vérifiez que la clé API est valide et que l\'API Places est activée';
+            console.error('❌ Google Maps API Error - Clé:', GOOGLE_API_KEY?.substring(0, 15) + '...');
+          } else if (error.config?.url?.includes('hunter.io')) {
+            userMessage = 'Erreur Hunter.io API (403) - Clé API invalide ou quota dépassé';
+          } else {
+            userMessage = 'Erreur 403 lors du scraping d\'un site web - Site protégé';
+          }
+        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ETIMEDOUT')) {
+          userMessage = 'Erreur de connexion - Vérifiez votre connexion internet';
+        } else if (error.message.includes('Invalid API key')) {
+          userMessage = 'Clé API Google Maps invalide';
+        }
+
+        console.error('❌ Message envoyé au frontend:', userMessage);
+        sendProgress({ type: 'error', message: userMessage });
         res.end();
         return;
       } finally {
