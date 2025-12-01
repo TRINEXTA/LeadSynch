@@ -539,14 +539,21 @@ async function handler(req, res) {
             }
 
             console.log(`🔎 Recherche Google: "${type} ${city}" (rayon: ${radius}km)`);
+            sendProgress({ type: 'progress', percent: 35, message: `Recherche Google Maps: ${type}...` });
 
             let googleResults = [];
             try {
+              console.log(`📡 Appel Google textSearch avec query="${type} ${city}"`);
               const response = await googleMapsClient.textSearch({
                 params: { query: `${type} ${city}`, radius: radius * 1000, key: GOOGLE_API_KEY, language: 'fr' }
               });
               googleResults = response.data.results || [];
               console.log(`✅ Google retourne ${googleResults.length} résultats pour "${type}"`);
+
+              if (googleResults.length === 0) {
+                console.log(`⚠️ Aucun résultat Google pour "${type} ${city}" - essai du type suivant`);
+                sendProgress({ type: 'progress', percent: 40, message: `Aucun résultat pour ${type}, recherche suivante...` });
+              }
             } catch (googleError) {
               console.error(`❌ Erreur Google Maps API pour "${type}":`, googleError.message);
               if (googleError.response?.status === 403 || googleError.message.includes('403')) {
@@ -568,7 +575,12 @@ async function handler(req, res) {
               }
 
               const existing = await queryAll('SELECT id FROM global_leads WHERE google_place_id = $1', [place.place_id]);
-              if (existing.length > 0) continue;
+              if (existing.length > 0) {
+                console.log(`⏭️ Skip "${place.name}" - déjà en base (place_id: ${place.place_id.substring(0, 20)}...)`);
+                continue;
+              }
+              console.log(`🆕 Traitement nouveau lieu: "${place.name}"`);
+              sendProgress({ type: 'progress', percent: 45 + Math.floor((generated / missingCount) * 45), message: `Analyse: ${place.name}...` });
 
               try {
                 const detailsResponse = await googleMapsClient.placeDetails({
@@ -586,14 +598,19 @@ async function handler(req, res) {
 
                 generated++;
                 const percent = 30 + Math.floor((generated / missingCount) * 60);
-                sendProgress({ type: 'new_lead', percent, generated, total: foundCount + generated, lead: result.rows[0] });
+                const newLead = result.rows[0];
+                console.log(`✅ Lead inséré: "${newLead?.company_name}" (${generated}/${missingCount})`);
+                sendProgress({ type: 'new_lead', percent, generated, total: foundCount + generated, lead: newLead });
 
               } catch (error) {
-                console.error('Erreur details:', error.message);
+                console.error(`❌ Erreur traitement "${place.name}":`, error.message);
+                // Continuer avec le lieu suivant
               }
             }
           }
         }
+
+        const totalLeads = foundCount + (missingCount > 0 ? generated : 0);
 
         if (missingCount <= 0) {
           console.log(`✅ Tous les leads demandés (${quantity}) trouvés en cache, pas besoin de Google Maps`);
@@ -601,7 +618,18 @@ async function handler(req, res) {
           console.log(`📈 Génération terminée: ${generated} nouveaux leads générés via Google Maps`);
         }
 
-        sendProgress({ type: 'complete', percent: 100, total: foundCount + (missingCount > 0 ? generated : 0) });
+        // Message de fin plus informatif
+        let completeMessage = `Terminé ! ${totalLeads} leads trouvés`;
+        if (totalLeads === 0) {
+          completeMessage = 'Aucun lead trouvé pour cette recherche. Essayez un autre secteur ou une autre ville.';
+          console.log(`⚠️ Recherche terminée sans résultats pour ${sector} à ${city}`);
+        } else if (foundCount > 0 && generated === 0) {
+          completeMessage = `${foundCount} leads trouvés en cache (déjà enregistrés)`;
+        } else if (foundCount === 0 && generated > 0) {
+          completeMessage = `${generated} nouveaux leads générés via Google Maps`;
+        }
+
+        sendProgress({ type: 'complete', percent: 100, total: totalLeads, message: completeMessage, fromCache: foundCount, generated: generated });
         res.end();
         return;
 
