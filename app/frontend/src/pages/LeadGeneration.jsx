@@ -25,6 +25,8 @@ export default function LeadGeneration() {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState(null);
   const [quotaError, setQuotaError] = useState(null);
+  const [searchComplete, setSearchComplete] = useState(false);
+  const [completeMessage, setCompleteMessage] = useState("");
   const searchIdRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -69,6 +71,8 @@ export default function LeadGeneration() {
     setEstimatedTime(null);
     setMessage("Demarrage...");
     setQuotaError(null);
+    setSearchComplete(false);
+    setCompleteMessage("");
 
     const searchId = Date.now().toString();
     searchIdRef.current = searchId;
@@ -159,7 +163,15 @@ export default function LeadGeneration() {
                 case 'complete':
                   setProgress(100);
                   setIsGenerating(false);
-                  setMessage(`Termine ! ${data.total} leads trouves`);
+                  setSearchComplete(true);
+                  setCompleteMessage(data.message || `Terminé ! ${data.total} leads trouvés`);
+                  setStats(prev => ({ ...prev, found: data.fromCache || prev.found, generated: data.generated || prev.generated, total: data.total }));
+                  setMessage(data.message || `Terminé ! ${data.total} leads trouvés`);
+                  if (data.total === 0) {
+                    toast("Aucun résultat trouvé", { icon: "⚠️", duration: 5000 });
+                  } else {
+                    toast.success(`${data.total} leads trouvés !`, { duration: 3000 });
+                  }
                   break;
                 case 'error':
                   setIsGenerating(false);
@@ -389,12 +401,33 @@ export default function LeadGeneration() {
         </Card>
       )}
 
+      {/* Message de fin de recherche */}
+      {searchComplete && !isGenerating && leads.length === 0 && (
+        <Card className="mb-6 border-2 border-yellow-400 bg-gradient-to-r from-yellow-50 to-amber-50 shadow-lg">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-yellow-100 rounded-full">
+                <Sparkles className="w-8 h-8 text-yellow-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-yellow-800 mb-2">Recherche terminée</h3>
+                <p className="text-gray-700">{completeMessage}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Essayez de modifier les paramètres de recherche (secteur, ville, rayon) pour obtenir plus de résultats.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {leads.length > 0 && (
         <Card className="shadow-xl">
           <CardHeader className="bg-green-50 border-b-2">
             <CardTitle className="text-2xl flex items-center gap-3">
               <CheckCircle2 className="w-7 h-7 text-green-600" />
               Resultats ({leads.length} leads)
+              {searchComplete && <span className="text-sm font-normal text-gray-500 ml-2">- {completeMessage}</span>}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
