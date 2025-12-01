@@ -30,12 +30,33 @@ export default function ResetPassword() {
 
     setIsLoading(true);
 
-    // TODO: Appel API backend pour réinitialiser le mot de passe
-    setTimeout(() => {
+    const API_URL = import.meta.env.VITE_API_URL;
+    if (!API_URL) {
+      setError('Configuration manquante. Veuillez contacter le support.');
       setIsLoading(false);
-      // Redirection vers login avec message succès
-      navigate('/login', { state: { message: 'Mot de passe réinitialisé avec succès !' } });
-    }, 1500);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword: password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        navigate('/login', { state: { message: 'Mot de passe reinitialise avec succes !' } });
+      } else {
+        setError(data.error || 'Erreur lors de la reinitialisation du mot de passe');
+      }
+    } catch (error) {
+      console.error('Erreur reseau:', error);
+      setError('Erreur de connexion. Veuillez reessayer.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

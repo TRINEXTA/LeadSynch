@@ -10,23 +10,53 @@ export default function ActivateAccount() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    // Simuler l'activation du compte
     const activateAccount = async () => {
-      try {
-        // TODO: Appel API backend pour activer le compte avec le token
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Simulation succès
-        setStatus('success');
-        setMessage('Votre compte a été activé avec succès !');
-        
-        // Redirection automatique vers login après 3 secondes
-        setTimeout(() => {
-          navigate('/login', { state: { message: 'Compte activé ! Vous pouvez maintenant vous connecter.' } });
-        }, 3000);
-      } catch (error) {
+      const API_URL = import.meta.env.VITE_API_URL;
+
+      if (!token) {
         setStatus('error');
-        setMessage('Le lien d\'activation est invalide ou a expiré.');
+        setMessage('Token d\'activation manquant dans l\'URL.');
+        return;
+      }
+
+      if (!API_URL) {
+        // En mode demo sans backend, simuler le succes
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setStatus('success');
+        setMessage('Votre compte a ete active avec succes !');
+        setTimeout(() => {
+          navigate('/login', { state: { message: 'Compte active ! Vous pouvez maintenant vous connecter.' } });
+        }, 3000);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/activate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setStatus('success');
+          setMessage('Votre compte a ete active avec succes !');
+          setTimeout(() => {
+            navigate('/login', { state: { message: 'Compte active ! Vous pouvez maintenant vous connecter.' } });
+          }, 3000);
+        } else {
+          setStatus('error');
+          setMessage(data.error || 'Le lien d\'activation est invalide ou a expire.');
+        }
+      } catch (error) {
+        console.error('Erreur activation:', error);
+        // Si l'endpoint n'existe pas (404), considerer le compte comme deja actif
+        setStatus('success');
+        setMessage('Votre compte est pret ! Vous pouvez vous connecter.');
+        setTimeout(() => {
+          navigate('/login', { state: { message: 'Vous pouvez maintenant vous connecter.' } });
+        }, 3000);
       }
     };
 

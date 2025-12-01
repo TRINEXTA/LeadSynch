@@ -222,30 +222,47 @@ async function handler(req, res) {
 
       console.log(`🔍 Recherche: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 
-      // 1. VÉRIFIER LES QUOTAS
-      const quotaCheck = await queryAll(
-        `SELECT 
-          s.google_leads_quota,
-          s.google_leads_used,
-          (s.google_leads_quota - s.google_leads_used + 
-           COALESCE(SUM(p.google_leads_remaining), 0)) AS available
-        FROM subscriptions s
-        LEFT JOIN one_shot_packs p ON s.tenant_id = p.tenant_id 
-          AND p.status = 'active' 
-          AND p.expires_at >= CURRENT_DATE
-        WHERE s.tenant_id = $1
-        GROUP BY s.id`,
+      // 1. VÉRIFIER LES QUOTAS (système basé sur tenants.plan)
+      const LEGACY_PLAN_QUOTAS = {
+        'FREE': { google_leads_quota: 10 },
+        'STARTER': { google_leads_quota: 100 },
+        'PRO': { google_leads_quota: 500 },
+        'BUSINESS': { google_leads_quota: -1 }
+      };
+
+      const tenantResult = await queryAll(
+        `SELECT plan FROM tenants WHERE id = $1`,
         [tenant_id]
       );
 
-      if (quotaCheck.length === 0) {
-        return res.status(403).json({ error: 'Aucun abonnement trouvé' });
+      if (tenantResult.length === 0) {
+        return res.status(403).json({ error: 'Tenant non trouvé' });
       }
 
-      const available = quotaCheck[0].available;
-      console.log(`💳 Quota disponible: ${available} leads Google`);
+      const plan = tenantResult[0].plan || 'FREE';
+      const planQuotas = LEGACY_PLAN_QUOTAS[plan] || LEGACY_PLAN_QUOTAS['FREE'];
 
-      if (available < quantity) {
+      let available = -1; // -1 = illimité
+      if (planQuotas.google_leads_quota !== -1) {
+        const usageResult = await queryAll(
+          `SELECT COALESCE(SUM(credits_used), 0) as total
+           FROM credit_usage
+           WHERE tenant_id = $1 AND source = 'google_maps'
+           AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+          [tenant_id]
+        );
+        const creditsResult = await queryAll(
+          `SELECT COALESCE(credits_remaining, 0) as credits FROM lead_credits WHERE tenant_id = $1`,
+          [tenant_id]
+        );
+        const used = parseInt(usageResult[0]?.total || 0);
+        const bonusCredits = parseInt(creditsResult[0]?.credits || 0);
+        available = Math.max(0, planQuotas.google_leads_quota - used + bonusCredits);
+      }
+
+      console.log(`💳 Quota disponible: ${available === -1 ? 'illimité' : available} leads Google`);
+
+      if (available !== -1 && available < quantity) {
         return res.status(403).json({
           error: 'Quota insuffisant',
           available,
@@ -399,44 +416,70 @@ async function handler(req, res) {
       // Vérifier si l'utilisateur est super admin (pas de limite de quota)
       const isSuperAdmin = req.user.is_super_admin === true;
 
+      // Définition des quotas par plan
+      const PLAN_QUOTAS = {
+        'FREE': { google_leads_quota: 10 },
+        'STARTER': { google_leads_quota: 100 },
+        'PRO': { google_leads_quota: 500 },
+        'BUSINESS': { google_leads_quota: -1 } // illimité
+      };
+
       // Vérification quota (sauf pour super admin)
       if (!isSuperAdmin) {
-        const quotaCheck = await queryAll(
-          `SELECT
-            s.google_leads_quota,
-            s.google_leads_used,
-            (s.google_leads_quota - s.google_leads_used +
-             COALESCE(SUM(p.google_leads_remaining), 0)) AS available
-          FROM subscriptions s
-          LEFT JOIN one_shot_packs p ON s.tenant_id = p.tenant_id
-            AND p.status = 'active'
-            AND p.expires_at >= CURRENT_DATE
-          WHERE s.tenant_id = $1
-          GROUP BY s.id`,
+        // Récupérer le plan du tenant
+        const tenantResult = await queryAll(
+          `SELECT plan FROM tenants WHERE id = $1`,
           [tenant_id]
         );
 
-        if (quotaCheck.length === 0) {
+        if (tenantResult.length === 0) {
           return res.status(403).json({
-            error: 'Aucun abonnement actif',
-            message: 'Vous n\'avez pas d\'abonnement actif. Veuillez souscrire à un plan pour générer des leads.',
-            action: 'subscribe',
-            redirect: '/pricing'
+            error: 'Tenant non trouvé',
+            message: 'Votre compte n\'est pas correctement configuré.',
+            action: 'contact_support',
+            redirect: '/support'
           });
         }
 
-        const available = parseInt(quotaCheck[0].available) || 0;
-        console.log(`💳 Quota disponible pour ${req.user.email}: ${available} leads Google`);
+        const plan = tenantResult[0].plan || 'FREE';
+        const planQuotas = PLAN_QUOTAS[plan] || PLAN_QUOTAS['FREE'];
 
-        if (available < quantity) {
-          return res.status(403).json({
-            error: 'Quota insuffisant',
-            message: `Vous avez ${available} crédit(s) restant(s) mais vous demandez ${quantity} leads. Achetez des crédits supplémentaires pour continuer.`,
-            available,
-            requested: quantity,
-            action: 'buy_credits',
-            redirect: '/settings/billing'
-          });
+        // Si plan illimité, pas besoin de vérifier
+        if (planQuotas.google_leads_quota !== -1) {
+          // Récupérer l'utilisation ce mois depuis credit_usage
+          const usageResult = await queryAll(
+            `SELECT COALESCE(SUM(credits_used), 0) as total
+             FROM credit_usage
+             WHERE tenant_id = $1 AND source = 'google_maps'
+             AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`,
+            [tenant_id]
+          );
+
+          // Récupérer les crédits bonus achetés
+          const creditsResult = await queryAll(
+            `SELECT COALESCE(credits_remaining, 0) as credits FROM lead_credits WHERE tenant_id = $1`,
+            [tenant_id]
+          );
+
+          const used = parseInt(usageResult[0]?.total || 0);
+          const bonusCredits = parseInt(creditsResult[0]?.credits || 0);
+          const available = Math.max(0, planQuotas.google_leads_quota - used + bonusCredits);
+
+          console.log(`💳 Quota pour ${req.user.email}: Plan ${plan}, Utilisé ${used}/${planQuotas.google_leads_quota}, Bonus ${bonusCredits}, Disponible ${available}`);
+
+          if (available < quantity) {
+            return res.status(403).json({
+              error: 'Quota insuffisant',
+              message: `Vous avez ${available} crédit(s) restant(s) mais vous demandez ${quantity} leads. Achetez des crédits supplémentaires ou upgradez votre plan.`,
+              available,
+              requested: quantity,
+              plan: plan,
+              action: 'buy_credits',
+              redirect: '/settings/billing'
+            });
+          }
+        } else {
+          console.log(`💳 Plan ${plan} avec quotas illimités pour ${req.user.email}`);
         }
       } else {
         console.log(`👑 Super admin ${req.user.email} - pas de limite de quota`);
@@ -467,8 +510,10 @@ async function handler(req, res) {
 
         sendProgress({ type: 'cache_results', percent: 30, found: foundCount, missing: missingCount, leads: existingLeads });
 
+        // Déclaration en dehors du bloc if pour être accessible partout
+        let generated = 0;
+
         if (missingCount > 0 && searchState.active) {
-          let generated = 0;
           const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
           
           for (const type of googleTypes) {

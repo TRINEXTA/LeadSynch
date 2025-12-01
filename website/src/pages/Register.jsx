@@ -11,6 +11,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [siretLoading, setSiretLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Étape 1 : Infos personnelles
   const [formData, setFormData] = useState({
@@ -162,7 +163,9 @@ export default function Register() {
         postalCode: data.postalCode || prev.postalCode,
       }));
 
-      alert('✅ SIRET vérifié ! Les informations ont été complétées automatiquement.');
+      setSuccessMessage('SIRET verifie ! Les informations ont ete completees automatiquement.');
+      // Effacer le message apres 5 secondes
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (error) {
       setErrors(prev => ({
         ...prev,
@@ -223,9 +226,11 @@ export default function Register() {
       const data = await response.json();
 
       if (response.ok) {
-        alert(' Compte créé avec succès ! Vous allez être redirigé vers l\'application.');
-        // Redirection vers l'app CRM
-        window.location.href = APP_URL;
+        setSuccessMessage('Compte cree avec succes ! Redirection vers l\'application...');
+        // Redirection vers l'app CRM apres un court delai
+        setTimeout(() => {
+          window.location.href = APP_URL;
+        }, 1500);
       } else {
         setErrors({ submit: data.error || 'Erreur lors de l\'inscription' });
       }
@@ -460,6 +465,15 @@ export default function Register() {
                   <p className="text-xs text-gray-500 mt-1">Cliquez sur "Vérifier" pour valider et auto-compléter les infos</p>
                 </div>
 
+                {successMessage && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-green-700 flex items-center gap-2">
+                      <Check className="w-5 h-5" />
+                      {successMessage}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-semibold mb-2">Numéro TVA intracommunautaire (optionnel)</label>
                   <input
@@ -628,6 +642,15 @@ export default function Register() {
                   </label>
                   {errors.acceptTerms && <p className="text-red-500 text-sm mt-2">{errors.acceptTerms}</p>}
                 </div>
+
+                {successMessage && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-green-700 flex items-center gap-2">
+                      <Check className="w-5 h-5" />
+                      {successMessage}
+                    </p>
+                  </div>
+                )}
 
                 {errors.submit && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
