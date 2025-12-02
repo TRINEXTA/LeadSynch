@@ -1031,43 +1031,82 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
       assignedUserIds = [];
     }
 
-    // Récupérer les commerciaux :
-    // 1. Ceux dans assigned_users
-    // 2. OU ceux qui ont des leads dans pipeline_leads pour cette campagne
-    // 3. OU ceux qui ont des leads assignés dans la database de la campagne
+    // Récupérer les commerciaux avec comptage des leads (pipeline + leads table)
     const commercials = await queryAll(
-      `SELECT DISTINCT
+      `SELECT
         u.id,
         u.first_name,
         u.last_name,
         u.email,
         u.role,
-        COALESCE(COUNT(DISTINCT pl.lead_id), 0) as leads_assigned,
-        COALESCE(COUNT(DISTINCT CASE WHEN pl.stage != 'cold_call' THEN pl.lead_id END), 0) as leads_contacted,
-        COALESCE(COUNT(DISTINCT CASE WHEN pl.stage IN ('tres_qualifie', 'proposition', 'gagne') THEN pl.lead_id END), 0) as meetings_scheduled
+        -- Leads dans pipeline_leads
+        COALESCE((
+          SELECT COUNT(DISTINCT pl2.lead_id)
+          FROM pipeline_leads pl2
+          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
+        ), 0) as pipeline_leads_count,
+        -- Leads dans la table leads (pas encore dans le pipeline)
+        COALESCE((
+          SELECT COUNT(DISTINCT l2.id)
+          FROM leads l2
+          WHERE l2.assigned_to = u.id
+            AND l2.database_id = $4
+            AND l2.tenant_id = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM pipeline_leads pl3
+              WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
+            )
+        ), 0) as pending_leads_count,
+        -- Total leads assignés
+        COALESCE((
+          SELECT COUNT(DISTINCT pl2.lead_id)
+          FROM pipeline_leads pl2
+          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
+        ), 0) + COALESCE((
+          SELECT COUNT(DISTINCT l2.id)
+          FROM leads l2
+          WHERE l2.assigned_to = u.id
+            AND l2.database_id = $4
+            AND l2.tenant_id = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM pipeline_leads pl3
+              WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
+            )
+        ), 0) as leads_assigned,
+        -- Leads contactés (dans pipeline, pas cold_call)
+        COALESCE((
+          SELECT COUNT(DISTINCT pl2.lead_id)
+          FROM pipeline_leads pl2
+          WHERE pl2.assigned_user_id = u.id
+            AND pl2.campaign_id = $1
+            AND pl2.stage != 'cold_call'
+        ), 0) as leads_contacted,
+        -- RDV obtenus
+        COALESCE((
+          SELECT COUNT(DISTINCT pl2.lead_id)
+          FROM pipeline_leads pl2
+          WHERE pl2.assigned_user_id = u.id
+            AND pl2.campaign_id = $1
+            AND pl2.stage IN ('tres_qualifie', 'proposition', 'gagne')
+        ), 0) as meetings_scheduled
       FROM users u
-      LEFT JOIN pipeline_leads pl ON pl.assigned_user_id = u.id AND pl.campaign_id = $1
       WHERE u.tenant_id = $2
+        AND u.is_active = true
         AND (
-          -- Dans assigned_users
           u.id = ANY($3::uuid[])
-          -- OU a des leads dans le pipeline de cette campagne
           OR EXISTS (
             SELECT 1 FROM pipeline_leads pl2
             WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
           )
-          -- OU a des leads dans la database de la campagne
           OR EXISTS (
             SELECT 1 FROM leads l
             WHERE l.assigned_to = u.id AND l.database_id = $4
           )
-          -- OU est dans campaign_assignments
           OR EXISTS (
             SELECT 1 FROM campaign_assignments ca
             WHERE ca.user_id = u.id AND ca.campaign_id = $1
           )
         )
-      GROUP BY u.id, u.first_name, u.last_name, u.email, u.role
       ORDER BY u.first_name, u.last_name`,
       [campaignId, tenantId, assignedUserIds, campaign.database_id]
     );
