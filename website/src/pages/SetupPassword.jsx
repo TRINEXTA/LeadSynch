@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { UserPlus, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function SetupPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
-  
+
   const [invitationData, setInvitationData] = useState(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,17 +18,29 @@ export default function SetupPassword() {
 
   useEffect(() => {
     const verifyToken = async () => {
+      if (!API_URL) {
+        setError('Configuration manquante. Veuillez contacter le support.');
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        const response = await fetch(`${API_URL}/api/auth/verify-invite?token=${token}`);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Invitation invalide');
+        }
+
+        const data = await response.json();
         setInvitationData({
-          email: 'commercial@exemple.com',
-          companyName: 'Entreprise XYZ',
-          role: 'Commercial'
+          email: data.email,
+          companyName: data.company_name || data.tenant_name,
+          role: data.role
         });
         setIsLoading(false);
-      } catch (error) {
-        setError('Le lien d\'invitation est invalide ou a expiré.');
+      } catch (err) {
+        setError(err.message || 'Le lien d\'invitation est invalide ou a expiré.');
         setIsLoading(false);
       }
     };
@@ -51,10 +65,20 @@ export default function SetupPassword() {
     setIsLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch(`${API_URL}/api/auth/setup-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur lors de la création du compte');
+      }
+
       navigate('/login', { state: { message: 'Compte créé avec succès ! Vous pouvez maintenant vous connecter.' } });
-    } catch (error) {
-      setError('Une erreur est survenue. Veuillez réessayer.');
+    } catch (err) {
+      setError(err.message || 'Une erreur est survenue. Veuillez réessayer.');
       setIsLoading(false);
     }
   };

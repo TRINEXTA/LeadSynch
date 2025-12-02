@@ -4,6 +4,7 @@ import {
   Building, Calendar, CheckCircle, XCircle, Clock, AlertCircle
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const STATUS_COLORS = {
   trial: 'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -81,7 +82,7 @@ export default function SuperAdminTenants() {
       setTenants(response.data.tenants);
     } catch (error) {
       console.error('Erreur chargement tenants:', error);
-      alert('Erreur chargement des clients');
+      toast.error('Erreur chargement des clients');
     } finally {
       setLoading(false);
     }
@@ -106,13 +107,13 @@ export default function SuperAdminTenants() {
 
     // Validation
     if (!newClient.name || !newClient.billing_email || !newClient.admin_email || !newClient.plan_id) {
-      alert('Veuillez remplir tous les champs obligatoires');
+      toast.error('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
     try {
       await api.post('/super-admin/tenants', newClient);
-      alert('✅ Client créé avec succès');
+      toast.success('Client créé avec succès');
       setShowCreateModal(false);
       setNewClient({
         name: '',
@@ -135,36 +136,36 @@ export default function SuperAdminTenants() {
       loadStats();
     } catch (error) {
       console.error('Erreur création client:', error);
-      alert('Erreur lors de la création du client');
+      toast.error('Erreur lors de la création du client');
     }
   };
 
   const handleSuspend = async (tenantId) => {
-    if (!confirm('Suspendre ce client ? Il n\'aura plus accès à LeadSynch.')) return;
+    if (!window.confirm('Suspendre ce client ? Il n\'aura plus accès à LeadSynch.')) return;
 
-    const reason = prompt('Raison de la suspension:');
+    const reason = window.prompt('Raison de la suspension:');
     if (!reason) return;
 
     try {
       await api.post(`/super-admin/tenants/${tenantId}/suspend`, { reason });
-      alert('✅ Client suspendu');
+      toast.success('Client suspendu');
       loadTenants();
     } catch (error) {
       console.error('Erreur suspension:', error);
-      alert('Erreur lors de la suspension');
+      toast.error('Erreur lors de la suspension');
     }
   };
 
   const handleActivate = async (tenantId) => {
-    if (!confirm('Réactiver ce client ?')) return;
+    if (!window.confirm('Réactiver ce client ?')) return;
 
     try {
       await api.post(`/super-admin/tenants/${tenantId}/activate`);
-      alert('✅ Client réactivé');
+      toast.success('Client réactivé');
       loadTenants();
     } catch (error) {
       console.error('Erreur activation:', error);
-      alert('Erreur lors de la réactivation');
+      toast.error('Erreur lors de la réactivation');
     }
   };
 

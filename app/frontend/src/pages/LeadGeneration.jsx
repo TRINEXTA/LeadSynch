@@ -1,14 +1,16 @@
-﻿import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Loader, Pause, Play, Square, Clock, CheckCircle2, ShoppingCart, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 
-// URL de l'API backend
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://localhost:3000'
-  : 'https://leadsynch-api.onrender.com';
+// URL de l'API backend - utilise la variable d'environnement
+const API_BASE = import.meta.env.VITE_API_URL || (
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:3000'
+    : 'https://leadsynch-api.onrender.com'
+);
 
 export default function LeadGeneration() {
   const navigate = useNavigate();
@@ -60,8 +62,6 @@ export default function LeadGeneration() {
       return;
     }
 
-    console.log("Lancement generation:", { sector, city, radius, quantity });
-
     setIsGenerating(true);
     setIsPaused(false);
     setProgress(0);
@@ -78,10 +78,6 @@ export default function LeadGeneration() {
     searchIdRef.current = searchId;
 
     try {
-      console.log("🚀 Appel API generate-leads-stream...");
-      console.log("📍 URL:", `${API_BASE}/api/generate-leads-stream`);
-      console.log("📋 Params:", { sector, city, radius: parseInt(radius), quantity: parseInt(quantity) });
-
       const response = await fetch(`${API_BASE}/api/generate-leads-stream`, {
         method: "POST",
         headers: {
@@ -97,27 +93,20 @@ export default function LeadGeneration() {
         })
       });
 
-      console.log("✅ Response status:", response.status);
-      console.log("✅ Response ok:", response.ok);
-
       if (!response.ok) {
         // Gérer les erreurs de quota (403)
         if (response.status === 403) {
-          console.warn("⚠️ 403 Forbidden - Quota error");
           try {
             const errorData = await response.json();
-            console.log("📊 Error data:", errorData);
             setQuotaError(errorData);
             setIsGenerating(false);
             setMessage(errorData.message || "Quota insuffisant");
             toast.error(errorData.message || "Quota insuffisant", { duration: 5000, id: 'quota-error' });
             return;
-          } catch (e) {
-            console.error("❌ Error parsing 403 response:", e);
+          } catch {
             throw new Error("Quota insuffisant");
           }
         }
-        console.error("❌ HTTP Error:", response.status);
         throw new Error(`Erreur HTTP ${response.status}`);
       }
 
@@ -126,10 +115,7 @@ export default function LeadGeneration() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          console.log("Stream termine");
-          break;
-        }
+        if (done) break;
 
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n');
@@ -138,7 +124,6 @@ export default function LeadGeneration() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              console.log("Event recu:", data.type, data);
 
               switch (data.type) {
                 case 'start':
@@ -179,20 +164,14 @@ export default function LeadGeneration() {
                   toast.error(data.message);
                   break;
               }
-            } catch (e) {
-              console.error('Erreur parsing:', e, line);
+            } catch {
+              // Ignorer les erreurs de parsing JSON
             }
           }
         }
       }
     } catch (error) {
-      console.error("❌ Erreur generation (catch block):", error);
-      console.error("❌ Error name:", error.name);
-      console.error("❌ Error message:", error.message);
-      console.error("❌ Error stack:", error.stack);
       setIsGenerating(false);
-
-      // Afficher un message plus informatif
       const errorMsg = error.message || "Erreur de connexion";
       setMessage(errorMsg);
       toast.error(errorMsg, { id: 'generation-error', duration: 5000 });

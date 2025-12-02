@@ -25,6 +25,7 @@ import {
   Percent
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function SuperAdminTenantDetails() {
   const { id } = useParams();
@@ -68,7 +69,7 @@ export default function SuperAdminTenantDetails() {
       }
     } catch (error) {
       console.error('Erreur chargement tenant:', error);
-      alert('Erreur lors du chargement du client');
+      toast.error('Erreur lors du chargement du client');
       navigate('/super-admin/tenants');
     } finally {
       setLoading(false);
@@ -78,105 +79,105 @@ export default function SuperAdminTenantDetails() {
   const handleSave = async () => {
     try {
       await api.put(`/super-admin/tenants/${id}`, formData);
-      alert('Informations mises à jour avec succès');
+      toast.success('Informations mises à jour avec succès');
       setEditing(false);
       loadTenantDetails();
     } catch (error) {
       console.error('Erreur mise à jour:', error);
-      alert('Erreur lors de la mise à jour');
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
   const handleSuspend = async () => {
-    if (!confirm('Suspendre ce client ? Tous ses utilisateurs seront bloqués.')) return;
+    if (!window.confirm('Suspendre ce client ? Tous ses utilisateurs seront bloqués.')) return;
 
     try {
       await api.post(`/super-admin/tenants/${id}/suspend`);
-      alert('Client suspendu');
+      toast.success('Client suspendu');
       loadTenantDetails();
     } catch (error) {
       console.error('Erreur suspension:', error);
-      alert('Erreur lors de la suspension');
+      toast.error('Erreur lors de la suspension');
     }
   };
 
   const handleActivate = async () => {
-    if (!confirm('Réactiver ce client ?')) return;
+    if (!window.confirm('Réactiver ce client ?')) return;
 
     try {
       await api.post(`/super-admin/tenants/${id}/activate`);
-      alert('Client réactivé');
+      toast.success('Client réactivé');
       loadTenantDetails();
     } catch (error) {
       console.error('Erreur réactivation:', error);
-      alert('Erreur lors de la réactivation');
+      toast.error('Erreur lors de la réactivation');
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('⚠️ ATTENTION ! Supprimer définitivement ce client et TOUTES ses données ? Cette action est IRRÉVERSIBLE !')) return;
-    if (!confirm('Êtes-vous VRAIMENT sûr ? Toutes les données seront perdues.')) return;
+    if (!window.confirm('⚠️ ATTENTION ! Supprimer définitivement ce client et TOUTES ses données ? Cette action est IRRÉVERSIBLE !')) return;
+    if (!window.confirm('Êtes-vous VRAIMENT sûr ? Toutes les données seront perdues.')) return;
 
     try {
       await api.delete(`/super-admin/tenants/${id}`);
-      alert('Client supprimé');
+      toast.success('Client supprimé');
       navigate('/super-admin/tenants');
     } catch (error) {
       console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
+      toast.error('Erreur lors de la suppression');
     }
   };
 
   const handleGiftCredits = async () => {
     if (giftAmount <= 0) {
-      alert('Montant invalide');
+      toast.error('Montant invalide');
       return;
     }
 
     try {
       await api.post(`/super-admin/tenants/${id}/gift-credits`, { amount: giftAmount });
-      alert(`${giftAmount} crédits offerts avec succès`);
+      toast.success(`${giftAmount} crédits offerts avec succès`);
       setShowGiftModal(false);
       setGiftAmount(0);
       loadTenantDetails();
     } catch (error) {
       console.error('Erreur cadeau crédits:', error);
-      alert('Erreur lors de l\'attribution des crédits');
+      toast.error('Erreur lors de l\'attribution des crédits');
     }
   };
 
   const handleRefund = async () => {
     if (refundAmount <= 0) {
-      alert('Montant invalide');
+      toast.error('Montant invalide');
       return;
     }
 
     try {
       await api.post(`/super-admin/tenants/${id}/refund`, { amount: refundAmount });
-      alert(`Remboursement de ${refundAmount}€ effectué`);
+      toast.success(`Remboursement de ${refundAmount}€ effectué`);
       setShowRefundModal(false);
       setRefundAmount(0);
       loadTenantDetails();
     } catch (error) {
       console.error('Erreur remboursement:', error);
-      alert('Erreur lors du remboursement');
+      toast.error('Erreur lors du remboursement');
     }
   };
 
   const handleRenewSubscription = async () => {
     if (!subscriptionId) {
-      alert('Aucun abonnement actif à renouveler');
+      toast.error('Aucun abonnement actif à renouveler');
       return;
     }
-    if (!confirm('Renouveler l\'abonnement de ce client ?')) return;
+    if (!window.confirm('Renouveler l\'abonnement de ce client ?')) return;
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/renew`);
-      alert('Abonnement renouvelé avec succès');
+      toast.success('Abonnement renouvelé avec succès');
       loadTenantDetails();
     } catch (error) {
       console.error('Erreur renouvellement:', error);
-      alert('Erreur lors du renouvellement');
+      toast.error('Erreur lors du renouvellement');
     }
   };
 

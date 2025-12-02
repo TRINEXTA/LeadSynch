@@ -1,6 +1,7 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Sparkles, Loader } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function AITemplateGenerator({ onGenerated }) {
   const [generating, setGenerating] = useState(false);
@@ -17,7 +18,7 @@ export default function AITemplateGenerator({ onGenerated }) {
 
   const handleGenerate = async () => {
     if (!formData.objective) {
-      alert('❌ Objectif requis !');
+      toast.error('Objectif requis !');
       return;
     }
 
@@ -34,10 +35,10 @@ export default function AITemplateGenerator({ onGenerated }) {
         description: generated.preview_text || ''
       });
 
-      alert('✅ Template généré ! Passez en mode HTML pour l\'éditer.');
+      toast.success('Template généré ! Passez en mode HTML pour l\'éditer.');
     } catch (error) {
       console.error('Erreur:', error);
-      alert('❌ Erreur : ' + (error.response?.data?.message || error.message));
+      toast.error('Erreur : ' + (error.response?.data?.message || error.message));
     } finally {
       setGenerating(false);
     }
