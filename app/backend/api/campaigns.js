@@ -1019,9 +1019,9 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
     const tenantId = req.user?.tenant_id;
 
-    // Récupérer la campagne avec ses utilisateurs assignés
+    // Récupérer la campagne avec ses utilisateurs assignés et son type
     const campaign = await queryOne(
-      'SELECT assigned_users, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      'SELECT assigned_users, database_id, type FROM campaigns WHERE id = $1 AND tenant_id = $2',
       [campaignId, tenantId]
     );
 
@@ -1042,9 +1042,9 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
       assignedUserIds = [];
     }
 
-    console.log(`📋 Campagne ${campaignId}: assigned_users = ${JSON.stringify(assignedUserIds)}, database_id = ${campaign.database_id}`);
+    console.log(`📋 Campagne ${campaignId}: assigned_users = ${JSON.stringify(assignedUserIds)}, database_id = ${campaign.database_id}, type = ${campaign.type}`);
 
-    // Récupérer TOUS les commerciaux assignés à la campagne
+    // Récupérer TOUS les commerciaux assignés à la campagne avec le BON nombre de leads
     const commercials = await queryAll(
       `SELECT
         u.id,
@@ -1052,50 +1052,63 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         u.last_name,
         u.email,
         u.role,
-        -- Leads dans pipeline_leads
+        -- Leads dans pipeline_leads pour cette campagne
         COALESCE((
           SELECT COUNT(DISTINCT pl2.lead_id)
           FROM pipeline_leads pl2
           WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
         ), 0) as pipeline_leads_count,
-        -- Leads dans la table leads
+        -- Leads dans email_queue pour cette campagne (campagnes email)
         COALESCE((
-          SELECT COUNT(DISTINCT l2.id)
-          FROM leads l2
-          LEFT JOIN lead_database_relations ldr ON l2.id = ldr.lead_id
-          WHERE l2.assigned_to = u.id
-            AND l2.tenant_id = $2
-            AND ($4::uuid IS NULL OR l2.database_id = $4 OR ldr.database_id = $4)
-        ), 0) as pending_leads_count,
-        -- Total leads assignés
-        COALESCE((
-          SELECT COUNT(DISTINCT pl2.lead_id)
-          FROM pipeline_leads pl2
-          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
-        ), 0) + COALESCE((
-          SELECT COUNT(DISTINCT l2.id)
-          FROM leads l2
-          LEFT JOIN lead_database_relations ldr ON l2.id = ldr.lead_id
-          WHERE l2.assigned_to = u.id
-            AND l2.tenant_id = $2
-            AND ($4::uuid IS NULL OR l2.database_id = $4 OR ldr.database_id = $4)
-            AND NOT EXISTS (
-              SELECT 1 FROM pipeline_leads pl3
-              WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
-            )
-        ), 0) as leads_assigned,
-        -- Leads contactés
-        COALESCE((
-          SELECT COUNT(DISTINCT pl2.lead_id)
-          FROM pipeline_leads pl2
-          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1 AND pl2.stage != 'cold_call'
-        ), 0) as leads_contacted,
-        -- RDV obtenus
-        COALESCE((
-          SELECT COUNT(DISTINCT pl2.lead_id)
-          FROM pipeline_leads pl2
-          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1 AND pl2.stage IN ('tres_qualifie', 'proposition', 'gagne')
-        ), 0) as meetings_scheduled
+          SELECT COUNT(DISTINCT eq.lead_id)
+          FROM email_queue eq
+          JOIN leads l ON eq.lead_id = l.id
+          WHERE eq.campaign_id = $1 AND l.assigned_to = u.id
+        ), 0) as email_leads_count,
+        -- Total leads assignés dans CETTE campagne
+        CASE
+          WHEN $5 = 'email' THEN COALESCE((
+            SELECT COUNT(DISTINCT eq.lead_id)
+            FROM email_queue eq
+            JOIN leads l ON eq.lead_id = l.id
+            WHERE eq.campaign_id = $1 AND l.assigned_to = u.id
+          ), 0)
+          ELSE COALESCE((
+            SELECT COUNT(DISTINCT pl2.lead_id)
+            FROM pipeline_leads pl2
+            WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
+          ), 0)
+        END as leads_assigned,
+        -- Leads contactés (emails ouverts ou pipeline pas cold_call)
+        CASE
+          WHEN $5 = 'email' THEN COALESCE((
+            SELECT COUNT(DISTINCT te.lead_id)
+            FROM tracking_events te
+            WHERE te.campaign_id = $1
+              AND te.event_type = 'open'
+              AND te.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
+          ), 0)
+          ELSE COALESCE((
+            SELECT COUNT(DISTINCT pl2.lead_id)
+            FROM pipeline_leads pl2
+            WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1 AND pl2.stage != 'cold_call'
+          ), 0)
+        END as leads_contacted,
+        -- RDV obtenus / Clics
+        CASE
+          WHEN $5 = 'email' THEN COALESCE((
+            SELECT COUNT(DISTINCT te.lead_id)
+            FROM tracking_events te
+            WHERE te.campaign_id = $1
+              AND te.event_type = 'click'
+              AND te.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
+          ), 0)
+          ELSE COALESCE((
+            SELECT COUNT(DISTINCT pl2.lead_id)
+            FROM pipeline_leads pl2
+            WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1 AND pl2.stage IN ('tres_qualifie', 'proposition', 'gagne')
+          ), 0)
+        END as meetings_scheduled
       FROM users u
       WHERE u.tenant_id = $2
         AND u.is_active = true
@@ -1107,6 +1120,12 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
             SELECT 1 FROM pipeline_leads pl2
             WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
           )
+          -- OU utilisateurs avec leads dans email_queue
+          OR EXISTS (
+            SELECT 1 FROM email_queue eq
+            JOIN leads l ON eq.lead_id = l.id
+            WHERE eq.campaign_id = $1 AND l.assigned_to = u.id
+          )
           -- OU utilisateurs dans campaign_assignments
           OR EXISTS (
             SELECT 1 FROM campaign_assignments ca
@@ -1114,7 +1133,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           )
         )
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, tenantId, assignedUserIds.length > 0 ? assignedUserIds : null, campaign.database_id]
+      [campaignId, tenantId, assignedUserIds.length > 0 ? assignedUserIds : null, campaign.database_id, campaign.type]
     );
 
     console.log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
