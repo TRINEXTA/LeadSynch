@@ -20,20 +20,68 @@ async function handler(req, res) {
   try {
     // GET - List users
     if (method === 'GET') {
-      console.log('🔍 GET /api/users - User:', req.user.email, 'Tenant:', req.user.tenant_id);
-      
-      const users = await queryAll(
-        `SELECT u.id, u.email, u.first_name, u.last_name, u.role,  
-                u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
-                t.name as tenant_name
-         FROM users u
-         LEFT JOIN tenants t ON u.tenant_id = t.id
-         WHERE u.tenant_id = $1
-         ORDER BY u.created_at DESC`,
-        [req.user.tenant_id]
-      );
+      console.log('🔍 GET /api/users - User:', req.user.email, 'Role:', req.user.role, 'Tenant:', req.user.tenant_id);
 
-      console.log('✅ Users trouvés:', users.length);
+      const userRole = req.user.role;
+      const userId = req.user.id;
+      const isSuperAdmin = req.user.is_super_admin === true;
+
+      let users = [];
+
+      // Super admin ou admin : voir tous les utilisateurs du tenant
+      if (isSuperAdmin || userRole === 'admin') {
+        users = await queryAll(
+          `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
+                  u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
+                  u.is_super_admin,
+                  t.name as tenant_name
+           FROM users u
+           LEFT JOIN tenants t ON u.tenant_id = t.id
+           WHERE u.tenant_id = $1
+           ORDER BY u.created_at DESC`,
+          [req.user.tenant_id]
+        );
+        console.log('✅ Admin - tous les users:', users.length);
+      }
+      // Manager : voir uniquement les membres de ses équipes (où il est manager)
+      else if (userRole === 'manager') {
+        users = await queryAll(
+          `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.role,
+                  u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
+                  u.is_super_admin,
+                  t.name as tenant_name
+           FROM users u
+           LEFT JOIN tenants t ON u.tenant_id = t.id
+           LEFT JOIN team_members tm ON u.id = tm.user_id
+           LEFT JOIN teams te ON tm.team_id = te.id
+           WHERE u.tenant_id = $1
+             AND (
+               -- Membres de ses équipes (où il est manager)
+               te.manager_id = $2
+               -- Ou lui-même
+               OR u.id = $2
+             )
+             -- IMPORTANT : Ne jamais montrer les admins ou super admins aux managers
+             AND u.role NOT IN ('admin')
+             AND (u.is_super_admin IS NULL OR u.is_super_admin = false)
+           ORDER BY u.created_at DESC`,
+          [req.user.tenant_id, userId]
+        );
+        console.log('✅ Manager - membres équipe uniquement:', users.length);
+      }
+      // User ou commercial : voir uniquement eux-mêmes
+      else {
+        users = await queryAll(
+          `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
+                  u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
+                  t.name as tenant_name
+           FROM users u
+           LEFT JOIN tenants t ON u.tenant_id = t.id
+           WHERE u.id = $1`,
+          [userId]
+        );
+        console.log('✅ User - lui-même uniquement:', users.length);
+      }
 
       return res.status(200).json({
         success: true,
@@ -108,11 +156,50 @@ async function handler(req, res) {
     // ✅ PUT - Update user
     if (method === 'PUT') {
       const userId = req.url.split('/').pop();
-      
+
       if (!['admin', 'manager'].includes(req.user.role)) {
         return res.status(403).json({
           error: 'Permissions insuffisantes'
         });
+      }
+
+      // 🔒 SÉCURITÉ : Vérifier les permissions sur l'utilisateur cible
+      const targetUser = await queryOne(
+        'SELECT id, role, is_super_admin FROM users WHERE id = $1 AND tenant_id = $2',
+        [userId, req.user.tenant_id]
+      );
+
+      if (!targetUser) {
+        return res.status(404).json({
+          error: 'Utilisateur non trouvé'
+        });
+      }
+
+      // 🔒 Les managers ne peuvent PAS modifier les admins ou super admins
+      if (req.user.role === 'manager') {
+        if (targetUser.role === 'admin' || targetUser.is_super_admin === true) {
+          console.log(`🚫 Manager ${req.user.email} tentative modification admin/superadmin ${userId}`);
+          return res.status(403).json({
+            error: 'Accès refusé',
+            message: 'Vous ne pouvez pas modifier un compte administrateur'
+          });
+        }
+
+        // Vérifier que l'utilisateur cible fait partie de l'équipe du manager
+        const isInTeam = await queryOne(
+          `SELECT 1 FROM team_members tm
+           JOIN teams t ON tm.team_id = t.id
+           WHERE tm.user_id = $1 AND t.manager_id = $2`,
+          [userId, req.user.id]
+        );
+
+        if (!isInTeam && userId !== req.user.id) {
+          console.log(`🚫 Manager ${req.user.email} tentative modification user hors équipe ${userId}`);
+          return res.status(403).json({
+            error: 'Accès refusé',
+            message: 'Cet utilisateur ne fait pas partie de votre équipe'
+          });
+        }
       }
 
       const { first_name, last_name, role, phone, team_id } = req.body;
@@ -120,6 +207,14 @@ async function handler(req, res) {
       if (!first_name || !last_name || !role) {
         return res.status(400).json({
           error: 'Prénom, nom et rôle requis'
+        });
+      }
+
+      // 🔒 Les managers ne peuvent PAS promouvoir quelqu'un en admin
+      if (req.user.role === 'manager' && role === 'admin') {
+        return res.status(403).json({
+          error: 'Accès refusé',
+          message: 'Vous ne pouvez pas promouvoir un utilisateur en administrateur'
         });
       }
 
@@ -132,18 +227,12 @@ async function handler(req, res) {
       }
 
       const updatedUser = await queryOne(
-        `UPDATE users 
+        `UPDATE users
          SET first_name = $1, last_name = $2, role = $3, phone = $4, updated_at = NOW()
          WHERE id = $5 AND tenant_id = $6
          RETURNING id, email, first_name, last_name, role, phone, is_active, created_at`,
         [first_name, last_name, role, phone || null, userId, req.user.tenant_id]
       );
-
-      if (!updatedUser) {
-        return res.status(404).json({
-          error: 'Utilisateur non trouvé'
-        });
-      }
 
       console.log('✅ User modifié:', updatedUser.id);
 
@@ -169,6 +258,27 @@ async function handler(req, res) {
         return res.status(400).json({
           error: 'Vous ne pouvez pas bloquer votre propre compte'
         });
+      }
+
+      // 🔒 SÉCURITÉ : Vérifier les permissions sur l'utilisateur cible
+      const targetUser = await queryOne(
+        'SELECT id, role, is_super_admin FROM users WHERE id = $1 AND tenant_id = $2',
+        [userId, req.user.tenant_id]
+      );
+
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Utilisateur non trouvé' });
+      }
+
+      // 🔒 Les managers ne peuvent PAS bloquer/modifier les admins ou super admins
+      if (req.user.role === 'manager') {
+        if (targetUser.role === 'admin' || targetUser.is_super_admin === true) {
+          console.log(`🚫 Manager ${req.user.email} tentative ${action} sur admin/superadmin ${userId}`);
+          return res.status(403).json({
+            error: 'Accès refusé',
+            message: 'Vous ne pouvez pas effectuer cette action sur un compte administrateur'
+          });
+        }
       }
 
       let updatedUser;

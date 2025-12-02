@@ -18,22 +18,63 @@ function extractAndValidateUuid(url, position) {
 
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
+  const userId = req.user.id;
+  const userRole = req.user.role;
+  const isSuperAdmin = req.user.is_super_admin === true;
 
   try {
     // GET - Liste des équipes
     if (req.method === 'GET' && !req.url.includes('/members')) {
-      const teams = await queryAll(
-        `SELECT t.*, 
-                u.first_name || ' ' || u.last_name as manager_name,
-                COUNT(DISTINCT tm.user_id) as members_count
-         FROM teams t
-         LEFT JOIN users u ON t.manager_id = u.id
-         LEFT JOIN team_members tm ON t.id = tm.team_id
-         WHERE t.tenant_id = $1
-         GROUP BY t.id, t.name, t.description, t.manager_id, t.created_at, t.updated_at, u.first_name, u.last_name
-         ORDER BY t.created_at DESC`,
-        [tenant_id]
-      );
+      let teams;
+
+      // Admin ou super admin : voir toutes les équipes
+      if (isSuperAdmin || userRole === 'admin') {
+        teams = await queryAll(
+          `SELECT t.*,
+                  u.first_name || ' ' || u.last_name as manager_name,
+                  COUNT(DISTINCT tm.user_id) as members_count
+           FROM teams t
+           LEFT JOIN users u ON t.manager_id = u.id
+           LEFT JOIN team_members tm ON t.id = tm.team_id
+           WHERE t.tenant_id = $1
+           GROUP BY t.id, t.name, t.description, t.manager_id, t.created_at, t.updated_at, u.first_name, u.last_name
+           ORDER BY t.created_at DESC`,
+          [tenant_id]
+        );
+        console.log(`✅ Admin - toutes les équipes: ${teams?.length}`);
+      }
+      // Manager : voir uniquement les équipes où il est manager ou membre
+      else if (userRole === 'manager') {
+        teams = await queryAll(
+          `SELECT DISTINCT t.*,
+                  u.first_name || ' ' || u.last_name as manager_name,
+                  COUNT(DISTINCT tm.user_id) OVER (PARTITION BY t.id) as members_count
+           FROM teams t
+           LEFT JOIN users u ON t.manager_id = u.id
+           LEFT JOIN team_members tm ON t.id = tm.team_id
+           WHERE t.tenant_id = $1
+             AND (t.manager_id = $2 OR tm.user_id = $2)
+           ORDER BY t.created_at DESC`,
+          [tenant_id, userId]
+        );
+        console.log(`✅ Manager - ses équipes: ${teams?.length}`);
+      }
+      // User/commercial : voir uniquement les équipes dont il est membre
+      else {
+        teams = await queryAll(
+          `SELECT DISTINCT t.*,
+                  u.first_name || ' ' || u.last_name as manager_name,
+                  COUNT(DISTINCT tm2.user_id) OVER (PARTITION BY t.id) as members_count
+           FROM teams t
+           LEFT JOIN users u ON t.manager_id = u.id
+           INNER JOIN team_members tm ON t.id = tm.team_id AND tm.user_id = $2
+           LEFT JOIN team_members tm2 ON t.id = tm2.team_id
+           WHERE t.tenant_id = $1
+           ORDER BY t.created_at DESC`,
+          [tenant_id, userId]
+        );
+        console.log(`✅ User - ses équipes: ${teams?.length}`);
+      }
 
       return res.json({ success: true, teams: teams || [] });
     }
