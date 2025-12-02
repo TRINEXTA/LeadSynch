@@ -1029,17 +1029,22 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    // Parser assigned_users
+    // Parser assigned_users - IMPORTANT: gérer tous les cas
     let assignedUserIds = [];
     try {
-      assignedUserIds = Array.isArray(campaign.assigned_users)
-        ? campaign.assigned_users
-        : JSON.parse(campaign.assigned_users || '[]');
+      if (campaign.assigned_users) {
+        assignedUserIds = Array.isArray(campaign.assigned_users)
+          ? campaign.assigned_users
+          : JSON.parse(campaign.assigned_users);
+      }
     } catch (e) {
+      console.log('Erreur parsing assigned_users:', e);
       assignedUserIds = [];
     }
 
-    // Récupérer les commerciaux avec comptage des leads (pipeline + leads table + lead_database_relations)
+    console.log(`📋 Campagne ${campaignId}: assigned_users = ${JSON.stringify(assignedUserIds)}, database_id = ${campaign.database_id}`);
+
+    // Récupérer TOUS les commerciaux assignés à la campagne
     const commercials = await queryAll(
       `SELECT
         u.id,
@@ -1053,18 +1058,14 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           FROM pipeline_leads pl2
           WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
         ), 0) as pipeline_leads_count,
-        -- Leads dans la table leads (pas encore dans le pipeline) - via database_id OU lead_database_relations
+        -- Leads dans la table leads
         COALESCE((
           SELECT COUNT(DISTINCT l2.id)
           FROM leads l2
           LEFT JOIN lead_database_relations ldr ON l2.id = ldr.lead_id
           WHERE l2.assigned_to = u.id
             AND l2.tenant_id = $2
-            AND (l2.database_id = $4 OR ldr.database_id = $4)
-            AND NOT EXISTS (
-              SELECT 1 FROM pipeline_leads pl3
-              WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
-            )
+            AND ($4::uuid IS NULL OR l2.database_id = $4 OR ldr.database_id = $4)
         ), 0) as pending_leads_count,
         -- Total leads assignés
         COALESCE((
@@ -1077,49 +1078,43 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           LEFT JOIN lead_database_relations ldr ON l2.id = ldr.lead_id
           WHERE l2.assigned_to = u.id
             AND l2.tenant_id = $2
-            AND (l2.database_id = $4 OR ldr.database_id = $4)
+            AND ($4::uuid IS NULL OR l2.database_id = $4 OR ldr.database_id = $4)
             AND NOT EXISTS (
               SELECT 1 FROM pipeline_leads pl3
               WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
             )
         ), 0) as leads_assigned,
-        -- Leads contactés (dans pipeline, pas cold_call)
+        -- Leads contactés
         COALESCE((
           SELECT COUNT(DISTINCT pl2.lead_id)
           FROM pipeline_leads pl2
-          WHERE pl2.assigned_user_id = u.id
-            AND pl2.campaign_id = $1
-            AND pl2.stage != 'cold_call'
+          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1 AND pl2.stage != 'cold_call'
         ), 0) as leads_contacted,
         -- RDV obtenus
         COALESCE((
           SELECT COUNT(DISTINCT pl2.lead_id)
           FROM pipeline_leads pl2
-          WHERE pl2.assigned_user_id = u.id
-            AND pl2.campaign_id = $1
-            AND pl2.stage IN ('tres_qualifie', 'proposition', 'gagne')
+          WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1 AND pl2.stage IN ('tres_qualifie', 'proposition', 'gagne')
         ), 0) as meetings_scheduled
       FROM users u
       WHERE u.tenant_id = $2
         AND u.is_active = true
         AND (
-          u.id = ANY($3::uuid[])
+          -- Utilisateurs dans assigned_users (JSON)
+          ($3::uuid[] IS NOT NULL AND array_length($3::uuid[], 1) > 0 AND u.id = ANY($3::uuid[]))
+          -- OU utilisateurs avec leads dans le pipeline
           OR EXISTS (
             SELECT 1 FROM pipeline_leads pl2
             WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
           )
-          OR EXISTS (
-            SELECT 1 FROM leads l
-            LEFT JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-            WHERE l.assigned_to = u.id AND (l.database_id = $4 OR ldr.database_id = $4)
-          )
+          -- OU utilisateurs dans campaign_assignments
           OR EXISTS (
             SELECT 1 FROM campaign_assignments ca
             WHERE ca.user_id = u.id AND ca.campaign_id = $1
           )
         )
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, tenantId, assignedUserIds, campaign.database_id]
+      [campaignId, tenantId, assignedUserIds.length > 0 ? assignedUserIds : null, campaign.database_id]
     );
 
     console.log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
