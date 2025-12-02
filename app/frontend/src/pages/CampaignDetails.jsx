@@ -1,15 +1,16 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Users, Eye, MousePointer, Clock, Calendar, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Mail, Users, Eye, MousePointer, Clock, Calendar, TrendingUp, UserCheck } from 'lucide-react';
 import api from '../api/axios';
 
 export default function CampaignDetails() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const campaignId = searchParams.get('id');
-  
+
   const [campaign, setCampaign] = useState(null);
   const [stats, setStats] = useState(null);
+  const [commercials, setCommercials] = useState([]);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,15 +23,17 @@ export default function CampaignDetails() {
   const loadCampaignDetails = async () => {
     try {
       setLoading(true);
-      
-      const [campaignRes, statsRes] = await Promise.all([
+
+      const [campaignRes, statsRes, commercialsRes] = await Promise.all([
         api.get(`/campaigns/${campaignId}`),
-        api.get(`/tracking/campaign/${campaignId}/stats`)
+        api.get(`/tracking/campaign/${campaignId}/stats`),
+        api.get(`/campaigns/${campaignId}/commercials`)
       ]);
-      
+
       setCampaign(campaignRes.data.campaign);
       setStats(statsRes.data.stats);
-      
+      setCommercials(commercialsRes.data.commercials || []);
+
     } catch (error) {
       console.error('Erreur:', error);
       alert('Erreur chargement campagne');
@@ -170,7 +173,7 @@ export default function CampaignDetails() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">📊 Statistiques détaillées</h2>
           <div className="space-y-3">
             {[
@@ -191,7 +194,7 @@ export default function CampaignDetails() {
                       <span className="text-sm font-bold text-gray-800">{stat.value}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className={`bg-gradient-to-r from-${stat.color}-400 to-${stat.color}-600 h-2 rounded-full transition-all`}
                         style={{ width: `${Math.min(percentage, 100)}%` }}
                       />
@@ -204,6 +207,50 @@ export default function CampaignDetails() {
               );
             })}
           </div>
+        </div>
+
+        {/* Section Commerciaux Affectés */}
+        <div className="bg-white rounded-2xl shadow-xl p-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+            <Users className="w-7 h-7 text-purple-600" />
+            Commerciaux affectés ({commercials.length})
+          </h2>
+
+          {commercials.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">Aucun commercial affecté</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {commercials.map((commercial, idx) => (
+                <div key={idx} className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-gradient-to-br from-blue-500 to-purple-500 p-3 rounded-full">
+                      <UserCheck className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-800">
+                        {commercial.first_name} {commercial.last_name}
+                      </h3>
+                      <p className="text-sm text-gray-500">{commercial.email}</p>
+                      <p className="text-xs text-purple-600 font-medium mt-1">{commercial.role}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-center">
+                    <div className="bg-blue-50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600">Leads</p>
+                      <p className="text-lg font-bold text-blue-600">{commercial.leads_assigned || 0}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600">Contactés</p>
+                      <p className="text-lg font-bold text-green-600">{commercial.leads_contacted || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
