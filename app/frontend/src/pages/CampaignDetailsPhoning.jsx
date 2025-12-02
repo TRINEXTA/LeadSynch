@@ -3,10 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Phone, Users, TrendingUp, Clock, Calendar, Edit,
   Play, Pause, StopCircle, Target, Award, Activity, BarChart3,
-  CheckCircle, XCircle, PhoneCall, UserCheck, AlertCircle, Plus
+  CheckCircle, XCircle, PhoneCall, UserCheck, AlertCircle, Plus,
+  RefreshCw, ArrowRightLeft
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import LeadTransferModal from '../components/campaigns/LeadTransferModal';
 
 const STAGE_CONFIG = {
   cold_call: { name: 'Cold Call', color: 'bg-blue-500', icon: Phone, textColor: 'text-blue-700', bgLight: 'bg-blue-50' },
@@ -30,6 +32,7 @@ export default function CampaignDetailsPhoning() {
   const [pipelineStats, setPipelineStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddLeadsModal, setShowAddLeadsModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
   useEffect(() => {
     if (campaignId) {
@@ -144,6 +147,13 @@ export default function CampaignDetailsPhoning() {
           </button>
           
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold"
+            >
+              <ArrowRightLeft className="w-5 h-5" />
+              Transférer des leads
+            </button>
             <button
               onClick={handleAddLeadsBatch}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
@@ -319,8 +329,8 @@ export default function CampaignDetailsPhoning() {
           ) : (
             <div className="space-y-4">
               {commercials.map((commercial, idx) => {
-                const commercialProgress = commercial.leads_assigned > 0 
-                  ? Math.round((commercial.leads_contacted / commercial.leads_assigned) * 100) 
+                const commercialProgress = commercial.leads_assigned > 0
+                  ? Math.round((commercial.leads_contacted / commercial.leads_assigned) * 100)
                   : 0;
 
                 return (
@@ -337,9 +347,20 @@ export default function CampaignDetailsPhoning() {
                           <p className="text-sm text-gray-500">{commercial.email}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-blue-600">{commercialProgress}%</p>
-                        <p className="text-sm text-gray-500">progression</p>
+                      <div className="flex items-center gap-4">
+                        {(commercial.leads_assigned || 0) > 0 && (
+                          <button
+                            onClick={() => setShowTransferModal(true)}
+                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            title="Transférer les leads"
+                          >
+                            <ArrowRightLeft className="w-5 h-5" />
+                          </button>
+                        )}
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-blue-600">{commercialProgress}%</p>
+                          <p className="text-sm text-gray-500">progression</p>
+                        </div>
                       </div>
                     </div>
 
@@ -404,6 +425,15 @@ export default function CampaignDetailsPhoning() {
             </div>
           </div>
         )}
+
+        {/* Modal Transfert de Leads */}
+        <LeadTransferModal
+          isOpen={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          campaignId={campaignId}
+          commercials={commercials}
+          onTransferComplete={loadCampaignDetails}
+        />
       </div>
     </div>
   );
