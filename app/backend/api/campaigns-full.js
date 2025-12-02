@@ -8,20 +8,48 @@ async function handler(req, res) {
   try {
     // GET - Liste des campagnes avec stats
     if (req.method === 'GET' && !req.url.includes('/api/campaigns-full/')) {
-      const campaigns = await queryAll(
-        `SELECT 
-          c.*,
-          COUNT(DISTINCT ca.user_id) as assigned_users_count,
-          COALESCE(SUM(ca.leads_assigned), 0) as total_leads_assigned,
-          COALESCE(SUM(ca.calls_made), 0) as total_calls_made,
-          COALESCE(SUM(ca.meetings_scheduled), 0) as total_meetings
-        FROM campaigns c
-        LEFT JOIN campaign_assignments ca ON c.id = ca.campaign_id
-        WHERE c.tenant_id = $1
-        GROUP BY c.id
-        ORDER BY c.created_at DESC`,
-        [tenant_id]
-      );
+      const userRole = req.user.role;
+      const isSuperAdmin = req.user.is_super_admin === true;
+
+      let campaigns;
+
+      // Admin ou super admin : voir toutes les campagnes
+      if (isSuperAdmin || userRole === 'admin') {
+        campaigns = await queryAll(
+          `SELECT
+            c.*,
+            COUNT(DISTINCT ca.user_id) as assigned_users_count,
+            COALESCE(SUM(ca.leads_assigned), 0) as total_leads_assigned,
+            COALESCE(SUM(ca.calls_made), 0) as total_calls_made,
+            COALESCE(SUM(ca.meetings_scheduled), 0) as total_meetings
+          FROM campaigns c
+          LEFT JOIN campaign_assignments ca ON c.id = ca.campaign_id
+          WHERE c.tenant_id = $1
+          GROUP BY c.id
+          ORDER BY c.created_at DESC`,
+          [tenant_id]
+        );
+        console.log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
+      }
+      // Manager ou commercial : voir uniquement les campagnes auxquelles ils sont assignés
+      else {
+        campaigns = await queryAll(
+          `SELECT
+            c.*,
+            COUNT(DISTINCT ca2.user_id) as assigned_users_count,
+            COALESCE(SUM(ca2.leads_assigned), 0) as total_leads_assigned,
+            COALESCE(SUM(ca2.calls_made), 0) as total_calls_made,
+            COALESCE(SUM(ca2.meetings_scheduled), 0) as total_meetings
+          FROM campaigns c
+          INNER JOIN campaign_assignments ca ON c.id = ca.campaign_id AND ca.user_id = $2
+          LEFT JOIN campaign_assignments ca2 ON c.id = ca2.campaign_id
+          WHERE c.tenant_id = $1
+          GROUP BY c.id
+          ORDER BY c.created_at DESC`,
+          [tenant_id, user_id]
+        );
+        console.log(`✅ ${userRole} ${req.user.email} - campagnes assignées: ${campaigns.length}`);
+      }
 
       return res.json({
         success: true,

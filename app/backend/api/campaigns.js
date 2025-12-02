@@ -52,46 +52,58 @@ router.get('/', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const userId = req.user?.id;
     const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
 
-    // ✅ NOUVELLE LOGIQUE : Managers avec filtre multi-manager
-    let query = `
-      SELECT
-        c.*,
-        ld.name as database_name,
-        et.name as template_name
-      FROM campaigns c
-      LEFT JOIN lead_databases ld ON c.database_id = ld.id
-      LEFT JOIN email_templates et ON c.template_id = et.id
-      WHERE c.tenant_id = $1
-    `;
+    let campaigns;
 
-    const params = [tenantId];
-
-    // Si manager : vérifier s'il y a plusieurs managers
-    if (userRole === 'manager') {
-      const managerCount = await queryOne(
-        'SELECT COUNT(*) as count FROM users WHERE tenant_id = $1 AND role = $2 AND is_active = true',
-        [tenantId, 'manager']
+    // Admin ou super admin : voir toutes les campagnes
+    if (isSuperAdmin || userRole === 'admin') {
+      campaigns = await queryAll(
+        `SELECT
+          c.*,
+          ld.name as database_name,
+          et.name as template_name
+        FROM campaigns c
+        LEFT JOIN lead_databases ld ON c.database_id = ld.id
+        LEFT JOIN email_templates et ON c.template_id = et.id
+        WHERE c.tenant_id = $1
+        ORDER BY c.created_at DESC`,
+        [tenantId]
       );
-
-      const totalManagers = parseInt(managerCount?.count || 0);
-      console.log(`👥 Nombre de managers dans le tenant: ${totalManagers}`);
-
-      // Si plusieurs managers, filtrer par created_by
-      if (totalManagers > 1) {
-        query += ` AND c.created_by = $2`;
-        params.push(userId);
-        console.log(`🔒 Filtrage multi-manager activé pour user ${userId}`);
-      } else {
-        console.log(`✅ Manager unique - accès à toutes les campagnes`);
-      }
+      console.log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
     }
-
-    query += ` ORDER BY c.created_at DESC`;
-
-    const campaigns = await queryAll(query, params);
-
-    console.log(`📋 Campagnes chargées: ${campaigns.length} (role: ${userRole})`);
+    // Manager ou commercial : voir uniquement les campagnes où ils sont assignés
+    else {
+      campaigns = await queryAll(
+        `SELECT DISTINCT
+          c.*,
+          ld.name as database_name,
+          et.name as template_name
+        FROM campaigns c
+        LEFT JOIN lead_databases ld ON c.database_id = ld.id
+        LEFT JOIN email_templates et ON c.template_id = et.id
+        WHERE c.tenant_id = $1
+          AND (
+            -- Campagnes où l'utilisateur est dans assigned_users (JSON)
+            c.assigned_users::jsonb ? $2::text
+            -- Ou campagnes créées par l'utilisateur
+            OR c.created_by = $2
+            -- Ou campagnes où il a des leads dans le pipeline
+            OR EXISTS (
+              SELECT 1 FROM pipeline_leads pl
+              WHERE pl.campaign_id = c.id AND pl.assigned_user_id = $2
+            )
+            -- Ou campagnes où il est dans campaign_assignments
+            OR EXISTS (
+              SELECT 1 FROM campaign_assignments ca
+              WHERE ca.campaign_id = c.id AND ca.user_id = $2
+            )
+          )
+        ORDER BY c.created_at DESC`,
+        [tenantId, userId]
+      );
+      console.log(`✅ ${userRole} ${req.user?.email} - campagnes accessibles: ${campaigns.length}`);
+    }
 
     return res.json({ success: true, campaigns });
 
@@ -107,57 +119,64 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const userId = req.user?.id;
     const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
 
     console.log(`📋 Chargement campagnes pour user ${userId} (${userRole})`);
 
-    let query = `
-      SELECT c.*,
-             ld.name as database_name,
-             et.name as template_name,
-             COUNT(DISTINCT pl.id) as my_leads_count,
-             COUNT(DISTINCT CASE WHEN eq.status = 'sent' THEN eq.id END) as emails_sent
-      FROM campaigns c
-      LEFT JOIN lead_databases ld ON c.database_id = ld.id
-      LEFT JOIN email_templates et ON c.template_id = et.id
-      LEFT JOIN pipeline_leads pl ON c.id = pl.campaign_id AND pl.assigned_user_id = $2
-      LEFT JOIN email_queue eq ON c.id = eq.campaign_id
-      WHERE c.tenant_id = $1
-    `;
+    let campaigns;
 
-    const params = [tenantId, userId];
-
-    // ✅ NOUVELLE LOGIQUE : Gestion managers multi-tenant
-    if (userRole === 'manager') {
-      const managerCount = await queryOne(
-        'SELECT COUNT(*) as count FROM users WHERE tenant_id = $1 AND role = $2 AND is_active = true',
-        [tenantId, 'manager']
+    // Admin ou super admin : toutes les campagnes
+    if (isSuperAdmin || userRole === 'admin') {
+      campaigns = await queryAll(
+        `SELECT c.*,
+                ld.name as database_name,
+                et.name as template_name,
+                COUNT(DISTINCT pl.id) as my_leads_count,
+                COUNT(DISTINCT CASE WHEN eq.status = 'sent' THEN eq.id END) as emails_sent
+         FROM campaigns c
+         LEFT JOIN lead_databases ld ON c.database_id = ld.id
+         LEFT JOIN email_templates et ON c.template_id = et.id
+         LEFT JOIN pipeline_leads pl ON c.id = pl.campaign_id
+         LEFT JOIN email_queue eq ON c.id = eq.campaign_id
+         WHERE c.tenant_id = $1
+         GROUP BY c.id, ld.name, et.name
+         ORDER BY c.created_at DESC`,
+        [tenantId]
       );
-
-      const totalManagers = parseInt(managerCount?.count || 0);
-
-      // Si plusieurs managers, filtrer par created_by
-      if (totalManagers > 1) {
-        query += ` AND c.created_by = $2`;
-        console.log(`🔒 Manager multi-tenant: filtrage par created_by`);
-      } else {
-        console.log(`✅ Manager unique: accès complet`);
-      }
-    } else if (userRole !== 'admin') {
-      // Commerciaux/users : uniquement leurs campagnes assignées
-      query += ` AND (
-        c.assigned_users::jsonb ? $2::text
-        OR c.created_by = $2
-      )`;
+      console.log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
     }
-
-    query += `
-      GROUP BY c.id, ld.name, et.name
-      ORDER BY c.created_at DESC
-    `;
-
-    const campaigns = await queryAll(query, params);
-
-    console.log(`✅ ${campaigns.length} campagnes trouvées pour ${userRole}`);
+    // Manager ou commercial : uniquement leurs campagnes assignées
+    else {
+      campaigns = await queryAll(
+        `SELECT DISTINCT c.*,
+                ld.name as database_name,
+                et.name as template_name,
+                COUNT(DISTINCT pl.id) as my_leads_count,
+                COUNT(DISTINCT CASE WHEN eq.status = 'sent' THEN eq.id END) as emails_sent
+         FROM campaigns c
+         LEFT JOIN lead_databases ld ON c.database_id = ld.id
+         LEFT JOIN email_templates et ON c.template_id = et.id
+         LEFT JOIN pipeline_leads pl ON c.id = pl.campaign_id AND pl.assigned_user_id = $2
+         LEFT JOIN email_queue eq ON c.id = eq.campaign_id
+         WHERE c.tenant_id = $1
+           AND (
+             c.assigned_users::jsonb ? $2::text
+             OR c.created_by = $2
+             OR EXISTS (
+               SELECT 1 FROM pipeline_leads pl2
+               WHERE pl2.campaign_id = c.id AND pl2.assigned_user_id = $2
+             )
+             OR EXISTS (
+               SELECT 1 FROM campaign_assignments ca
+               WHERE ca.campaign_id = c.id AND ca.user_id = $2
+             )
+           )
+         GROUP BY c.id, ld.name, et.name
+         ORDER BY c.created_at DESC`,
+        [tenantId, userId]
+      );
+      console.log(`✅ ${userRole} ${req.user?.email} - mes campagnes: ${campaigns.length}`);
+    }
 
     return res.json({ success: true, campaigns });
 

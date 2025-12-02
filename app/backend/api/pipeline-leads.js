@@ -15,6 +15,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const userId = req.user?.id;
     const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
 
     let query = `
       SELECT
@@ -28,6 +29,7 @@ router.get('/', authenticateToken, async (req, res) => {
         l.status as lead_status,
         c.name as campaign_name,
         c.type as campaign_type,
+        u.first_name || ' ' || u.last_name as assigned_user_name,
         -- Compter les emails envoyés
         (SELECT COUNT(*)
          FROM lead_call_history
@@ -49,15 +51,42 @@ router.get('/', authenticateToken, async (req, res) => {
       FROM pipeline_leads pl
       JOIN leads l ON l.id = pl.lead_id
       LEFT JOIN campaigns c ON c.id = pl.campaign_id
+      LEFT JOIN users u ON pl.assigned_user_id = u.id
       WHERE pl.tenant_id = $1
     `;
 
     const params = [tenantId];
 
-    // Si pas admin, filtrer par commercial assigné
-    if (userRole !== 'admin') {
+    // Admin ou super admin : voir tous les leads
+    if (isSuperAdmin || userRole === 'admin') {
+      // Pas de filtre supplémentaire
+      console.log(`✅ Admin - accès à tous les leads du pipeline`);
+    }
+    // Manager : voir ses leads + ceux de ses équipes
+    else if (userRole === 'manager') {
+      query += ` AND (
+        pl.assigned_user_id = $2
+        OR l.assigned_to = $2
+        -- Ou leads des membres de ses équipes (où il est manager)
+        OR pl.assigned_user_id IN (
+          SELECT tm.user_id FROM team_members tm
+          JOIN teams t ON tm.team_id = t.id
+          WHERE t.manager_id = $2 AND t.tenant_id = $1
+        )
+        -- Ou des campagnes où il est assigné
+        OR pl.campaign_id IN (
+          SELECT ca.campaign_id FROM campaign_assignments ca
+          WHERE ca.user_id = $2
+        )
+      )`;
+      params.push(userId);
+      console.log(`✅ Manager ${userId} - accès à ses leads + équipe`);
+    }
+    // Commercial/User : uniquement ses propres leads
+    else {
       query += ` AND (pl.assigned_user_id = $2 OR l.assigned_to = $2)`;
       params.push(userId);
+      console.log(`✅ User ${userId} - accès à ses leads uniquement`);
     }
 
     query += ` ORDER BY pl.updated_at DESC`;
