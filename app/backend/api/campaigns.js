@@ -1114,7 +1114,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         AND u.is_active = true
         AND (
           -- Utilisateurs dans assigned_users (JSON)
-          ($3::uuid[] IS NOT NULL AND array_length($3::uuid[], 1) > 0 AND u.id = ANY($3::uuid[]))
+          (CARDINALITY($3::uuid[]) > 0 AND u.id = ANY($3::uuid[]))
           -- OU utilisateurs avec leads dans le pipeline
           OR EXISTS (
             SELECT 1 FROM pipeline_leads pl2
@@ -1133,7 +1133,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           )
         )
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, tenantId, assignedUserIds.length > 0 ? assignedUserIds : null, campaign.database_id, campaign.type]
+      [campaignId, tenantId, assignedUserIds, campaign.database_id, campaign.type || 'email']
     );
 
     console.log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
