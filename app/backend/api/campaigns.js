@@ -1013,7 +1013,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
 
     // Récupérer la campagne avec ses utilisateurs assignés
     const campaign = await queryOne(
-      'SELECT assigned_users FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      'SELECT assigned_users, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2',
       [campaignId, tenantId]
     );
 
@@ -1021,35 +1021,242 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    // Si pas d'utilisateurs assignés, retourner tableau vide
-    const assignedUserIds = campaign.assigned_users || [];
-    if (assignedUserIds.length === 0) {
-      return res.json({ success: true, commercials: [] });
+    // Parser assigned_users
+    let assignedUserIds = [];
+    try {
+      assignedUserIds = Array.isArray(campaign.assigned_users)
+        ? campaign.assigned_users
+        : JSON.parse(campaign.assigned_users || '[]');
+    } catch (e) {
+      assignedUserIds = [];
     }
 
-    // Récupérer les commerciaux avec leurs stats depuis pipeline_leads
+    // Récupérer les commerciaux :
+    // 1. Ceux dans assigned_users
+    // 2. OU ceux qui ont des leads dans pipeline_leads pour cette campagne
+    // 3. OU ceux qui ont des leads assignés dans la database de la campagne
     const commercials = await queryAll(
-      `SELECT
+      `SELECT DISTINCT
         u.id,
         u.first_name,
         u.last_name,
         u.email,
         u.role,
-        COUNT(DISTINCT pl.lead_id) as leads_assigned,
-        COUNT(DISTINCT CASE WHEN pl.stage != 'cold_call' THEN pl.lead_id END) as leads_contacted,
-        COUNT(DISTINCT CASE WHEN pl.stage IN ('tres_qualifie', 'proposition', 'gagne') THEN pl.lead_id END) as meetings_scheduled
+        COALESCE(COUNT(DISTINCT pl.lead_id), 0) as leads_assigned,
+        COALESCE(COUNT(DISTINCT CASE WHEN pl.stage != 'cold_call' THEN pl.lead_id END), 0) as leads_contacted,
+        COALESCE(COUNT(DISTINCT CASE WHEN pl.stage IN ('tres_qualifie', 'proposition', 'gagne') THEN pl.lead_id END), 0) as meetings_scheduled
       FROM users u
       LEFT JOIN pipeline_leads pl ON pl.assigned_user_id = u.id AND pl.campaign_id = $1
-      WHERE u.id = ANY($2::uuid[]) AND u.tenant_id = $3
+      WHERE u.tenant_id = $2
+        AND (
+          -- Dans assigned_users
+          u.id = ANY($3::uuid[])
+          -- OU a des leads dans le pipeline de cette campagne
+          OR EXISTS (
+            SELECT 1 FROM pipeline_leads pl2
+            WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
+          )
+          -- OU a des leads dans la database de la campagne
+          OR EXISTS (
+            SELECT 1 FROM leads l
+            WHERE l.assigned_to = u.id AND l.database_id = $4
+          )
+          -- OU est dans campaign_assignments
+          OR EXISTS (
+            SELECT 1 FROM campaign_assignments ca
+            WHERE ca.user_id = u.id AND ca.campaign_id = $1
+          )
+        )
       GROUP BY u.id, u.first_name, u.last_name, u.email, u.role
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, assignedUserIds, tenantId]
+      [campaignId, tenantId, assignedUserIds, campaign.database_id]
     );
+
+    console.log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
 
     return res.json({ success: true, commercials });
 
   } catch (error) {
     console.error('❌ Erreur commercials:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== TRANSFER LEADS ====================
+router.post('/:id/transfer-leads', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
+
+    const { lead_ids, target_user_id, source_user_id, transfer_all } = req.body;
+
+    if (!target_user_id) {
+      return res.status(400).json({ error: 'target_user_id requis' });
+    }
+
+    // Vérifier que la campagne existe
+    const campaign = await queryOne(
+      'SELECT id, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    // Vérifier que l'utilisateur cible existe
+    const targetUser = await queryOne(
+      'SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true',
+      [target_user_id, tenantId]
+    );
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Utilisateur cible non trouvé ou inactif' });
+    }
+
+    // Vérifier les permissions
+    if (!isSuperAdmin && userRole !== 'admin') {
+      if (userRole === 'manager') {
+        // Manager peut transférer uniquement vers les membres de son équipe
+        const isTargetInTeam = await queryOne(
+          `SELECT 1 FROM team_members tm
+           JOIN teams t ON tm.team_id = t.id
+           WHERE tm.user_id = $1 AND t.manager_id = $2`,
+          [target_user_id, userId]
+        );
+
+        if (!isTargetInTeam) {
+          return res.status(403).json({
+            error: 'Accès refusé',
+            message: 'Vous ne pouvez transférer des leads qu\'aux membres de votre équipe'
+          });
+        }
+      } else {
+        return res.status(403).json({ error: 'Permissions insuffisantes' });
+      }
+    }
+
+    let leadsToTransfer = [];
+
+    // Transférer tous les leads d'un commercial source
+    if (transfer_all && source_user_id) {
+      leadsToTransfer = await queryAll(
+        `SELECT DISTINCT l.id
+         FROM leads l
+         LEFT JOIN pipeline_leads pl ON l.id = pl.lead_id AND pl.campaign_id = $1
+         WHERE l.tenant_id = $2
+           AND (l.assigned_to = $3 OR pl.assigned_user_id = $3)
+           AND (
+             l.database_id = $4
+             OR EXISTS (SELECT 1 FROM pipeline_leads pl2 WHERE pl2.lead_id = l.id AND pl2.campaign_id = $1)
+           )`,
+        [campaignId, tenantId, source_user_id, campaign.database_id]
+      );
+    }
+    // Transférer des leads spécifiques
+    else if (lead_ids && lead_ids.length > 0) {
+      // Vérifier que les leads existent
+      leadsToTransfer = await queryAll(
+        `SELECT id FROM leads WHERE id = ANY($1::uuid[]) AND tenant_id = $2`,
+        [lead_ids, tenantId]
+      );
+    } else {
+      return res.status(400).json({ error: 'lead_ids ou (transfer_all + source_user_id) requis' });
+    }
+
+    if (leadsToTransfer.length === 0) {
+      return res.status(400).json({ error: 'Aucun lead à transférer' });
+    }
+
+    console.log(`🔄 Transfert de ${leadsToTransfer.length} leads vers ${targetUser.first_name} ${targetUser.last_name}`);
+
+    // Effectuer le transfert
+    let transferredCount = 0;
+    for (const lead of leadsToTransfer) {
+      try {
+        // Mettre à jour le lead
+        await execute(
+          `UPDATE leads SET assigned_to = $1, updated_at = NOW() WHERE id = $2`,
+          [target_user_id, lead.id]
+        );
+
+        // Mettre à jour le pipeline
+        await execute(
+          `UPDATE pipeline_leads
+           SET assigned_user_id = $1, updated_at = NOW()
+           WHERE lead_id = $2 AND campaign_id = $3`,
+          [target_user_id, lead.id, campaignId]
+        );
+
+        transferredCount++;
+      } catch (err) {
+        console.error(`Erreur transfert lead ${lead.id}:`, err.message);
+      }
+    }
+
+    console.log(`✅ ${transferredCount} leads transférés avec succès`);
+
+    return res.json({
+      success: true,
+      message: `${transferredCount} lead(s) transféré(s) à ${targetUser.first_name} ${targetUser.last_name}`,
+      transferred_count: transferredCount,
+      target_user: {
+        id: targetUser.id,
+        name: `${targetUser.first_name} ${targetUser.last_name}`
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur transfer-leads:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GET AVAILABLE USERS FOR TRANSFER ====================
+router.get('/:id/available-users', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
+
+    let users;
+
+    // Admin ou super admin : voir tous les utilisateurs actifs
+    if (isSuperAdmin || userRole === 'admin') {
+      users = await queryAll(
+        `SELECT id, first_name, last_name, email, role
+         FROM users
+         WHERE tenant_id = $1 AND is_active = true AND role IN ('manager', 'commercial', 'user')
+         ORDER BY first_name, last_name`,
+        [tenantId]
+      );
+    }
+    // Manager : voir uniquement les membres de ses équipes
+    else if (userRole === 'manager') {
+      users = await queryAll(
+        `SELECT DISTINCT u.id, u.first_name, u.last_name, u.email, u.role
+         FROM users u
+         JOIN team_members tm ON u.id = tm.user_id
+         JOIN teams t ON tm.team_id = t.id
+         WHERE u.tenant_id = $1
+           AND u.is_active = true
+           AND t.manager_id = $2
+         ORDER BY u.first_name, u.last_name`,
+        [tenantId, userId]
+      );
+    } else {
+      users = [];
+    }
+
+    return res.json({ success: true, users });
+
+  } catch (error) {
+    console.error('❌ Erreur available-users:', error);
     return res.status(500).json({ error: error.message });
   }
 });
