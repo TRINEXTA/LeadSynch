@@ -1215,6 +1215,156 @@ router.post('/:id/transfer-leads', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== DISTRIBUTE LEADS TO MULTIPLE USERS ====================
+router.post('/:id/distribute-leads', authenticateToken, async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
+
+    const { lead_ids, target_user_ids, source_user_id, transfer_all } = req.body;
+
+    if (!target_user_ids || !Array.isArray(target_user_ids) || target_user_ids.length === 0) {
+      return res.status(400).json({ error: 'target_user_ids requis (tableau d\'UUIDs)' });
+    }
+
+    // Vérifier que la campagne existe
+    const campaign = await queryOne(
+      'SELECT id, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      [campaignId, tenantId]
+    );
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    // Vérifier que les utilisateurs cibles existent
+    const targetUsers = await queryAll(
+      `SELECT id, first_name, last_name FROM users
+       WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND is_active = true`,
+      [target_user_ids, tenantId]
+    );
+
+    if (targetUsers.length === 0) {
+      return res.status(404).json({ error: 'Aucun utilisateur cible valide trouvé' });
+    }
+
+    // Vérifier les permissions pour les managers
+    if (!isSuperAdmin && userRole !== 'admin' && userRole === 'manager') {
+      const validTargets = await queryAll(
+        `SELECT DISTINCT u.id FROM users u
+         JOIN team_members tm ON u.id = tm.user_id
+         JOIN teams t ON tm.team_id = t.id
+         WHERE u.id = ANY($1::uuid[]) AND t.manager_id = $2`,
+        [target_user_ids, userId]
+      );
+
+      if (validTargets.length !== target_user_ids.length) {
+        return res.status(403).json({
+          error: 'Accès refusé',
+          message: 'Vous ne pouvez distribuer des leads qu\'aux membres de votre équipe'
+        });
+      }
+    } else if (!isSuperAdmin && userRole !== 'admin' && userRole !== 'manager') {
+      return res.status(403).json({ error: 'Permissions insuffisantes' });
+    }
+
+    let leadsToDistribute = [];
+
+    // Récupérer tous les leads d'un commercial source
+    if (transfer_all && source_user_id) {
+      leadsToDistribute = await queryAll(
+        `SELECT DISTINCT l.id
+         FROM leads l
+         LEFT JOIN pipeline_leads pl ON l.id = pl.lead_id AND pl.campaign_id = $1
+         WHERE l.tenant_id = $2
+           AND (l.assigned_to = $3 OR pl.assigned_user_id = $3)
+           AND (
+             l.database_id = $4
+             OR EXISTS (SELECT 1 FROM pipeline_leads pl2 WHERE pl2.lead_id = l.id AND pl2.campaign_id = $1)
+           )`,
+        [campaignId, tenantId, source_user_id, campaign.database_id]
+      );
+    }
+    // Récupérer des leads spécifiques
+    else if (lead_ids && lead_ids.length > 0) {
+      leadsToDistribute = await queryAll(
+        `SELECT id FROM leads WHERE id = ANY($1::uuid[]) AND tenant_id = $2`,
+        [lead_ids, tenantId]
+      );
+    } else {
+      return res.status(400).json({ error: 'lead_ids ou (transfer_all + source_user_id) requis' });
+    }
+
+    if (leadsToDistribute.length === 0) {
+      return res.status(400).json({ error: 'Aucun lead à distribuer' });
+    }
+
+    console.log(`🔄 Distribution de ${leadsToDistribute.length} leads vers ${targetUsers.length} commerciaux`);
+
+    // Distribuer équitablement les leads entre les utilisateurs
+    const distribution = {};
+    targetUsers.forEach(u => { distribution[u.id] = []; });
+
+    leadsToDistribute.forEach((lead, index) => {
+      const targetIdx = index % targetUsers.length;
+      const targetId = targetUsers[targetIdx].id;
+      distribution[targetId].push(lead.id);
+    });
+
+    // Effectuer la distribution
+    let totalTransferred = 0;
+    const results = [];
+
+    for (const targetUser of targetUsers) {
+      const leadIds = distribution[targetUser.id];
+      let transferredCount = 0;
+
+      for (const leadId of leadIds) {
+        try {
+          await execute(
+            `UPDATE leads SET assigned_to = $1, updated_at = NOW() WHERE id = $2`,
+            [targetUser.id, leadId]
+          );
+
+          await execute(
+            `UPDATE pipeline_leads
+             SET assigned_user_id = $1, updated_at = NOW()
+             WHERE lead_id = $2 AND campaign_id = $3`,
+            [targetUser.id, leadId, campaignId]
+          );
+
+          transferredCount++;
+        } catch (err) {
+          console.error(`Erreur distribution lead ${leadId}:`, err.message);
+        }
+      }
+
+      totalTransferred += transferredCount;
+      results.push({
+        user_id: targetUser.id,
+        user_name: `${targetUser.first_name} ${targetUser.last_name}`,
+        leads_assigned: transferredCount
+      });
+    }
+
+    console.log(`✅ ${totalTransferred} leads distribués avec succès`);
+
+    return res.json({
+      success: true,
+      message: `${totalTransferred} lead(s) distribué(s) entre ${targetUsers.length} commercial(aux)`,
+      total_distributed: totalTransferred,
+      distribution: results
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur distribute-leads:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== GET AVAILABLE USERS FOR TRANSFER ====================
 router.get('/:id/available-users', authenticateToken, async (req, res) => {
   try {
