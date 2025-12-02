@@ -29,15 +29,26 @@ export default function CampaignDetails() {
     try {
       setLoading(true);
 
-      const [campaignRes, statsRes, commercialsRes] = await Promise.all([
-        api.get(`/campaigns/${campaignId}`),
-        api.get(`/tracking/campaign/${campaignId}/stats`),
-        api.get(`/campaigns/${campaignId}/commercials`)
-      ]);
-
+      // Charger la campagne d'abord (obligatoire)
+      const campaignRes = await api.get(`/campaigns/${campaignId}`);
       setCampaign(campaignRes.data.campaign);
-      setStats(statsRes.data.stats);
-      setCommercials(commercialsRes.data.commercials || []);
+
+      // Charger stats et commercials séparément (optionnel)
+      try {
+        const statsRes = await api.get(`/tracking/campaign/${campaignId}/stats`);
+        setStats(statsRes.data.stats);
+      } catch (e) {
+        console.error('Erreur stats:', e);
+        setStats({ sent: 0, opened: 0, clicked: 0, open_rate: 0, click_rate: 0 });
+      }
+
+      try {
+        const commercialsRes = await api.get(`/campaigns/${campaignId}/commercials`);
+        setCommercials(commercialsRes.data.commercials || []);
+      } catch (e) {
+        console.error('Erreur commercials:', e);
+        setCommercials([]);
+      }
 
     } catch (error) {
       console.error('Erreur:', error);
