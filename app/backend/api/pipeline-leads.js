@@ -62,7 +62,7 @@ router.get('/', authenticateToken, async (req, res) => {
       // Pas de filtre supplémentaire
       console.log(`✅ Admin - accès à tous les leads du pipeline`);
     }
-    // Manager : voir ses leads + ceux de ses équipes
+    // Manager : voir ses leads + ceux de ses équipes + campagnes assignées
     else if (userRole === 'manager') {
       query += ` AND (
         pl.assigned_user_id = $2
@@ -73,14 +73,19 @@ router.get('/', authenticateToken, async (req, res) => {
           JOIN teams t ON tm.team_id = t.id
           WHERE t.manager_id = $2 AND t.tenant_id = $1
         )
-        -- Ou des campagnes où il est assigné
+        -- Ou des campagnes où il est dans campaign_assignments
         OR pl.campaign_id IN (
           SELECT ca.campaign_id FROM campaign_assignments ca
           WHERE ca.user_id = $2
         )
+        -- Ou des campagnes où il est dans assigned_users (JSON)
+        OR pl.campaign_id IN (
+          SELECT c2.id FROM campaigns c2
+          WHERE c2.tenant_id = $1 AND c2.assigned_users::jsonb ? $2::text
+        )
       )`;
       params.push(userId);
-      console.log(`✅ Manager ${userId} - accès à ses leads + équipe`);
+      console.log(`✅ Manager ${userId} - accès à ses leads + équipe + campagnes assignées`);
     }
     // Commercial/User : uniquement ses propres leads
     else {

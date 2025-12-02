@@ -952,10 +952,13 @@ router.get('/:id/phoning-stats', authenticateToken, async (req, res) => {
   try {
     const campaignId = req.params.id;
     const tenantId = req.user?.tenant_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const isSuperAdmin = req.user?.is_super_admin === true;
 
     // Vérifier que la campagne existe et appartient au tenant
     const campaign = await queryOne(
-      'SELECT id, type, database_id FROM campaigns WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, type, database_id, assigned_users FROM campaigns WHERE id = $1 AND tenant_id = $2',
       [campaignId, tenantId]
     );
 
@@ -963,11 +966,14 @@ router.get('/:id/phoning-stats', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    // Compter le nombre total de leads dans la campagne (via database_id)
+    // Compter le nombre total de leads dans la campagne
+    // Via database_id direct OU via lead_database_relations
     const totalLeadsResult = await queryOne(
       `SELECT COUNT(DISTINCT l.id) as total
        FROM leads l
-       WHERE l.database_id = $1 AND l.tenant_id = $2`,
+       LEFT JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+       WHERE l.tenant_id = $2
+         AND (l.database_id = $1 OR ldr.database_id = $1)`,
       [campaign.database_id, tenantId]
     );
 
@@ -996,6 +1002,8 @@ router.get('/:id/phoning-stats', authenticateToken, async (req, res) => {
       leads_contacted: parseInt(contactedLeadsResult?.contacted || 0),
       meetings_scheduled: parseInt(meetingsResult?.meetings || 0)
     };
+
+    console.log(`📊 Stats campagne ${campaignId}: ${stats.total_leads} leads, ${stats.leads_contacted} contactés`);
 
     return res.json({ success: true, stats });
 
@@ -1031,7 +1039,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
       assignedUserIds = [];
     }
 
-    // Récupérer les commerciaux avec comptage des leads (pipeline + leads table)
+    // Récupérer les commerciaux avec comptage des leads (pipeline + leads table + lead_database_relations)
     const commercials = await queryAll(
       `SELECT
         u.id,
@@ -1045,13 +1053,14 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           FROM pipeline_leads pl2
           WHERE pl2.assigned_user_id = u.id AND pl2.campaign_id = $1
         ), 0) as pipeline_leads_count,
-        -- Leads dans la table leads (pas encore dans le pipeline)
+        -- Leads dans la table leads (pas encore dans le pipeline) - via database_id OU lead_database_relations
         COALESCE((
           SELECT COUNT(DISTINCT l2.id)
           FROM leads l2
+          LEFT JOIN lead_database_relations ldr ON l2.id = ldr.lead_id
           WHERE l2.assigned_to = u.id
-            AND l2.database_id = $4
             AND l2.tenant_id = $2
+            AND (l2.database_id = $4 OR ldr.database_id = $4)
             AND NOT EXISTS (
               SELECT 1 FROM pipeline_leads pl3
               WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
@@ -1065,9 +1074,10 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         ), 0) + COALESCE((
           SELECT COUNT(DISTINCT l2.id)
           FROM leads l2
+          LEFT JOIN lead_database_relations ldr ON l2.id = ldr.lead_id
           WHERE l2.assigned_to = u.id
-            AND l2.database_id = $4
             AND l2.tenant_id = $2
+            AND (l2.database_id = $4 OR ldr.database_id = $4)
             AND NOT EXISTS (
               SELECT 1 FROM pipeline_leads pl3
               WHERE pl3.lead_id = l2.id AND pl3.campaign_id = $1
@@ -1100,7 +1110,8 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           )
           OR EXISTS (
             SELECT 1 FROM leads l
-            WHERE l.assigned_to = u.id AND l.database_id = $4
+            LEFT JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+            WHERE l.assigned_to = u.id AND (l.database_id = $4 OR ldr.database_id = $4)
           )
           OR EXISTS (
             SELECT 1 FROM campaign_assignments ca
