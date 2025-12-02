@@ -1082,11 +1082,11 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         -- Leads contactés (emails ouverts ou pipeline pas cold_call)
         CASE
           WHEN $5 = 'email' THEN COALESCE((
-            SELECT COUNT(DISTINCT te.lead_id)
-            FROM tracking_events te
-            WHERE te.campaign_id = $1
-              AND te.event_type = 'open'
-              AND te.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
+            SELECT COUNT(DISTINCT et.lead_id)
+            FROM email_tracking et
+            WHERE et.campaign_id = $1
+              AND et.event_type = 'open'
+              AND et.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
           ), 0)
           ELSE COALESCE((
             SELECT COUNT(DISTINCT pl2.lead_id)
@@ -1097,11 +1097,11 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         -- RDV obtenus / Clics
         CASE
           WHEN $5 = 'email' THEN COALESCE((
-            SELECT COUNT(DISTINCT te.lead_id)
-            FROM tracking_events te
-            WHERE te.campaign_id = $1
-              AND te.event_type = 'click'
-              AND te.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
+            SELECT COUNT(DISTINCT et.lead_id)
+            FROM email_tracking et
+            WHERE et.campaign_id = $1
+              AND et.event_type = 'click'
+              AND et.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
           ), 0)
           ELSE COALESCE((
             SELECT COUNT(DISTINCT pl2.lead_id)
@@ -1114,7 +1114,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         AND u.is_active = true
         AND (
           -- Utilisateurs dans assigned_users (JSON)
-          ($3::uuid[] IS NOT NULL AND array_length($3::uuid[], 1) > 0 AND u.id = ANY($3::uuid[]))
+          (CARDINALITY($3::uuid[]) > 0 AND u.id = ANY($3::uuid[]))
           -- OU utilisateurs avec leads dans le pipeline
           OR EXISTS (
             SELECT 1 FROM pipeline_leads pl2
@@ -1133,7 +1133,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           )
         )
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, tenantId, assignedUserIds.length > 0 ? assignedUserIds : null, campaign.database_id, campaign.type]
+      [campaignId, tenantId, assignedUserIds, campaign.database_id, campaign.type || 'email']
     );
 
     console.log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
