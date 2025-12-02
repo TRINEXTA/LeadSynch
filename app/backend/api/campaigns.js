@@ -1082,11 +1082,11 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         -- Leads contactés (emails ouverts ou pipeline pas cold_call)
         CASE
           WHEN $5 = 'email' THEN COALESCE((
-            SELECT COUNT(DISTINCT te.lead_id)
-            FROM tracking_events te
-            WHERE te.campaign_id = $1
-              AND te.event_type = 'open'
-              AND te.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
+            SELECT COUNT(DISTINCT et.lead_id)
+            FROM email_tracking et
+            WHERE et.campaign_id = $1
+              AND et.event_type = 'open'
+              AND et.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
           ), 0)
           ELSE COALESCE((
             SELECT COUNT(DISTINCT pl2.lead_id)
@@ -1097,11 +1097,11 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         -- RDV obtenus / Clics
         CASE
           WHEN $5 = 'email' THEN COALESCE((
-            SELECT COUNT(DISTINCT te.lead_id)
-            FROM tracking_events te
-            WHERE te.campaign_id = $1
-              AND te.event_type = 'click'
-              AND te.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
+            SELECT COUNT(DISTINCT et.lead_id)
+            FROM email_tracking et
+            WHERE et.campaign_id = $1
+              AND et.event_type = 'click'
+              AND et.lead_id IN (SELECT l.id FROM leads l WHERE l.assigned_to = u.id)
           ), 0)
           ELSE COALESCE((
             SELECT COUNT(DISTINCT pl2.lead_id)
