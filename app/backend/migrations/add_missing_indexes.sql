@@ -44,11 +44,11 @@ CREATE INDEX IF NOT EXISTS idx_email_queue_status ON email_queue(status);
 -- Index for campaign_id (for campaign-specific queries)
 CREATE INDEX IF NOT EXISTS idx_email_queue_campaign ON email_queue(campaign_id);
 
--- Index for scheduled_at (for scheduling queries)
-CREATE INDEX IF NOT EXISTS idx_email_queue_scheduled ON email_queue(scheduled_at);
+-- Index for sent_at (for worker queries and batch timing)
+CREATE INDEX IF NOT EXISTS idx_email_queue_sent_at ON email_queue(sent_at);
 
--- Composite index for worker queries
-CREATE INDEX IF NOT EXISTS idx_email_queue_status_scheduled ON email_queue(status, scheduled_at);
+-- Composite index for worker queries (pending emails)
+CREATE INDEX IF NOT EXISTS idx_email_queue_status_campaign ON email_queue(status, campaign_id);
 
 -- ============================================
 -- EMAIL_TRACKING TABLE INDEXES
@@ -82,15 +82,10 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_leads_lead ON pipeline_leads(lead_id);
 -- ============================================
 -- FOLLOW_UPS TABLE INDEXES
 -- ============================================
+-- Note: Most indexes already exist in migration 012
 
--- Index for assigned_to (for user task lists)
-CREATE INDEX IF NOT EXISTS idx_follow_ups_assigned ON follow_ups(assigned_to);
-
--- Index for status + due_date (for task filtering)
-CREATE INDEX IF NOT EXISTS idx_follow_ups_status_due ON follow_ups(status, due_date);
-
--- Index for tenant_id
-CREATE INDEX IF NOT EXISTS idx_follow_ups_tenant ON follow_ups(tenant_id);
+-- Composite index for user task lists with scheduling
+CREATE INDEX IF NOT EXISTS idx_follow_ups_user_scheduled ON follow_ups(user_id, scheduled_date) WHERE completed = false;
 
 -- ============================================
 -- USERS TABLE INDEXES
