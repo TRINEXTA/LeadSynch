@@ -15,6 +15,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function SuperAdminInvoices() {
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ export default function SuperAdminInvoices() {
       setInvoices(response.data.invoices || []);
     } catch (error) {
       console.error('Erreur chargement factures:', error);
-      alert('Erreur lors du chargement des factures');
+      toast.error('Erreur lors du chargement des factures');
     } finally {
       setLoading(false);
     }
@@ -63,28 +64,28 @@ export default function SuperAdminInvoices() {
   };
 
   const handleMarkAsPaid = async (invoiceId) => {
-    if (!confirm('Marquer cette facture comme payée ?')) return;
+    if (!window.confirm('Marquer cette facture comme payée ?')) return;
 
     try {
       await api.post(`/super-admin/invoices/${invoiceId}/mark-paid`);
-      alert('Facture marquée comme payée');
+      toast.success('Facture marquée comme payée');
       loadInvoices();
       loadStats();
     } catch (error) {
       console.error('Erreur marquage paiement:', error);
-      alert('Erreur lors du marquage comme payée');
+      toast.error('Erreur lors du marquage comme payée');
     }
   };
 
   const handleSendReminder = async (invoiceId) => {
-    if (!confirm('Envoyer un rappel de paiement au client ?')) return;
+    if (!window.confirm('Envoyer un rappel de paiement au client ?')) return;
 
     try {
       await api.post(`/super-admin/invoices/${invoiceId}/send-reminder`);
-      alert('Rappel envoyé avec succès');
+      toast.success('Rappel envoyé avec succès');
     } catch (error) {
       console.error('Erreur envoi rappel:', error);
-      alert('Erreur lors de l\'envoi du rappel');
+      toast.error('Erreur lors de l\'envoi du rappel');
     }
   };
 
@@ -103,7 +104,7 @@ export default function SuperAdminInvoices() {
       link.remove();
     } catch (error) {
       console.error('Erreur téléchargement PDF:', error);
-      alert('Erreur lors du téléchargement du PDF');
+      toast.error('Erreur lors du téléchargement du PDF');
     }
   };
 

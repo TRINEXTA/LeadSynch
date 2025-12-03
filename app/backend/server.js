@@ -102,7 +102,17 @@ const authLimiter = rateLimit({
   message: 'Trop de tentatives de connexion, réessayez dans 15 minutes'
 });
 
+// Rate limiter pour tracking - Protection contre le spam de faux events
+const trackingLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requêtes par minute par IP
+  message: 'Too many tracking requests',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 app.use('/api/', globalLimiter);
+app.use('/api/track/', trackingLimiter);
 
 console.log('🔒 Sécurité activée: Helmet + Rate Limiting');
 console.log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
@@ -242,6 +252,10 @@ app.use('/api/import-csv', importCsvRoute);
 app.use('/api/asefi', asefiRoute);
 // Asefi génération de templates (endpoints spécifiques)
 app.use('/api/asefi', asefiGenerateRoute);
+
+// AI Generate Template - Endpoint pour génération templates email via IA
+import aiGenerateTemplateRoute from './api/ai-generate-template.js';
+app.use('/api/ai/generate-template', aiGenerateTemplateRoute);
 app.use('/api/email-templates', emailTemplatesRoute);
 app.use('/api/chatbot', chatbotRoute);
 app.use('/api/verify-siret', verifySiretRoute);
