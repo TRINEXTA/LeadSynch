@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -51,7 +52,7 @@ export default function Services() {
       setSubscriptions(subscriptionsRes.data.subscriptions);
       setStats(statsRes.data);
     } catch (error) {
-      console.error('Erreur chargement données:', error);
+      error('Erreur chargement données:', error);
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ export default function Services() {
       setEditingService(null);
       await loadData();
     } catch (error) {
-      console.error('Erreur sauvegarde service:', error);
+      error('Erreur sauvegarde service:', error);
       throw error;
     }
   };
@@ -83,7 +84,7 @@ export default function Services() {
       await api.delete(`/services/${serviceId}`);
       await loadData();
     } catch (error) {
-      console.error('Erreur suppression service:', error);
+      error('Erreur suppression service:', error);
       alert(error.response?.data?.message || 'Erreur lors de la suppression');
     }
   };

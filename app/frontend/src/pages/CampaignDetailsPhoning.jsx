@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -57,7 +58,7 @@ export default function CampaignDetailsPhoning() {
       setPipelineStats(pipelineRes.data.pipeline || []);
 
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur chargement campagne');
     } finally {
       setLoading(false);

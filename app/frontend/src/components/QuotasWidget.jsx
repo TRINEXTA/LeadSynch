@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { Zap, Mail, Target, TrendingUp, AlertCircle } from 'lucide-react';
 import api from '../api/axios';
@@ -17,7 +18,7 @@ export default function QuotasWidget() {
         setQuotas(data);
       }
     } catch (error) {
-      console.error('Erreur chargement quotas:', error?.response?.data || error.message);
+      error('Erreur chargement quotas:', error?.response?.data || error.message);
     } finally {
       setLoading(false);
     }

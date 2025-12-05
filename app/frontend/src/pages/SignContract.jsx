@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, FileText, Mail, Shield, Clock, Building, User, Euro, Calendar, Lock, Send } from 'lucide-react';
@@ -38,7 +39,7 @@ export default function SignContract() {
       }
       setLoading(false);
     } catch (err) {
-      console.error('Erreur:', err);
+      error('Erreur:', err);
       setError(err.response?.data?.error || 'Lien invalide ou expiré');
       setLoading(false);
     }

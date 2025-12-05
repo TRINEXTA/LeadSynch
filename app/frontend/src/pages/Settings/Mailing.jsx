@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mail, Save, Send, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function MailingSettings() {
       const { data } = await api.get('/mailing-settings');
       setSettings(data.settings);
     } catch (error) {
-      console.error('Erreur chargement settings:', error);
+      error('Erreur chargement settings:', error);
       setMessage({ type: 'error', text: 'Erreur de chargement' });
     } finally {
       setLoading(false);

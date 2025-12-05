@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import {
   Users, Search, Plus, Eye, Pause, Play, X, Mail, FileText,
@@ -67,7 +68,7 @@ export default function SuperAdminTenants() {
         });
       }
     } catch (error) {
-      console.error('Erreur chargement stats:', error);
+      error('Erreur chargement stats:', error);
     }
   };
 
@@ -81,7 +82,7 @@ export default function SuperAdminTenants() {
       const response = await api.get('/super-admin/tenants', { params });
       setTenants(response.data.tenants);
     } catch (error) {
-      console.error('Erreur chargement tenants:', error);
+      error('Erreur chargement tenants:', error);
       toast.error('Erreur chargement des clients');
     } finally {
       setLoading(false);
@@ -98,7 +99,7 @@ export default function SuperAdminTenants() {
       const response = await api.get('/super-admin/plans');
       setPlans(response.data.plans || []);
     } catch (error) {
-      console.error('Erreur chargement plans:', error);
+      error('Erreur chargement plans:', error);
     }
   };
 
@@ -135,7 +136,7 @@ export default function SuperAdminTenants() {
       loadTenants();
       loadStats();
     } catch (error) {
-      console.error('Erreur création client:', error);
+      error('Erreur création client:', error);
       toast.error('Erreur lors de la création du client');
     }
   };
@@ -151,7 +152,7 @@ export default function SuperAdminTenants() {
       toast.success('Client suspendu');
       loadTenants();
     } catch (error) {
-      console.error('Erreur suspension:', error);
+      error('Erreur suspension:', error);
       toast.error('Erreur lors de la suspension');
     }
   };
@@ -164,7 +165,7 @@ export default function SuperAdminTenants() {
       toast.success('Client réactivé');
       loadTenants();
     } catch (error) {
-      console.error('Erreur activation:', error);
+      error('Erreur activation:', error);
       toast.error('Erreur lors de la réactivation');
     }
   };

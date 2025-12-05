@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -5,11 +6,11 @@ const router = express.Router();
 
 // Vérifier que la clé API est configurée
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('⚠️ ========================================');
-  console.error('⚠️ ANTHROPIC_API_KEY non configurée !');
-  console.error('⚠️ Le chatbot website ne fonctionnera pas');
-  console.error('⚠️ Configurez ANTHROPIC_API_KEY dans vos variables d\'environnement');
-  console.error('⚠️ ========================================');
+  error('⚠️ ========================================');
+  error('⚠️ ANTHROPIC_API_KEY non configurée !');
+  error('⚠️ Le chatbot website ne fonctionnera pas');
+  error('⚠️ Configurez ANTHROPIC_API_KEY dans vos variables d\'environnement');
+  error('⚠️ ========================================');
 }
 
 // Initialiser le client Anthropic
@@ -22,7 +23,7 @@ router.post('/ask', async (req, res) => {
   try {
     // Vérifier la clé API
     if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'sk-ant-dummy-key') {
-      console.error('❌ ANTHROPIC_API_KEY manquante - Le chatbot ne peut pas fonctionner');
+      error('❌ ANTHROPIC_API_KEY manquante - Le chatbot ne peut pas fonctionner');
       return res.status(503).json({
         error: 'Service IA temporairement indisponible',
         message: 'Le chatbot Asefi n\'est pas configuré. Veuillez contacter le support technique.',
@@ -116,7 +117,7 @@ RÈGLES CRITIQUES :
     });
 
   } catch (error) {
-    console.error('Erreur chatbot:', error);
+    error('Erreur chatbot:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la communication avec Asefi',
       details: error.message 

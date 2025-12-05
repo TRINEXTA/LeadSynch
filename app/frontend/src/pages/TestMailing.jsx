@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mail, Send, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
@@ -38,7 +39,7 @@ export default function TestMailing() {
       }, 3000);
 
     } catch (error) {
-      console.error('Erreur test email:', error);
+      error('Erreur test email:', error);
       setResult({
         success: false,
         message: error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'envoi de l\'email de test'

@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 import { queryAll } from '../lib/db.js';
 
 async function checkStructure() {
   try {
-    console.log('?? Structure de la table users:\n');
+    log('?? Structure de la table users:\n');
 
     const columns = await queryAll(`
       SELECT column_name, data_type 
@@ -11,18 +12,18 @@ async function checkStructure() {
       ORDER BY ordinal_position
     `);
 
-    console.log('Colonnes disponibles:');
+    log('Colonnes disponibles:');
     columns.forEach(col => {
-      console.log(`  - ${col.column_name} (${col.data_type})`);
+      log(`  - ${col.column_name} (${col.data_type})`);
     });
 
-    console.log('\n?? Premier utilisateur:');
+    log('\n?? Premier utilisateur:');
     const user = await queryAll('SELECT * FROM users LIMIT 1');
-    console.log(user[0]);
+    log(user[0]);
 
     process.exit(0);
   } catch (error) {
-    console.error('? Erreur:', error);
+    error('? Erreur:', error);
     process.exit(1);
   }
 }

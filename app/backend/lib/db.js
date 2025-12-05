@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import pg from 'pg';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -19,7 +20,7 @@ export async function query(query, params = []) {
     const result = await pool.query(query, params);
     return result;
   } catch (error) {
-    console.error('Database query error:', error);
+    error('Database query error:', error);
     throw error;
   }
 }

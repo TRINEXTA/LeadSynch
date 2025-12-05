@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { z } from 'zod';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
@@ -70,7 +71,7 @@ router.get('/', authenticateToken, async (req, res) => {
         ORDER BY c.created_at DESC`,
         [tenantId]
       );
-      console.log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
+      log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
     }
     // Manager ou commercial : voir uniquement les campagnes où ils sont assignés
     else {
@@ -102,13 +103,13 @@ router.get('/', authenticateToken, async (req, res) => {
         ORDER BY c.created_at DESC`,
         [tenantId, userId]
       );
-      console.log(`✅ ${userRole} ${req.user?.email} - campagnes accessibles: ${campaigns.length}`);
+      log(`✅ ${userRole} ${req.user?.email} - campagnes accessibles: ${campaigns.length}`);
     }
 
     return res.json({ success: true, campaigns });
 
   } catch (error) {
-    console.error('❌ Erreur GET campaigns:', error);
+    error('❌ Erreur GET campaigns:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -121,7 +122,7 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
     const userRole = req.user?.role;
     const isSuperAdmin = req.user?.is_super_admin === true;
 
-    console.log(`📋 Chargement campagnes pour user ${userId} (${userRole})`);
+    log(`📋 Chargement campagnes pour user ${userId} (${userRole})`);
 
     let campaigns;
 
@@ -143,7 +144,7 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
          ORDER BY c.created_at DESC`,
         [tenantId]
       );
-      console.log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
+      log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
     }
     // Manager ou commercial : uniquement leurs campagnes assignées
     else {
@@ -175,13 +176,13 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
          ORDER BY c.created_at DESC`,
         [tenantId, userId]
       );
-      console.log(`✅ ${userRole} ${req.user?.email} - mes campagnes: ${campaigns.length}`);
+      log(`✅ ${userRole} ${req.user?.email} - mes campagnes: ${campaigns.length}`);
     }
 
     return res.json({ success: true, campaigns });
 
   } catch (error) {
-    console.error('❌ Erreur my-campaigns:', error);
+    error('❌ Erreur my-campaigns:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -212,7 +213,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     return res.json({ success: true, campaign });
     
   } catch (error) {
-    console.error('❌ Erreur GET campaign:', error);
+    error('❌ Erreur GET campaign:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -242,7 +243,7 @@ router.post('/', authenticateToken, async (req, res) => {
       attachments, track_clicks, auto_distribute
     } = validatedData;
 
-    console.log('📥 Données validées:', { name, type, database_id });
+    log('📥 Données validées:', { name, type, database_id });
 
     let leads = [];
     
@@ -279,7 +280,7 @@ router.post('/', authenticateToken, async (req, res) => {
       );
     }
 
-    console.log(`📊 ${leads.length} leads trouvés`);
+    log(`📊 ${leads.length} leads trouvés`);
 
     if (leads.length === 0) {
       return res.status(400).json({ error: 'Aucun lead trouvé dans cette base' });
@@ -307,10 +308,10 @@ router.post('/', authenticateToken, async (req, res) => {
       ]
     );
 
-    console.log('✅ Campagne créée:', campaign.id);
+    log('✅ Campagne créée:', campaign.id);
 
     if (type === 'email') {
-      console.log('📧 Ajout des emails à la queue...');
+      log('📧 Ajout des emails à la queue...');
       
       for (const lead of leads) {
         await execute(
@@ -320,12 +321,12 @@ router.post('/', authenticateToken, async (req, res) => {
         );
       }
       
-      console.log(`✅ ${leads.length} emails ajoutés à la queue`);
+      log(`✅ ${leads.length} emails ajoutés à la queue`);
     }
 
     // ✅ CORRECTION ICI - LIGNE 337-370
     if (type !== 'email' && assigned_users && assigned_users.length > 0) {
-      console.log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
+      log(`👥 Affectation de ${leads.length} leads à ${assigned_users.length} commercial(aux)...`);
 
       await execute('BEGIN');
 
@@ -350,11 +351,11 @@ router.post('/', authenticateToken, async (req, res) => {
         }
 
         await execute('COMMIT');
-        console.log(`✅ ${leads.length} leads affectés et injectés dans le pipeline`);
+        log(`✅ ${leads.length} leads affectés et injectés dans le pipeline`);
         
       } catch (e) {
         await execute('ROLLBACK');
-        console.error('❌ Erreur affectation/injection :', e.message);
+        error('❌ Erreur affectation/injection :', e.message);
         throw e;
       }
     }
@@ -362,7 +363,7 @@ router.post('/', authenticateToken, async (req, res) => {
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur création campagne:', error);
+    error('❌ Erreur création campagne:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -374,7 +375,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
     const updates = req.body;
 
-    console.log('📝 Mise à jour campagne:', campaignId, 'avec:', updates);
+    log('📝 Mise à jour campagne:', campaignId, 'avec:', updates);
 
     // Construire la requête dynamiquement pour ne mettre à jour que les champs fournis
     const updateFields = [];
@@ -442,11 +443,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('✅ Campagne mise à jour:', campaignId);
+    log('✅ Campagne mise à jour:', campaignId);
 
     // ✅ Si assigned_users a été modifié ET c'est une campagne phoning, injecter dans pipeline
     if (updates.assigned_users !== undefined && campaign.type !== 'email' && updates.assigned_users.length > 0) {
-      console.log(`👥 Réaffectation: injection de leads dans le pipeline pour ${updates.assigned_users.length} commercial(aux)...`);
+      log(`👥 Réaffectation: injection de leads dans le pipeline pour ${updates.assigned_users.length} commercial(aux)...`);
 
       // 🔧 FIX: Récupérer les leads en RESPECTANT le filtre de secteurs de la campagne
       let leads = [];
@@ -456,7 +457,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
       if (campaignSectors && Object.keys(campaignSectors).length > 0) {
         // ✅ Appliquer le filtre de secteurs (même logique que lors de la création)
-        console.log(`🎯 Application du filtre de secteurs:`, campaignSectors);
+        log(`🎯 Application du filtre de secteurs:`, campaignSectors);
 
         const sectorConditions = [];
         const params = [tenantId, campaign.database_id];
@@ -481,7 +482,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
       } else {
         // ✅ Pas de filtre de secteurs : récupérer tous les leads de la database
-        console.log(`📋 Récupération de tous les leads (pas de filtre secteurs)`);
+        log(`📋 Récupération de tous les leads (pas de filtre secteurs)`);
         leads = await queryAll(
           `SELECT DISTINCT l.*
            FROM leads l
@@ -491,7 +492,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         );
       }
 
-      console.log(`📊 ${leads.length} leads récupérés avec filtre`);
+      log(`📊 ${leads.length} leads récupérés avec filtre`);
 
       if (leads.length > 0) {
         await execute('BEGIN');
@@ -517,22 +518,22 @@ router.put('/:id', authenticateToken, async (req, res) => {
           }
 
           await execute('COMMIT');
-          console.log(`✅ ${leads.length} leads réaffectés et injectés dans le pipeline`);
+          log(`✅ ${leads.length} leads réaffectés et injectés dans le pipeline`);
 
         } catch (e) {
           await execute('ROLLBACK');
-          console.error('❌ Erreur réaffectation/injection :', e.message);
+          error('❌ Erreur réaffectation/injection :', e.message);
           throw e;
         }
       } else {
-        console.log(`⚠️ Aucun lead trouvé avec le filtre de secteurs appliqué`);
+        log(`⚠️ Aucun lead trouvé avec le filtre de secteurs appliqué`);
       }
     }
 
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur update:', error);
+    error('❌ Erreur update:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -574,15 +575,15 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
             [campaignId, lead.id, tenantId, lead.email]
           );
         }
-        console.log(`✅ ${leads.length} emails ajoutés à la queue`);
+        log(`✅ ${leads.length} emails ajoutés à la queue`);
       }
     }
 
-    console.log('🟢 Campagne démarrée:', campaignId);
+    log('🟢 Campagne démarrée:', campaignId);
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur start:', error);
+    error('❌ Erreur start:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -603,11 +604,11 @@ router.post('/:id/pause', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('⏸️ Campagne mise en pause:', campaignId);
+    log('⏸️ Campagne mise en pause:', campaignId);
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur pause:', error);
+    error('❌ Erreur pause:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -628,11 +629,11 @@ router.post('/:id/resume', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('▶️ Campagne reprise:', campaignId);
+    log('▶️ Campagne reprise:', campaignId);
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur resume:', error);
+    error('❌ Erreur resume:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -653,11 +654,11 @@ router.post('/:id/stop', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('⏹️ Campagne arrêtée:', campaignId);
+    log('⏹️ Campagne arrêtée:', campaignId);
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur stop:', error);
+    error('❌ Erreur stop:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -678,11 +679,11 @@ router.post('/:id/archive', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('📦 Campagne archivée:', campaignId);
+    log('📦 Campagne archivée:', campaignId);
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur archive:', error);
+    error('❌ Erreur archive:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -703,11 +704,11 @@ router.post('/:id/unarchive', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    console.log('📂 Campagne désarchivée:', campaignId);
+    log('📂 Campagne désarchivée:', campaignId);
     return res.json({ success: true, campaign });
 
   } catch (error) {
-    console.error('❌ Erreur unarchive:', error);
+    error('❌ Erreur unarchive:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -718,7 +719,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const campaignId = req.params.id;
     
-    console.log('🔄 Relance campagne:', campaignId);
+    log('🔄 Relance campagne:', campaignId);
     
     const campaign = await queryOne(
       'SELECT * FROM campaigns WHERE id = $1 AND tenant_id = $2',
@@ -736,7 +737,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     );
     
     const excludedIds = excludedLeads.map(l => l.lead_id);
-    console.log(`📊 ${excludedIds.length} leads à exclure (RGPD)`);
+    log(`📊 ${excludedIds.length} leads à exclure (RGPD)`);
     
     const allLeads = await queryAll(
       `SELECT DISTINCT l.* FROM leads l
@@ -747,7 +748,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     
     const eligibleLeads = allLeads.filter(l => !excludedIds.includes(l.id));
     
-    console.log(`✅ ${eligibleLeads.length} leads éligibles pour relance`);
+    log(`✅ ${eligibleLeads.length} leads éligibles pour relance`);
     
     if (eligibleLeads.length === 0) {
       return res.status(400).json({ error: 'Aucun lead éligible pour la relance' });
@@ -780,7 +781,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
       );
     }
     
-    console.log(`✅ Relance créée: ${eligibleLeads.length} emails en queue`);
+    log(`✅ Relance créée: ${eligibleLeads.length} emails en queue`);
     
     return res.json({ 
       success: true, 
@@ -790,7 +791,7 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erreur relance:', error);
+    error('❌ Erreur relance:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -830,12 +831,12 @@ router.post('/:id/duplicate', authenticateToken, async (req, res) => {
       ]
     );
     
-    console.log('📋 Campagne dupliquée:', newCampaign.id);
+    log('📋 Campagne dupliquée:', newCampaign.id);
     
     return res.json({ success: true, campaign: newCampaign });
     
   } catch (error) {
-    console.error('❌ Erreur duplication:', error);
+    error('❌ Erreur duplication:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -857,12 +858,12 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
     
-    console.log('🗑️ Campagne supprimée:', campaignId);
+    log('🗑️ Campagne supprimée:', campaignId);
     
     return res.json({ success: true, message: 'Campagne supprimée' });
     
   } catch (error) {
-    console.error('❌ Erreur suppression:', error);
+    error('❌ Erreur suppression:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -890,7 +891,7 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Template non trouvé' });
     }
     
-    console.log(`📧 Envoi de ${recipients.length} emails de test...`);
+    log(`📧 Envoi de ${recipients.length} emails de test...`);
     
     const { sendTestEmail } = await import('../services/elasticEmail.js');
     
@@ -908,12 +909,12 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
         });
         results.success.push(recipient);
       } catch (error) {
-        console.error(`❌ Erreur envoi à ${recipient}:`, error);
+        error(`❌ Erreur envoi à ${recipient}:`, error);
         results.failed.push({ email: recipient, error: error.message });
       }
     }
     
-    console.log(`✅ Envoi terminé: ${results.success.length} succès, ${results.failed.length} échecs`);
+    log(`✅ Envoi terminé: ${results.success.length} succès, ${results.failed.length} échecs`);
     
     return res.json({ 
       success: true, 
@@ -922,7 +923,7 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erreur envoi test:', error);
+    error('❌ Erreur envoi test:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -933,7 +934,7 @@ router.post('/:id/force-sync', authenticateToken, async (req, res) => {
     const campaignId = req.params.id;
     const tenantId = req.user?.tenant_id;
 
-    console.log('🔄 [FORCE SYNC] Synchronisation forcée pour:', campaignId);
+    log('🔄 [FORCE SYNC] Synchronisation forcée pour:', campaignId);
 
     const { pollingService } = await import('../lib/elasticEmailPolling.js');
     
@@ -942,7 +943,7 @@ router.post('/:id/force-sync', authenticateToken, async (req, res) => {
     return res.json({ success: true, message: 'Synchronisation forcée lancée' });
     
   } catch (error) {
-    console.error('❌ Erreur force sync:', error);
+    error('❌ Erreur force sync:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1003,12 +1004,12 @@ router.get('/:id/phoning-stats', authenticateToken, async (req, res) => {
       meetings_scheduled: parseInt(meetingsResult?.meetings || 0)
     };
 
-    console.log(`📊 Stats campagne ${campaignId}: ${stats.total_leads} leads, ${stats.leads_contacted} contactés`);
+    log(`📊 Stats campagne ${campaignId}: ${stats.total_leads} leads, ${stats.leads_contacted} contactés`);
 
     return res.json({ success: true, stats });
 
   } catch (error) {
-    console.error('❌ Erreur phoning-stats:', error);
+    error('❌ Erreur phoning-stats:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1038,11 +1039,11 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           : JSON.parse(campaign.assigned_users);
       }
     } catch (e) {
-      console.log('Erreur parsing assigned_users:', e);
+      log('Erreur parsing assigned_users:', e);
       assignedUserIds = [];
     }
 
-    console.log(`📋 Campagne ${campaignId}: assigned_users = ${JSON.stringify(assignedUserIds)}, database_id = ${campaign.database_id}, type = ${campaign.type}`);
+    log(`📋 Campagne ${campaignId}: assigned_users = ${JSON.stringify(assignedUserIds)}, database_id = ${campaign.database_id}, type = ${campaign.type}`);
 
     // Récupérer TOUS les commerciaux assignés à la campagne avec le BON nombre de leads
     const commercials = await queryAll(
@@ -1136,12 +1137,12 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
       [campaignId, tenantId, assignedUserIds, campaign.database_id, campaign.type || 'email']
     );
 
-    console.log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
+    log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
 
     return res.json({ success: true, commercials });
 
   } catch (error) {
-    console.error('❌ Erreur commercials:', error);
+    error('❌ Erreur commercials:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1235,7 +1236,7 @@ router.post('/:id/transfer-leads', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Aucun lead à transférer' });
     }
 
-    console.log(`🔄 Transfert de ${leadsToTransfer.length} leads vers ${targetUser.first_name} ${targetUser.last_name}`);
+    log(`🔄 Transfert de ${leadsToTransfer.length} leads vers ${targetUser.first_name} ${targetUser.last_name}`);
 
     // Effectuer le transfert
     let transferredCount = 0;
@@ -1257,11 +1258,11 @@ router.post('/:id/transfer-leads', authenticateToken, async (req, res) => {
 
         transferredCount++;
       } catch (err) {
-        console.error(`Erreur transfert lead ${lead.id}:`, err.message);
+        error(`Erreur transfert lead ${lead.id}:`, err.message);
       }
     }
 
-    console.log(`✅ ${transferredCount} leads transférés avec succès`);
+    log(`✅ ${transferredCount} leads transférés avec succès`);
 
     return res.json({
       success: true,
@@ -1274,7 +1275,7 @@ router.post('/:id/transfer-leads', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur transfer-leads:', error);
+    error('❌ Erreur transfer-leads:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1366,7 +1367,7 @@ router.post('/:id/distribute-leads', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Aucun lead à distribuer' });
     }
 
-    console.log(`🔄 Distribution de ${leadsToDistribute.length} leads vers ${targetUsers.length} commerciaux`);
+    log(`🔄 Distribution de ${leadsToDistribute.length} leads vers ${targetUsers.length} commerciaux`);
 
     // Distribuer équitablement les leads entre les utilisateurs
     const distribution = {};
@@ -1402,7 +1403,7 @@ router.post('/:id/distribute-leads', authenticateToken, async (req, res) => {
 
           transferredCount++;
         } catch (err) {
-          console.error(`Erreur distribution lead ${leadId}:`, err.message);
+          error(`Erreur distribution lead ${leadId}:`, err.message);
         }
       }
 
@@ -1414,7 +1415,7 @@ router.post('/:id/distribute-leads', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`✅ ${totalTransferred} leads distribués avec succès`);
+    log(`✅ ${totalTransferred} leads distribués avec succès`);
 
     return res.json({
       success: true,
@@ -1424,7 +1425,7 @@ router.post('/:id/distribute-leads', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur distribute-leads:', error);
+    error('❌ Erreur distribute-leads:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1470,7 +1471,7 @@ router.get('/:id/available-users', authenticateToken, async (req, res) => {
     return res.json({ success: true, users });
 
   } catch (error) {
-    console.error('❌ Erreur available-users:', error);
+    error('❌ Erreur available-users:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1490,7 +1491,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'user_ids requis (tableau d\'UUIDs)' });
     }
 
-    console.log(`👥 ${action === 'add' ? 'Ajout' : 'Retrait'} de ${user_ids.length} commercial(aux) à/de la campagne ${campaignId}`);
+    log(`👥 ${action === 'add' ? 'Ajout' : 'Retrait'} de ${user_ids.length} commercial(aux) à/de la campagne ${campaignId}`);
 
     // Récupérer la campagne
     const campaign = await queryOne(
@@ -1522,7 +1523,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
         }
       });
 
-      console.log(`➕ Ajout de ${user_ids.length} commercial(aux)`);
+      log(`➕ Ajout de ${user_ids.length} commercial(aux)`);
 
       // Injecter les leads de chaque nouveau commercial dans le pipeline
       for (const userId of user_ids) {
@@ -1538,7 +1539,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
             [tenantId, campaign.database_id, userId]
           );
 
-          console.log(`📊 ${leads.length} leads trouvés pour le commercial ${userId}`);
+          log(`📊 ${leads.length} leads trouvés pour le commercial ${userId}`);
 
           // Injecter dans le pipeline
           if (leads.length > 0 && campaign.type !== 'email') {
@@ -1557,11 +1558,11 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
               }
 
               await execute('COMMIT');
-              console.log(`✅ ${leads.length} leads injectés dans le pipeline pour ${userId}`);
+              log(`✅ ${leads.length} leads injectés dans le pipeline pour ${userId}`);
 
             } catch (e) {
               await execute('ROLLBACK');
-              console.error(`❌ Erreur injection pipeline:`, e.message);
+              error(`❌ Erreur injection pipeline:`, e.message);
               throw e;
             }
           }
@@ -1572,7 +1573,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
       // Retirer les utilisateurs
       newUsers = newUsers.filter(uid => !user_ids.includes(uid));
 
-      console.log(`➖ Retrait de ${user_ids.length} commercial(aux)`);
+      log(`➖ Retrait de ${user_ids.length} commercial(aux)`);
 
       // Optionnel : Retirer les leads du pipeline
       // (ou les laisser pour historique)
@@ -1584,7 +1585,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
         [campaignId, tenantId, user_ids]
       );
 
-      console.log(`✅ Leads retirés du pipeline pour ${user_ids.length} commercial(aux)`);
+      log(`✅ Leads retirés du pipeline pour ${user_ids.length} commercial(aux)`);
     }
 
     // Mettre à jour la campagne
@@ -1596,7 +1597,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
       [JSON.stringify(newUsers), campaignId, tenantId]
     );
 
-    console.log(`✅ Équipe mise à jour: ${currentUsers.length} → ${newUsers.length} commercial(aux)`);
+    log(`✅ Équipe mise à jour: ${currentUsers.length} → ${newUsers.length} commercial(aux)`);
 
     return res.json({
       success: true,
@@ -1609,7 +1610,7 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur gestion équipe:', error);
+    error('❌ Erreur gestion équipe:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1646,7 +1647,7 @@ router.get('/:id/pipeline-stats', authenticateToken, async (req, res) => {
     return res.json({ success: true, pipeline });
 
   } catch (error) {
-    console.error('❌ Erreur pipeline-stats:', error);
+    error('❌ Erreur pipeline-stats:', error);
     return res.status(500).json({ error: error.message });
   }
 });

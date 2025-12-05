@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 // Script pour appliquer la migration validation_requests sur Neon
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -9,31 +10,31 @@ const __dirname = dirname(__filename);
 
 async function applyMigration() {
   try {
-    console.log('📂 Lecture du fichier de migration...');
+    log('📂 Lecture du fichier de migration...');
 
     const migrationPath = join(__dirname, '../migrations/create_validation_requests.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
 
-    console.log('🔄 Application de la migration sur Neon...');
+    log('🔄 Application de la migration sur Neon...');
 
     // Exécuter la migration
     await pool.query(migrationSQL);
 
-    console.log('✅ Migration appliquée avec succès !');
-    console.log('✅ Table créée: validation_requests');
-    console.log('✅ Indexes créés pour performances optimales');
-    console.log('✅ Triggers créés pour updated_at et resolved_at');
-    console.log('');
-    console.log('📋 Système de demandes de validation et d\'aide prêt !');
-    console.log('   - Les commerciaux peuvent demander validation ou aide');
-    console.log('   - Les managers reçoivent les demandes dans leur dashboard');
-    console.log('   - Support de la priorité (low, normal, high, urgent)');
-    console.log('   - Workflow complet: pending → approved/rejected/resolved');
+    log('✅ Migration appliquée avec succès !');
+    log('✅ Table créée: validation_requests');
+    log('✅ Indexes créés pour performances optimales');
+    log('✅ Triggers créés pour updated_at et resolved_at');
+    log('');
+    log('📋 Système de demandes de validation et d\'aide prêt !');
+    log('   - Les commerciaux peuvent demander validation ou aide');
+    log('   - Les managers reçoivent les demandes dans leur dashboard');
+    log('   - Support de la priorité (low, normal, high, urgent)');
+    log('   - Workflow complet: pending → approved/rejected/resolved');
 
     await pool.end();
     process.exit(0);
   } catch (error) {
-    console.error('❌ Erreur lors de la migration:', error);
+    error('❌ Erreur lors de la migration:', error);
     await pool.end();
     process.exit(1);
   }

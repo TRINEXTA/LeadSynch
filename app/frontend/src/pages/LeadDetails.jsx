@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building, Mail, Phone, MapPin, Globe, Calendar, User, Tag, DollarSign, BarChart3, History, FileText, MessageSquare } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function LeadDetails() {
       setLead(response.data.lead);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur chargement lead:', error);
+      error('Erreur chargement lead:', error);
       // Si 404, le lead n'existe pas/plus
       if (error.response?.status === 404) {
         setLead(null);
@@ -41,7 +42,7 @@ export default function LeadDetails() {
       const response = await api.get(`/pipeline-leads/${leadId}/history`);
       setHistory(response.data.history || []);
     } catch (error) {
-      console.error('Erreur chargement historique:', error);
+      error('Erreur chargement historique:', error);
     }
   };
 
@@ -50,7 +51,7 @@ export default function LeadDetails() {
       const response = await api.get(`/follow-ups?lead_id=${leadId}`);
       setTasks(response.data.followups || []);
     } catch (error) {
-      console.error('Erreur chargement tâches:', error);
+      error('Erreur chargement tâches:', error);
     }
   };
 

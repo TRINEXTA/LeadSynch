@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Mail, Eye, Trash2, Filter, Search, Plus, CheckCircle, Clock, Send, XCircle, ArrowRight, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import api from '../api/axios';
@@ -49,7 +50,7 @@ export default function Proposals() {
       const response = await api.get(`/proposals?${params.toString()}`);
       setProposals(response.data.proposals || []);
     } catch (error) {
-      console.error('Error loading proposals:', error);
+      error('Error loading proposals:', error);
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export default function Proposals() {
         window.URL.revokeObjectURL(url);
       }
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      error('Error downloading PDF:', error);
       alert('Erreur lors du téléchargement');
     } finally {
       setDownloading(null);
@@ -138,7 +139,7 @@ L'équipe Trinexta`;
       loadProposals();
 
     } catch (error) {
-      console.error('Error:', error);
+      error('Error:', error);
     } finally {
       setSendingEmail(null);
     }
@@ -150,7 +151,7 @@ L'équipe Trinexta`;
       // Navigate to pipeline with contract creation from this proposal
       window.location.href = `/pipeline?action=create_contract&proposal_id=${proposal.id}&lead_id=${proposal.lead_id}`;
     } catch (error) {
-      console.error('Error:', error);
+      error('Error:', error);
     } finally {
       setConverting(null);
     }
@@ -163,7 +164,7 @@ L'équipe Trinexta`;
       await api.delete(`/proposals/${proposalId}`);
       loadProposals();
     } catch (error) {
-      console.error('Error:', error);
+      error('Error:', error);
       alert('Erreur lors de la suppression');
     }
   };

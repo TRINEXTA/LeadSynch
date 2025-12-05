@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -116,7 +117,7 @@ router.post('/detect', async (req, res) => {
       duplicates: duplicateGroups
     });
   } catch (error) {
-    console.error('Erreur détection doublons POST:', error);
+    error('Erreur détection doublons POST:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -208,7 +209,7 @@ router.get('/detect', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erreur détection doublons:', error);
+    error('Erreur détection doublons:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -259,7 +260,7 @@ router.get('/group/:type/:value', async (req, res) => {
       leads: rows
     });
   } catch (error) {
-    console.error('Erreur récupération groupe doublons:', error);
+    error('Erreur récupération groupe doublons:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -363,7 +364,7 @@ router.post('/merge', async (req, res) => {
       merged_count: duplicate_lead_ids.length
     });
   } catch (error) {
-    console.error('Erreur fusion doublons:', error);
+    error('Erreur fusion doublons:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -449,7 +450,7 @@ router.post('/merge-auto', async (req, res) => {
       merged_count: duplicate_ids.length
     });
   } catch (error) {
-    console.error('Erreur fusion automatique:', error);
+    error('Erreur fusion automatique:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -487,7 +488,7 @@ router.post('/ignore', async (req, res) => {
       lead_ids
     });
   } catch (error) {
-    console.error('Erreur ignore doublons:', error);
+    error('Erreur ignore doublons:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -519,7 +520,7 @@ router.delete('/:id', async (req, res) => {
       id
     });
   } catch (error) {
-    console.error('Erreur suppression lead:', error);
+    error('Erreur suppression lead:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

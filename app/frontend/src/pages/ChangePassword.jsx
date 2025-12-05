@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, CheckCircle, AlertCircle } from 'lucide-react';

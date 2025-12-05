@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne, execute } from '../lib/db.js';
 
@@ -36,7 +37,7 @@ async function handler(req, res) {
            ORDER BY l.created_at DESC`,
           [campaign_id, tenant_id]
         );
-        console.log(`✅ Admin - tous les leads de la campagne: ${leads.length}`);
+        log(`✅ Admin - tous les leads de la campagne: ${leads.length}`);
       }
       // Manager : voir ses leads + ceux de son équipe dans la campagne
       else if (userRole === 'manager') {
@@ -72,7 +73,7 @@ async function handler(req, res) {
            ORDER BY l.created_at DESC`,
           [campaign_id, tenant_id, user_id]
         );
-        console.log(`✅ Manager - leads campagne (équipe): ${leads.length}`);
+        log(`✅ Manager - leads campagne (équipe): ${leads.length}`);
       }
       // Commercial : uniquement ses leads
       else {
@@ -92,7 +93,7 @@ async function handler(req, res) {
            ORDER BY l.created_at DESC`,
           [campaign_id, tenant_id, user_id]
         );
-        console.log(`✅ Commercial - ses leads uniquement: ${leads.length}`);
+        log(`✅ Commercial - ses leads uniquement: ${leads.length}`);
       }
 
       return res.json({
@@ -166,7 +167,7 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'Aucun lead à transférer' });
       }
 
-      console.log(`🔄 Transfert de ${leadsToTransfer.length} leads vers ${targetUser.first_name} ${targetUser.last_name}`);
+      log(`🔄 Transfert de ${leadsToTransfer.length} leads vers ${targetUser.first_name} ${targetUser.last_name}`);
 
       // Effectuer le transfert
       let transferredCount = 0;
@@ -190,11 +191,11 @@ async function handler(req, res) {
 
           transferredCount++;
         } catch (err) {
-          console.error(`Erreur transfert lead ${lead.id}:`, err.message);
+          error(`Erreur transfert lead ${lead.id}:`, err.message);
         }
       }
 
-      console.log(`✅ ${transferredCount} leads transférés avec succès`);
+      log(`✅ ${transferredCount} leads transférés avec succès`);
 
       return res.json({
         success: true,
@@ -210,7 +211,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Campaign leads error:', error);
+    error('Campaign leads error:', error);
     return res.status(500).json({
       error: 'Server error',
       details: error.message

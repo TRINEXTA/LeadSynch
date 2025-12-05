@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -55,7 +56,7 @@ export default function DashboardUniversel() {
             detailed: detailRes.data.stats
           };
         } catch (err) {
-          console.warn(`Stats détaillées non disponibles pour ${campaign.name}:`, err.message);
+          warn(`Stats détaillées non disponibles pour ${campaign.name}:`, err.message);
           return {
             ...campaign,
             detailed: null
@@ -87,7 +88,7 @@ export default function DashboardUniversel() {
       }
 
     } catch (error) {
-      console.error('Erreur dashboard:', error?.response?.data || error.message);
+      error('Erreur dashboard:', error?.response?.data || error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -130,7 +131,7 @@ export default function DashboardUniversel() {
 
       setUrgentAlerts(alerts);
     } catch (error) {
-      console.error('Erreur alerts:', error);
+      error('Erreur alerts:', error);
     }
   };
 
@@ -140,7 +141,7 @@ export default function DashboardUniversel() {
       // Pour l'instant, simuler avec données vides
       setPendingValidations([]);
     } catch (error) {
-      console.error('Erreur validations:', error);
+      error('Erreur validations:', error);
     }
   };
 
@@ -154,7 +155,7 @@ export default function DashboardUniversel() {
 
       setTopCommercials(commercials);
     } catch (error) {
-      console.error('Erreur top commercials:', error);
+      error('Erreur top commercials:', error);
     }
   };
 
@@ -162,10 +163,10 @@ export default function DashboardUniversel() {
   useEffect(() => {
     fetchDashboard();
     const interval = setInterval(fetchDashboard, 30000); // 30s au lieu de 60s
-    console.log('🔄 [POLLING DASHBOARD] Activé - Refresh toutes les 30s');
+    log('🔄 [POLLING DASHBOARD] Activé - Refresh toutes les 30s');
     return () => {
       clearInterval(interval);
-      console.log('⏹️ [POLLING DASHBOARD] Désactivé');
+      log('⏹️ [POLLING DASHBOARD] Désactivé');
     };
   }, [user]);
 

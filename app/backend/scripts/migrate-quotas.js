@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -17,11 +18,11 @@ async function migrateQuotas() {
   });
 
   try {
-    console.log('?? Connexion à Neon...');
+    log('?? Connexion à Neon...');
     await client.connect();
-    console.log('? Connecté !');
+    log('? Connecté !');
 
-    console.log('?? Création table tenant_quotas...');
+    log('?? Création table tenant_quotas...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS tenant_quotas (
         id SERIAL PRIMARY KEY,
@@ -36,29 +37,29 @@ async function migrateQuotas() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('? Table tenant_quotas créée');
+    log('? Table tenant_quotas créée');
 
-    console.log('?? Ajout colonnes à campaigns...');
+    log('?? Ajout colonnes à campaigns...');
     await client.query(`
       ALTER TABLE campaigns 
       ADD COLUMN IF NOT EXISTS emails_sent INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS emails_opened INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS emails_clicked INTEGER DEFAULT 0
     `);
-    console.log('? Colonnes ajoutées à campaigns');
+    log('? Colonnes ajoutées à campaigns');
 
-    console.log('?? Création quotas par défaut...');
+    log('?? Création quotas par défaut...');
     await client.query(`
       INSERT INTO tenant_quotas (tenant_id, plan, email_quota_limit, users_quota_limit, leads_quota_limit)
       SELECT DISTINCT 1, 'FREE', 100, 1, 500
       WHERE NOT EXISTS (SELECT 1 FROM tenant_quotas WHERE tenant_id = 1)
     `);
-    console.log('? Quotas par défaut créés');
+    log('? Quotas par défaut créés');
 
-    console.log('?? Migration terminée avec succès !');
+    log('?? Migration terminée avec succès !');
 
   } catch (error) {
-    console.error('? Erreur migration:', error.message);
+    error('? Erreur migration:', error.message);
     process.exit(1);
   } finally {
     await client.end();

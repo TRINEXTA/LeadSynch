@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { MapPin, Users, TrendingUp } from 'lucide-react';
 

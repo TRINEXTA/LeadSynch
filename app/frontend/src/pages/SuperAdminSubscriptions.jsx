@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -46,7 +47,7 @@ export default function SuperAdminSubscriptions() {
       const response = await api.get(`/super-admin/subscriptions?${params.toString()}`);
       setSubscriptions(response.data.subscriptions || []);
     } catch (error) {
-      console.error('Erreur chargement abonnements:', error);
+      error('Erreur chargement abonnements:', error);
       alert('Erreur lors du chargement des abonnements');
     } finally {
       setLoading(false);
@@ -58,7 +59,7 @@ export default function SuperAdminSubscriptions() {
       const response = await api.get('/super-admin/subscriptions/stats');
       setStats(response.data.stats || {});
     } catch (error) {
-      console.error('Erreur chargement stats:', error);
+      error('Erreur chargement stats:', error);
     }
   };
 
@@ -71,7 +72,7 @@ export default function SuperAdminSubscriptions() {
       loadSubscriptions();
       loadStats();
     } catch (error) {
-      console.error('Erreur renouvellement:', error);
+      error('Erreur renouvellement:', error);
       alert('Erreur lors du renouvellement');
     }
   };
@@ -85,7 +86,7 @@ export default function SuperAdminSubscriptions() {
       loadSubscriptions();
       loadStats();
     } catch (error) {
-      console.error('Erreur suspension:', error);
+      error('Erreur suspension:', error);
       alert('Erreur lors de la suspension');
     }
   };
@@ -99,7 +100,7 @@ export default function SuperAdminSubscriptions() {
       loadSubscriptions();
       loadStats();
     } catch (error) {
-      console.error('Erreur réactivation:', error);
+      error('Erreur réactivation:', error);
       alert('Erreur lors de la réactivation');
     }
   };

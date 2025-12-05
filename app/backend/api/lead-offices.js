@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -23,7 +24,7 @@ router.get('/:leadId/offices', authMiddleware, async (req, res) => {
       offices: result.rows
     });
   } catch (error) {
-    console.error('❌ Erreur GET offices:', error);
+    error('❌ Erreur GET offices:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -96,14 +97,14 @@ router.post('/:leadId/offices', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Bureau ${office_name} à ${city || 'ville non spécifiée'} ajouté`, user_id]
     );
 
-    console.log(`✅ Bureau ajouté pour lead ${leadId}`);
+    log(`✅ Bureau ajouté pour lead ${leadId}`);
 
     res.json({
       success: true,
       office: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur POST office:', error);
+    error('❌ Erreur POST office:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -178,14 +179,14 @@ router.put('/:leadId/offices/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Bureau ${office_name} modifié`, user_id]
     );
 
-    console.log(`✅ Bureau ${id} modifié`);
+    log(`✅ Bureau ${id} modifié`);
 
     res.json({
       success: true,
       office: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PUT office:', error);
+    error('❌ Erreur PUT office:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -221,14 +222,14 @@ router.delete('/:leadId/offices/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Bureau ${office.office_name} supprimé`, user_id]
     );
 
-    console.log(`✅ Bureau ${id} supprimé`);
+    log(`✅ Bureau ${id} supprimé`);
 
     res.json({
       success: true,
       message: 'Bureau supprimé'
     });
   } catch (error) {
-    console.error('❌ Erreur DELETE office:', error);
+    error('❌ Erreur DELETE office:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -255,14 +256,14 @@ router.patch('/:leadId/offices/:id/set-primary', authMiddleware, async (req, res
       });
     }
 
-    console.log(`✅ Bureau ${id} défini comme principal`);
+    log(`✅ Bureau ${id} défini comme principal`);
 
     res.json({
       success: true,
       office: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PATCH set-primary:', error);
+    error('❌ Erreur PATCH set-primary:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { authMiddleware } from '../middleware/auth.js';
 import { execute } from '../lib/db.js';
 import multer from 'multer';
@@ -102,7 +103,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Upload error:', error);
+    error('Upload error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }

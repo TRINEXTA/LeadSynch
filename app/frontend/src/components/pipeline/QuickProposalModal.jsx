@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { X, FileText, Save, Plus, Trash2, Download, Mail, Loader2, Sparkles } from 'lucide-react';
 import api from '../../api/axios';
@@ -102,7 +103,7 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
       }
 
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('Erreur lors de la création du devis');
     } finally {
       setSaving(false);
@@ -139,7 +140,7 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
         alert('PDF téléchargé avec succès !');
       }
     } catch (error) {
-      console.error('Erreur téléchargement PDF:', error);
+      error('Erreur téléchargement PDF:', error);
       alert('Erreur lors du téléchargement du PDF');
     } finally {
       setDownloading(false);
@@ -180,7 +181,7 @@ Réponds uniquement avec le corps de l'email (sans objet, sans salutation de typ
           emailBody = asefiResponse.data.content;
         }
       } catch (asefiError) {
-        console.warn('Asefi non disponible, email par défaut');
+        warn('Asefi non disponible, email par défaut');
         emailBody = `Bonjour ${lead.contact_name || ''},
 
 Veuillez trouver ci-joint notre devis pour les services proposés.
@@ -203,13 +204,13 @@ L'équipe Trinexta`;
       try {
         await api.put(`/proposals/${proposalId}`, { status: 'sent' });
       } catch (e) {
-        console.warn('Could not update proposal status');
+        warn('Could not update proposal status');
       }
 
       if (onSuccess) onSuccess();
 
     } catch (error) {
-      console.error('Erreur envoi email:', error);
+      error('Erreur envoi email:', error);
       alert('Erreur lors de la préparation de l\'email');
     } finally {
       setSendingEmail(false);

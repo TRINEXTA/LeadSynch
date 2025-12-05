@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import jwt from 'jsonwebtoken';
 import db from '../config/database.js'; // ✅ CORRECTION ICI
 
@@ -19,13 +20,13 @@ export function authMiddleware(handlerOrReq, res, next) {
         const authHeader = req.headers.authorization;
         
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          console.log('⚠️ Token manquant');
+          log('⚠️ Token manquant');
           return res.status(401).json({ error: 'Non autorisé - Token manquant' });
         }
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
-        console.log('✅ Token valide pour:', decoded.email || decoded.id);
+        log('✅ Token valide pour:', decoded.email || decoded.id);
         
         // Charger les infos complètes de l'utilisateur depuis la DB
         const { rows } = await db.query(
@@ -36,19 +37,19 @@ export function authMiddleware(handlerOrReq, res, next) {
         );
         
         if (rows.length === 0) {
-          console.log('⚠️ Utilisateur non trouvé');
+          log('⚠️ Utilisateur non trouvé');
           return res.status(401).json({ error: 'Utilisateur non trouvé' });
         }
         
         // Attacher les infos complètes à req.user
         req.user = rows[0];
         
-        console.log('👤 User chargé:', req.user.first_name, req.user.last_name);
+        log('👤 User chargé:', req.user.first_name, req.user.last_name);
         
         return handler(req, res);
         
       } catch (error) {
-        console.error('❌ Token error:', error.message);
+        error('❌ Token error:', error.message);
         return res.status(401).json({ 
           error: 'Non autorisé - ' + (error.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide')
         });
@@ -64,13 +65,13 @@ export function authMiddleware(handlerOrReq, res, next) {
       const authHeader = req.headers.authorization;
       
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        console.log('⚠️ Token manquant');
+        log('⚠️ Token manquant');
         return res.status(401).json({ error: 'Non autorisé - Token manquant' });
       }
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      console.log('✅ Token valide pour:', decoded.email || decoded.id);
+      log('✅ Token valide pour:', decoded.email || decoded.id);
       
       // Charger les infos complètes de l'utilisateur depuis la DB
       const { rows } = await db.query(
@@ -81,21 +82,21 @@ export function authMiddleware(handlerOrReq, res, next) {
       );
       
       if (rows.length === 0) {
-        console.log('⚠️ Utilisateur non trouvé');
+        log('⚠️ Utilisateur non trouvé');
         return res.status(401).json({ error: 'Utilisateur non trouvé' });
       }
       
       // Attacher les infos complètes à req.user
       req.user = rows[0];
       
-      console.log('👤 User chargé:', req.user.first_name, req.user.last_name);
+      log('👤 User chargé:', req.user.first_name, req.user.last_name);
       
       if (typeof next === 'function') {
         next();
       }
       
     } catch (error) {
-      console.error('❌ Token error:', error.message);
+      error('❌ Token error:', error.message);
       return res.status(401).json({ 
         error: 'Non autorisé - ' + (error.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide')
       });
@@ -141,7 +142,7 @@ export async function verifyAuth(req) {
     };
 
   } catch (error) {
-    console.error('❌ Auth error:', error.message);
+    error('❌ Auth error:', error.message);
     return {
       authenticated: false,
       error: error.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide'

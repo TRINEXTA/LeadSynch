@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -47,7 +48,7 @@ export default function SuperAdminInvoices() {
       const response = await api.get(`/super-admin/invoices?${params.toString()}`);
       setInvoices(response.data.invoices || []);
     } catch (error) {
-      console.error('Erreur chargement factures:', error);
+      error('Erreur chargement factures:', error);
       toast.error('Erreur lors du chargement des factures');
     } finally {
       setLoading(false);
@@ -59,7 +60,7 @@ export default function SuperAdminInvoices() {
       const response = await api.get('/super-admin/invoices/stats');
       setStats(response.data.stats || {});
     } catch (error) {
-      console.error('Erreur chargement stats:', error);
+      error('Erreur chargement stats:', error);
     }
   };
 
@@ -72,7 +73,7 @@ export default function SuperAdminInvoices() {
       loadInvoices();
       loadStats();
     } catch (error) {
-      console.error('Erreur marquage paiement:', error);
+      error('Erreur marquage paiement:', error);
       toast.error('Erreur lors du marquage comme payée');
     }
   };
@@ -84,7 +85,7 @@ export default function SuperAdminInvoices() {
       await api.post(`/super-admin/invoices/${invoiceId}/send-reminder`);
       toast.success('Rappel envoyé avec succès');
     } catch (error) {
-      console.error('Erreur envoi rappel:', error);
+      error('Erreur envoi rappel:', error);
       toast.error('Erreur lors de l\'envoi du rappel');
     }
   };
@@ -103,7 +104,7 @@ export default function SuperAdminInvoices() {
       link.click();
       link.remove();
     } catch (error) {
-      console.error('Erreur téléchargement PDF:', error);
+      error('Erreur téléchargement PDF:', error);
       toast.error('Erreur lors du téléchargement du PDF');
     }
   };

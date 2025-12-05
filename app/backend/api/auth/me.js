@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿// api/auth/me.js
 import { authMiddleware } from '../../middleware/auth.js';
 
@@ -15,16 +16,16 @@ function optionsHandler(req, res) {
 
 // Handler avec auth pour GET
 async function getHandler(req, res) {
-  console.log('========== /auth/me REQUEST ==========');
-  console.log('Method:', req.method);
-  console.log('Origin:', req.headers.origin);
-  console.log('Authorization header:', req.headers.authorization);
-  console.log('User from middleware:', req.user ? 'OK' : 'NULL');
+  log('========== /auth/me REQUEST ==========');
+  log('Method:', req.method);
+  log('Origin:', req.headers.origin);
+  log('Authorization header:', req.headers.authorization);
+  log('User from middleware:', req.user ? 'OK' : 'NULL');
   
   if (req.user) {
-    console.log('User ID:', req.user.id);
-    console.log('User email:', req.user.email);
-    console.log('User name:', req.user.first_name, req.user.last_name);
+    log('User ID:', req.user.id);
+    log('User email:', req.user.email);
+    log('User name:', req.user.first_name, req.user.last_name);
   }
   
   const origin = req.headers.origin;

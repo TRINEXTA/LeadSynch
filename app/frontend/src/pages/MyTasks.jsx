@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -49,7 +50,7 @@ export default function MyTasks() {
       setMyRequests(requestsRes.data.requests || []);
 
     } catch (error) {
-      console.error('Erreur chargement mes tâches:', error);
+      error('Erreur chargement mes tâches:', error);
       toast.error('Erreur lors du chargement');
     } finally {
       setLoading(false);
@@ -71,7 +72,7 @@ export default function MyTasks() {
       setCompletionNotes('');
       fetchMyTasks();
     } catch (error) {
-      console.error('Erreur complétion tâche:', error);
+      error('Erreur complétion tâche:', error);
       toast.error('Erreur lors de la complétion');
     }
   };

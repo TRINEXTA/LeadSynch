@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -68,7 +69,7 @@ export default function SuperAdminTenantDetails() {
         if (activeSub) setSubscriptionId(activeSub.id);
       }
     } catch (error) {
-      console.error('Erreur chargement tenant:', error);
+      error('Erreur chargement tenant:', error);
       toast.error('Erreur lors du chargement du client');
       navigate('/super-admin/tenants');
     } finally {
@@ -83,7 +84,7 @@ export default function SuperAdminTenantDetails() {
       setEditing(false);
       loadTenantDetails();
     } catch (error) {
-      console.error('Erreur mise à jour:', error);
+      error('Erreur mise à jour:', error);
       toast.error('Erreur lors de la mise à jour');
     }
   };
@@ -96,7 +97,7 @@ export default function SuperAdminTenantDetails() {
       toast.success('Client suspendu');
       loadTenantDetails();
     } catch (error) {
-      console.error('Erreur suspension:', error);
+      error('Erreur suspension:', error);
       toast.error('Erreur lors de la suspension');
     }
   };
@@ -109,7 +110,7 @@ export default function SuperAdminTenantDetails() {
       toast.success('Client réactivé');
       loadTenantDetails();
     } catch (error) {
-      console.error('Erreur réactivation:', error);
+      error('Erreur réactivation:', error);
       toast.error('Erreur lors de la réactivation');
     }
   };
@@ -123,7 +124,7 @@ export default function SuperAdminTenantDetails() {
       toast.success('Client supprimé');
       navigate('/super-admin/tenants');
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      error('Erreur suppression:', error);
       toast.error('Erreur lors de la suppression');
     }
   };
@@ -141,7 +142,7 @@ export default function SuperAdminTenantDetails() {
       setGiftAmount(0);
       loadTenantDetails();
     } catch (error) {
-      console.error('Erreur cadeau crédits:', error);
+      error('Erreur cadeau crédits:', error);
       toast.error('Erreur lors de l\'attribution des crédits');
     }
   };
@@ -159,7 +160,7 @@ export default function SuperAdminTenantDetails() {
       setRefundAmount(0);
       loadTenantDetails();
     } catch (error) {
-      console.error('Erreur remboursement:', error);
+      error('Erreur remboursement:', error);
       toast.error('Erreur lors du remboursement');
     }
   };
@@ -176,7 +177,7 @@ export default function SuperAdminTenantDetails() {
       toast.success('Abonnement renouvelé avec succès');
       loadTenantDetails();
     } catch (error) {
-      console.error('Erreur renouvellement:', error);
+      error('Erreur renouvellement:', error);
       toast.error('Erreur lors du renouvellement');
     }
   };

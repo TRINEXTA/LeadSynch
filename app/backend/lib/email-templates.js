@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * Templates d'emails professionnels pré-remplis
  * Utilisables pour les campagnes et l'automatisation

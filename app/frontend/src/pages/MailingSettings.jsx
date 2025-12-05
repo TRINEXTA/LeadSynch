@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Mail, User, Reply, Server, Send, Shield, Save, Eye, EyeOff, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Building } from 'lucide-react';
 import api from '../api/axios';
@@ -38,7 +39,7 @@ export default function MailingSettings() {
       }
       setLoading(false);
     } catch (error) {
-      console.error('Erreur chargement settings:', error);
+      error('Erreur chargement settings:', error);
       setLoading(false);
     }
   };
@@ -64,7 +65,7 @@ export default function MailingSettings() {
       await loadSettings();
       toast.success('Configuration enregistree ! Vous pouvez maintenant envoyer un email de test.');
     } catch (error) {
-      console.error('Erreur save:', error);
+      error('Erreur save:', error);
       const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de la sauvegarde';
       toast.error(errorMsg);
     } finally {
@@ -77,7 +78,7 @@ export default function MailingSettings() {
       await api.post('/mailing-settings/test', { test_email: settings.from_email });
       toast.success('Email de test envoye ! Verifiez votre boite de reception.');
     } catch (error) {
-      console.error('Erreur test:', error);
+      error('Erreur test:', error);
       const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'envoi du test';
       toast.error(errorMsg);
     }

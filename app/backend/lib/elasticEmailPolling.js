@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿// lib/elasticEmailPolling.js
 import axios from 'axios';
 import { query, execute } from './db.js';
@@ -8,7 +9,7 @@ export class ElasticEmailPolling {
   constructor() {
     this.apiKey = process.env.ELASTIC_EMAIL_API_KEY;
     if (!this.apiKey) {
-      console.warn('⚠️ ELASTIC_EMAIL_API_KEY manquant dans les variables d\'environnement');
+      warn('⚠️ ELASTIC_EMAIL_API_KEY manquant dans les variables d\'environnement');
     }
   }
 
@@ -79,10 +80,10 @@ export class ElasticEmailPolling {
            VALUES ($1, $2, $3, $4, NOW())`,
           [tenantId, campaignId, leadId, eventType]
         );
-        console.log(`✅ [POLLING] Événement enregistré: ${eventType} pour lead ${leadId}`);
+        log(`✅ [POLLING] Événement enregistré: ${eventType} pour lead ${leadId}`);
       } else {
         // Event déjà présent → on continue quand même pour le pipeline
-        // console.log(`[POLLING] Event déjà présent: ${eventType} lead ${leadId}`);
+        // log(`[POLLING] Event déjà présent: ${eventType} lead ${leadId}`);
       }
 
       // 2) Toujours upsert le pipeline sur "click" (même si l'event existait déjà)
@@ -94,17 +95,17 @@ export class ElasticEmailPolling {
            DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
           [tenantId, leadId, campaignId]
         );
-        console.log(`🧩 [POLLING] Lead injecté/MAJ dans pipeline (leads_click): ${leadId}`);
+        log(`🧩 [POLLING] Lead injecté/MAJ dans pipeline (leads_click): ${leadId}`);
       }
     } catch (error) {
-      console.error('❌ [POLLING] Erreur recordEvent:', error.message);
+      error('❌ [POLLING] Erreur recordEvent:', error.message);
     }
   }
 
   // -------------------- Core --------------------
   async syncCampaignStats(campaignId) {
     try {
-      console.log('📊 [POLLING] Synchronisation stats pour campagne:', campaignId);
+      log('📊 [POLLING] Synchronisation stats pour campagne:', campaignId);
 
       // Emails envoyés pour cette campagne (source de vérité locale)
       const { rows: emails } = await query(
@@ -117,9 +118,9 @@ export class ElasticEmailPolling {
         [campaignId]
       );
 
-      console.log(`📧 [POLLING] ${emails.length} emails à vérifier pour cette campagne`);
+      log(`📧 [POLLING] ${emails.length} emails à vérifier pour cette campagne`);
       if (emails.length === 0) {
-        console.log('⚠️ [POLLING] Aucun email envoyé trouvé');
+        log('⚠️ [POLLING] Aucun email envoyé trouvé');
         return { success: true, leadsChecked: 0 };
       }
 
@@ -131,10 +132,10 @@ export class ElasticEmailPolling {
       // Va chercher les events chez Elastic
       await this.checkElasticEmailStats(campaignId, emails);
 
-      console.log(`✅ [POLLING] ${emails.length} emails vérifiés`);
+      log(`✅ [POLLING] ${emails.length} emails vérifiés`);
       return { success: true, leadsChecked: emails.length };
     } catch (error) {
-      console.error('❌ [POLLING] Erreur syncCampaignStats:', error);
+      error('❌ [POLLING] Erreur syncCampaignStats:', error);
       return { success: false, error: error.message };
     }
   }
@@ -143,11 +144,11 @@ export class ElasticEmailPolling {
     // Fenêtre 7 jours
     const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19);
     const to   = new Date().toISOString().slice(0, 19);
-    console.log(`📅 [POLLING] Période de recherche: ${from} → ${to}`);
+    log(`📅 [POLLING] Période de recherche: ${from} → ${to}`);
 
     // Index par email normalisé
     const byEmail = new Map(emails.map(e => [this.normalizeEmail(e.email), e.id]));
-    console.log('📋 [POLLING] Emails indexés:', Array.from(byEmail.keys()));
+    log('📋 [POLLING] Emails indexés:', Array.from(byEmail.keys()));
 
     // ---- Tentative v4 (sans eventTypes, on filtre côté code) ----
     try {
@@ -164,7 +165,7 @@ export class ElasticEmailPolling {
       });
 
       const events = Array.isArray(res.data) ? res.data : [];
-      console.log(`📡 [POLLING] v4 events reçus: ${events.length}`);
+      log(`📡 [POLLING] v4 events reçus: ${events.length}`);
 
       let processed = 0;
       for (const ev of events) {
@@ -178,17 +179,17 @@ export class ElasticEmailPolling {
 
         await this.recordEvent(campaignId, leadId, t);
         processed++;
-        if (t === 'open')  console.log(`👁️ [POLLING] Open: ${recipient}`);
-        if (t === 'click') console.log(`🖱️ [POLLING] Click: ${recipient}`);
+        if (t === 'open')  log(`👁️ [POLLING] Open: ${recipient}`);
+        if (t === 'click') log(`🖱️ [POLLING] Click: ${recipient}`);
       }
 
-      console.log(`✅ [POLLING] ${processed} événements traités (v4)`);
+      log(`✅ [POLLING] ${processed} événements traités (v4)`);
       await sleep(200);
       return;
     } catch (err) {
       const status = err?.response?.status;
       const data = err?.response?.data;
-      console.error('❌ [POLLING] Erreur v4:', status, data || err.message);
+      error('❌ [POLLING] Erreur v4:', status, data || err.message);
       // on enchaîne en v2 si v4 échoue
     }
 
@@ -200,12 +201,12 @@ export class ElasticEmailPolling {
       });
 
       if (!res.data || !res.data.success || !res.data.data) {
-        console.log('ℹ️ [POLLING] v2: pas de données exploitables');
+        log('ℹ️ [POLLING] v2: pas de données exploitables');
         return;
       }
 
       const logs = Array.isArray(res.data.data) ? res.data.data : [res.data.data];
-      console.log(`📡 [POLLING] v2 logs reçus: ${logs.length}`);
+      log(`📡 [POLLING] v2 logs reçus: ${logs.length}`);
 
       let processed = 0;
       for (const log of logs) {
@@ -218,23 +219,23 @@ export class ElasticEmailPolling {
 
         await this.recordEvent(campaignId, leadId, t);
         processed++;
-        if (t === 'open')  console.log(`👁️ [POLLING] Open: ${recipient}`);
-        if (t === 'click') console.log(`🖱️ [POLLING] Click: ${recipient}`);
+        if (t === 'open')  log(`👁️ [POLLING] Open: ${recipient}`);
+        if (t === 'click') log(`🖱️ [POLLING] Click: ${recipient}`);
       }
 
-      console.log(`✅ [POLLING] ${processed} événements traités (v2)`);
+      log(`✅ [POLLING] ${processed} événements traités (v2)`);
       await sleep(200);
     } catch (err) {
       const status = err?.response?.status;
       const data = err?.response?.data;
-      console.error('❌ [POLLING] Erreur v2:', status, data || err.message);
+      error('❌ [POLLING] Erreur v2:', status, data || err.message);
     }
   }
 
   // -------------------- Batch --------------------
   async syncAllActiveCampaigns() {
     try {
-      console.log('\n🔄 [POLLING] Synchronisation de toutes les campagnes actives...');
+      log('\n🔄 [POLLING] Synchronisation de toutes les campagnes actives...');
 
       const { rows: campaigns } = await query(
         `SELECT id, name, status
@@ -245,27 +246,27 @@ export class ElasticEmailPolling {
           ORDER BY created_at DESC`
       );
 
-      console.log(`📊 [POLLING] ${campaigns.length} campagnes à synchroniser`);
+      log(`📊 [POLLING] ${campaigns.length} campagnes à synchroniser`);
 
       for (const c of campaigns) {
-        console.log(`\n🔍 [POLLING] Traitement: ${c.name} (${c.status})`);
+        log(`\n🔍 [POLLING] Traitement: ${c.name} (${c.status})`);
         await this.syncCampaignStats(c.id);
         await sleep(3000); // respiration API
       }
 
       await this.updateCampaignCounters();
 
-      console.log('\n✅ [POLLING] Synchronisation globale terminée\n');
+      log('\n✅ [POLLING] Synchronisation globale terminée\n');
       return { success: true, campaignsProcessed: campaigns.length };
     } catch (error) {
-      console.error('❌ [POLLING] Erreur syncAllActiveCampaigns:', error);
+      error('❌ [POLLING] Erreur syncAllActiveCampaigns:', error);
       return { success: false, error: error.message };
     }
   }
 
   async updateCampaignCounters() {
     try {
-      console.log('🔢 [POLLING] Mise à jour des compteurs des campagnes...');
+      log('🔢 [POLLING] Mise à jour des compteurs des campagnes...');
 
       const { rows: campaigns } = await query(
         `SELECT id
@@ -301,9 +302,9 @@ export class ElasticEmailPolling {
         }
       }
 
-      console.log('✅ [POLLING] Compteurs mis à jour');
+      log('✅ [POLLING] Compteurs mis à jour');
     } catch (error) {
-      console.error('❌ [POLLING] Erreur updateCampaignCounters:', error);
+      error('❌ [POLLING] Erreur updateCampaignCounters:', error);
     }
   }
 }

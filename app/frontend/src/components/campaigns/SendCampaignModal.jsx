@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Send, AlertTriangle, CheckCircle, Loader2, Mail, Database, Tag, Users } from 'lucide-react';
 import api from '../../api/axios';
@@ -36,7 +37,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       const response = await api.get('/email-templates');
       setTemplates(response.data.templates || []);
     } catch (error) {
-      console.error('Erreur templates:', error);
+      error('Erreur templates:', error);
     }
   };
 
@@ -45,7 +46,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       const response = await api.get('/lead-databases');
       setDatabases(response.data.databases || []);
     } catch (error) {
-      console.error('Erreur databases:', error);
+      error('Erreur databases:', error);
     }
   };
 
@@ -56,7 +57,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       const response = await api.get(`/lead-databases/${selectedDatabase}/sectors`);
       setSectors(response.data.sectors || []);
     } catch (error) {
-      console.error('Erreur secteurs:', error);
+      error('Erreur secteurs:', error);
       setSectors([]);
     }
   };
@@ -77,7 +78,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       const response = await api.get(`/leads/count?${params}`);
       setLeadsCount(response.data.count || 0);
     } catch (error) {
-      console.error('Erreur count leads:', error);
+      error('Erreur count leads:', error);
       setLeadsCount(0);
     } finally {
       setLoadingLeads(false);
@@ -89,7 +90,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       const response = await api.get('/quotas');
       setQuotas(response.data.quotas);
     } catch (error) {
-      console.error('Erreur quotas:', error);
+      error('Erreur quotas:', error);
     } finally {
       setLoadingQuotas(false);
     }
@@ -154,7 +155,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       }, 2000);
 
     } catch (error) {
-      console.error('Erreur envoi:', error);
+      error('Erreur envoi:', error);
       alert('? Erreur : ' + (error.response?.data?.error || error.message));
       setSending(false);
       setProgress(0);

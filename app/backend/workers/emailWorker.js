@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import db from '../config/db.js';
 import { sendEmail } from '../services/elasticEmail.js';
 
@@ -19,7 +20,7 @@ const execute = async (query, params = []) => {
 // ==================== PROCESS EMAIL QUEUE ====================
 const processEmailQueue = async () => {
   try {
-    console.log('🔄 [EMAIL WORKER] Traitement de la queue d\'emails...');
+    log('🔄 [EMAIL WORKER] Traitement de la queue d\'emails...');
 
     // Récupérer les campagnes actives de type email
     const activeCampaigns = await queryAll(
@@ -30,27 +31,27 @@ const processEmailQueue = async () => {
     );
 
     if (activeCampaigns.length === 0) {
-      console.log('ℹ️ [EMAIL WORKER] Aucune campagne email active');
+      log('ℹ️ [EMAIL WORKER] Aucune campagne email active');
       return;
     }
 
-    console.log(`📊 [EMAIL WORKER] ${activeCampaigns.length} campagne(s) email active(s)`);
+    log(`📊 [EMAIL WORKER] ${activeCampaigns.length} campagne(s) email active(s)`);
 
     for (const campaign of activeCampaigns) {
       await processCampaign(campaign);
     }
 
-    console.log('✅ [EMAIL WORKER] Traitement terminé');
+    log('✅ [EMAIL WORKER] Traitement terminé');
 
   } catch (error) {
-    console.error('❌ [EMAIL WORKER] Erreur:', error);
+    error('❌ [EMAIL WORKER] Erreur:', error);
   }
 };
 
 // ==================== PROCESS ONE CAMPAIGN ====================
 const processCampaign = async (campaign) => {
   try {
-    console.log(`\n🔍 [EMAIL WORKER] Traitement campagne: ${campaign.name}`);
+    log(`\n🔍 [EMAIL WORKER] Traitement campagne: ${campaign.name}`);
 
     // Utiliser le timezone Paris pour les horaires
     const now = new Date();
@@ -60,9 +61,9 @@ const processCampaign = async (campaign) => {
     const currentTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
     const currentDay = parisTime.getDay(); // 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
 
-    console.log(`🕐 [EMAIL WORKER] Heure Paris: ${parisTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
-    console.log(`📅 [EMAIL WORKER] Jour actuel: ${currentDay} (0=Dim, 1=Lun, 2=Mar, 3=Mer, 4=Jeu, 5=Ven, 6=Sam)`);
-    console.log(`⏰ [EMAIL WORKER] Heure: ${currentTime}`);
+    log(`🕐 [EMAIL WORKER] Heure Paris: ${parisTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
+    log(`📅 [EMAIL WORKER] Jour actuel: ${currentDay} (0=Dim, 1=Lun, 2=Mar, 3=Mer, 4=Jeu, 5=Ven, 6=Sam)`);
+    log(`⏰ [EMAIL WORKER] Heure: ${currentTime}`);
 
     const [startHour, startMin] = campaign.send_time_start.split(':').map(Number);
     const [endHour, endMin] = campaign.send_time_end.split(':').map(Number);
@@ -74,51 +75,51 @@ const processCampaign = async (campaign) => {
     // Vérifier jour d'envoi
     const sendDays = campaign.send_days || [1, 2, 3, 4, 5]; // Par défaut: Lun-Ven
     
-    console.log(`📋 [EMAIL WORKER] Jours configurés dans BDD: ${JSON.stringify(sendDays)}`);
-    console.log(`🔍 [EMAIL WORKER] Type de sendDays: ${typeof sendDays}`);
-    console.log(`🔍 [EMAIL WORKER] sendDays est un Array ? ${Array.isArray(sendDays)}`);
+    log(`📋 [EMAIL WORKER] Jours configurés dans BDD: ${JSON.stringify(sendDays)}`);
+    log(`🔍 [EMAIL WORKER] Type de sendDays: ${typeof sendDays}`);
+    log(`🔍 [EMAIL WORKER] sendDays est un Array ? ${Array.isArray(sendDays)}`);
     
     // Si sendDays est un string JSON, le parser
     let parsedSendDays = sendDays;
     if (typeof sendDays === 'string') {
       try {
         parsedSendDays = JSON.parse(sendDays);
-        console.log(`🔧 [EMAIL WORKER] sendDays parsé: ${JSON.stringify(parsedSendDays)}`);
+        log(`🔧 [EMAIL WORKER] sendDays parsé: ${JSON.stringify(parsedSendDays)}`);
       } catch (e) {
-        console.error(`❌ [EMAIL WORKER] Erreur parsing sendDays:`, e);
+        error(`❌ [EMAIL WORKER] Erreur parsing sendDays:`, e);
         parsedSendDays = [1, 2, 3, 4, 5];
       }
     }
     
-    console.log(`🔍 [EMAIL WORKER] currentDay (${currentDay}) est dans parsedSendDays (${JSON.stringify(parsedSendDays)}) ? ${parsedSendDays.includes(currentDay)}`);
+    log(`🔍 [EMAIL WORKER] currentDay (${currentDay}) est dans parsedSendDays (${JSON.stringify(parsedSendDays)}) ? ${parsedSendDays.includes(currentDay)}`);
     
     // Conversion jour : si dimanche (0), convertir en 7
     const dayToCheck = currentDay === 0 ? 7 : currentDay;
-    console.log(`🔍 [EMAIL WORKER] Jour à vérifier après conversion: ${dayToCheck}`);
+    log(`🔍 [EMAIL WORKER] Jour à vérifier après conversion: ${dayToCheck}`);
     
     if (!parsedSendDays.includes(dayToCheck)) {
-      console.log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Pas d'envoi aujourd'hui`);
-      console.log(`   ❌ currentDay=${currentDay}, dayToCheck=${dayToCheck}, sendDays=${JSON.stringify(parsedSendDays)}`);
+      log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Pas d'envoi aujourd'hui`);
+      log(`   ❌ currentDay=${currentDay}, dayToCheck=${dayToCheck}, sendDays=${JSON.stringify(parsedSendDays)}`);
       return;
     }
 
-    console.log(`✅ [EMAIL WORKER] Jour OK ! On peut envoyer.`);
-    console.log(`🔍 [EMAIL WORKER] Horaires configurés: ${campaign.send_time_start} - ${campaign.send_time_end}`);
-    console.log(`🔍 [EMAIL WORKER] Minutes actuelles: ${currentMinutes}, Début: ${startMinutes}, Fin: ${endMinutes}`);
+    log(`✅ [EMAIL WORKER] Jour OK ! On peut envoyer.`);
+    log(`🔍 [EMAIL WORKER] Horaires configurés: ${campaign.send_time_start} - ${campaign.send_time_end}`);
+    log(`🔍 [EMAIL WORKER] Minutes actuelles: ${currentMinutes}, Début: ${startMinutes}, Fin: ${endMinutes}`);
 
     // Vérifier heure d'envoi
     if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
-      console.log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Hors horaires d'envoi`);
-      console.log(`   ❌ Heure actuelle: ${currentTime}, Plage autorisée: ${campaign.send_time_start}-${campaign.send_time_end}`);
+      log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Hors horaires d'envoi`);
+      log(`   ❌ Heure actuelle: ${currentTime}, Plage autorisée: ${campaign.send_time_start}-${campaign.send_time_end}`);
       return;
     }
 
-    console.log(`✅ [EMAIL WORKER] Heure OK ! On peut envoyer.`);
+    log(`✅ [EMAIL WORKER] Heure OK ! On peut envoyer.`);
 
     // ==================== VÉRIFIER INTERVALLE ENTRE LES VAGUES ====================
     const cycleIntervalMinutes = campaign.cycle_interval_minutes || 10; // Par défaut 10 minutes
 
-    console.log(`🔧 [EMAIL WORKER] Config: ${campaign.emails_per_cycle || 50} emails/vague, ${cycleIntervalMinutes} min intervalle`);
+    log(`🔧 [EMAIL WORKER] Config: ${campaign.emails_per_cycle || 50} emails/vague, ${cycleIntervalMinutes} min intervalle`);
 
     // Vérifier quand le dernier email a été envoyé pour cette campagne
     // Calcul fait directement en SQL pour éviter les problèmes de timezone JS/PostgreSQL
@@ -132,26 +133,26 @@ const processCampaign = async (campaign) => {
       [campaign.id]
     );
 
-    console.log(`🔍 [EMAIL WORKER] DEBUG lastSentEmail:`, JSON.stringify(lastSentEmail));
+    log(`🔍 [EMAIL WORKER] DEBUG lastSentEmail:`, JSON.stringify(lastSentEmail));
 
     if (lastSentEmail && lastSentEmail.minutes_since_sent != null) {
       const minutesSinceLastBatch = parseFloat(lastSentEmail.minutes_since_sent);
 
-      console.log(`⏱️ [EMAIL WORKER] Dernier envoi: ${new Date(lastSentEmail.sent_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
-      console.log(`⏱️ [EMAIL WORKER] Minutes depuis dernier batch: ${minutesSinceLastBatch.toFixed(1)} / ${cycleIntervalMinutes} min requis`);
+      log(`⏱️ [EMAIL WORKER] Dernier envoi: ${new Date(lastSentEmail.sent_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}`);
+      log(`⏱️ [EMAIL WORKER] Minutes depuis dernier batch: ${minutesSinceLastBatch.toFixed(1)} / ${cycleIntervalMinutes} min requis`);
 
       if (minutesSinceLastBatch < cycleIntervalMinutes) {
         const waitMinutes = (cycleIntervalMinutes - minutesSinceLastBatch).toFixed(1);
-        console.log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Attente entre les vagues`);
-        console.log(`   ⏳ Prochain envoi dans ${waitMinutes} minute(s)`);
+        log(`⏸️ [EMAIL WORKER] Campagne "${campaign.name}": Attente entre les vagues`);
+        log(`   ⏳ Prochain envoi dans ${waitMinutes} minute(s)`);
         return;
       }
-      console.log(`✅ [EMAIL WORKER] ${minutesSinceLastBatch.toFixed(1)} min écoulées >= ${cycleIntervalMinutes} min, on peut envoyer`);
+      log(`✅ [EMAIL WORKER] ${minutesSinceLastBatch.toFixed(1)} min écoulées >= ${cycleIntervalMinutes} min, on peut envoyer`);
     } else {
-      console.log(`ℹ️ [EMAIL WORKER] Aucun email envoyé avant, première vague`);
+      log(`ℹ️ [EMAIL WORKER] Aucun email envoyé avant, première vague`);
     }
 
-    console.log(`✅ [EMAIL WORKER] Intervalle OK ! Envoi de la vague de ${campaign.emails_per_cycle || 50} emails.`);
+    log(`✅ [EMAIL WORKER] Intervalle OK ! Envoi de la vague de ${campaign.emails_per_cycle || 50} emails.`);
 
     // Récupérer le template
     const template = await queryOne(
@@ -160,11 +161,11 @@ const processCampaign = async (campaign) => {
     );
 
     if (!template) {
-      console.error(`❌ [EMAIL WORKER] Template non trouvé pour campagne ${campaign.name}`);
+      error(`❌ [EMAIL WORKER] Template non trouvé pour campagne ${campaign.name}`);
       return;
     }
 
-    console.log(`✅ [EMAIL WORKER] Template trouvé: ${template.name}`);
+    log(`✅ [EMAIL WORKER] Template trouvé: ${template.name}`);
 
     // Récupérer les emails en attente
     const emailsToSend = await queryAll(
@@ -179,7 +180,7 @@ const processCampaign = async (campaign) => {
     );
 
     if (emailsToSend.length === 0) {
-      console.log(`✅ [EMAIL WORKER] Campagne "${campaign.name}": Tous les emails envoyés`);
+      log(`✅ [EMAIL WORKER] Campagne "${campaign.name}": Tous les emails envoyés`);
       
       // Marquer la campagne en mode tracking (15 jours) au lieu de completed
       await execute(
@@ -191,12 +192,12 @@ const processCampaign = async (campaign) => {
         [campaign.id]
       );
       
-      console.log(`📊 [EMAIL WORKER] Campagne "${campaign.name}" en mode tracking (période: 15 jours)`);
-      console.log(`📅 [EMAIL WORKER] Les stats seront synchronisées pendant 15 jours`);
+      log(`📊 [EMAIL WORKER] Campagne "${campaign.name}" en mode tracking (période: 15 jours)`);
+      log(`📅 [EMAIL WORKER] Les stats seront synchronisées pendant 15 jours`);
       return;
     }
 
-    console.log(`📧 [EMAIL WORKER] ${emailsToSend.length} emails à envoyer pour "${campaign.name}"...`);
+    log(`📧 [EMAIL WORKER] ${emailsToSend.length} emails à envoyer pour "${campaign.name}"...`);
 
     let successCount = 0;
     let failCount = 0;
@@ -238,7 +239,7 @@ const processCampaign = async (campaign) => {
           htmlBody += trackingPixel;
         }
 
-        console.log(`📤 [EMAIL WORKER] Envoi à ${emailData.recipient_email}...`);
+        log(`📤 [EMAIL WORKER] Envoi à ${emailData.recipient_email}...`);
 
         // Envoyer l'email
         const result = await sendEmail({
@@ -258,10 +259,10 @@ const processCampaign = async (campaign) => {
         );
 
         successCount++;
-        console.log(`✅ [EMAIL WORKER] Email envoyé à ${emailData.recipient_email}`);
+        log(`✅ [EMAIL WORKER] Email envoyé à ${emailData.recipient_email}`);
 
       } catch (error) {
-        console.error(`❌ [EMAIL WORKER] Erreur envoi à ${emailData.recipient_email}:`, error.message);
+        error(`❌ [EMAIL WORKER] Erreur envoi à ${emailData.recipient_email}:`, error.message);
         
         // Marquer comme échec
         await execute(
@@ -298,17 +299,17 @@ const processCampaign = async (campaign) => {
       [stats.sent, campaign.id]
     );
 
-    console.log(`📊 [EMAIL WORKER] Campagne "${campaign.name}": ${successCount} envoyés, ${failCount} échecs`);
-    console.log(`📊 [EMAIL WORKER] Stats totales: ${stats.sent} envoyés, ${stats.failed} échecs, ${stats.pending} en attente`);
+    log(`📊 [EMAIL WORKER] Campagne "${campaign.name}": ${successCount} envoyés, ${failCount} échecs`);
+    log(`📊 [EMAIL WORKER] Stats totales: ${stats.sent} envoyés, ${stats.failed} échecs, ${stats.pending} en attente`);
 
   } catch (error) {
-    console.error(`❌ [EMAIL WORKER] Erreur traitement campagne ${campaign.name}:`, error);
+    error(`❌ [EMAIL WORKER] Erreur traitement campagne ${campaign.name}:`, error);
   }
 };
 
 // ==================== START WORKER ====================
 const startEmailWorker = () => {
-  console.log('🚀 [EMAIL WORKER] Démarrage du worker d\'emails...');
+  log('🚀 [EMAIL WORKER] Démarrage du worker d\'emails...');
   
   // Traiter immédiatement
   processEmailQueue();
@@ -316,7 +317,7 @@ const startEmailWorker = () => {
   // Puis toutes les 2 minutes
   setInterval(processEmailQueue, 2 * 60 * 1000);
   
-  console.log('✅ [EMAIL WORKER] Worker démarré (intervalle: 2 minutes)');
+  log('✅ [EMAIL WORKER] Worker démarré (intervalle: 2 minutes)');
 };
 
 export default startEmailWorker;

@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import db from '../lib/db.js';
 
 async function createImagesTable() {
   try {
-    console.log('🔄 Création de la table email_images...');
+    log('🔄 Création de la table email_images...');
     
     await db.query(`
       CREATE TABLE IF NOT EXISTS email_images (
@@ -21,17 +22,17 @@ async function createImagesTable() {
       )
     `);
     
-    console.log('✅ Table email_images créée !');
+    log('✅ Table email_images créée !');
 
     await db.query(`CREATE INDEX IF NOT EXISTS idx_images_user ON email_images(uploaded_by)`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_images_date ON email_images(uploaded_at DESC)`);
     
-    console.log('✅ Index créés !');
-    console.log('🎉 Migration terminée !');
+    log('✅ Index créés !');
+    log('🎉 Migration terminée !');
     
     process.exit(0);
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
+    error('❌ Erreur:', error.message);
     process.exit(1);
   }
 }

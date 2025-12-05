@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -47,7 +48,7 @@ router.get('/subscription', async (req, res) => {
       history
     });
   } catch (error) {
-    console.error('Erreur récupération abonnement:', error);
+    error('Erreur récupération abonnement:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -69,7 +70,7 @@ router.get('/invoices', async (req, res) => {
 
     res.json({ invoices: rows });
   } catch (error) {
-    console.error('Erreur récupération factures:', error);
+    error('Erreur récupération factures:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -94,7 +95,7 @@ router.get('/info', async (req, res) => {
 
     res.json({ billing_info: rows[0] });
   } catch (error) {
-    console.error('Erreur récupération info facturation:', error);
+    error('Erreur récupération info facturation:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -180,7 +181,7 @@ router.post('/info', async (req, res) => {
       billing_info: result
     });
   } catch (error) {
-    console.error('Erreur mise à jour billing info:', error);
+    error('Erreur mise à jour billing info:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -215,7 +216,7 @@ router.post('/create-checkout-session', async (req, res) => {
       message: 'Session Stripe créée (simulation)'
     });
   } catch (error) {
-    console.error('Erreur création session Stripe:', error);
+    error('Erreur création session Stripe:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -229,29 +230,29 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     // TODO: Vérifier la signature Stripe
     const event = req.body;
 
-    console.log('📥 Stripe webhook reçu:', event.type);
+    log('📥 Stripe webhook reçu:', event.type);
 
     switch (event.type) {
       case 'checkout.session.completed':
         // Mise à jour du plan après paiement réussi
-        console.log('✅ Paiement réussi');
+        log('✅ Paiement réussi');
         break;
 
       case 'customer.subscription.updated':
-        console.log('🔄 Abonnement mis à jour');
+        log('🔄 Abonnement mis à jour');
         break;
 
       case 'customer.subscription.deleted':
-        console.log('❌ Abonnement annulé');
+        log('❌ Abonnement annulé');
         break;
 
       default:
-        console.log('❓ Événement non géré:', event.type);
+        log('❓ Événement non géré:', event.type);
     }
 
     res.json({ received: true });
   } catch (error) {
-    console.error('Erreur webhook Stripe:', error);
+    error('Erreur webhook Stripe:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -274,7 +275,7 @@ router.post('/cancel-subscription', async (req, res) => {
     }
 
     // TODO: Annuler réellement l'abonnement Stripe
-    console.log('🚫 Annulation abonnement Stripe (simulation)');
+    log('🚫 Annulation abonnement Stripe (simulation)');
 
     // Enregistrer dans l'historique
     await q(
@@ -299,7 +300,7 @@ router.post('/cancel-subscription', async (req, res) => {
       new_plan: 'FREE'
     });
   } catch (error) {
-    console.error('Erreur annulation abonnement:', error);
+    error('Erreur annulation abonnement:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

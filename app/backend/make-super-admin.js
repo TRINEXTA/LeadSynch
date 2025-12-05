@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import pg from 'pg';
 import dotenv from 'dotenv';
 
@@ -8,7 +9,7 @@ const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 async function makeSuperAdmin() {
   try {
-    console.log('Creation Super Admin pour vprince@trinexta.fr...');
+    log('Creation Super Admin pour vprince@trinexta.fr...');
     
     const user_id = '7a5198ca-557d-49ea-93aa-040b46683cfe';
     const tenant_id = '584544e5-892c-4550-a9f6-f8360d7c3eb9';
@@ -20,7 +21,7 @@ async function makeSuperAdmin() {
       WHERE id = $1
     `, [user_id]);
     
-    console.log('Role mis a jour: super_admin');
+    log('Role mis a jour: super_admin');
     
     // 2. Créer ou mettre à jour la subscription avec quotas illimités
     await pool.query(`
@@ -78,7 +79,7 @@ async function makeSuperAdmin() {
         updated_at = NOW()
     `, [tenant_id]);
     
-    console.log('Subscription creee avec quotas illimites');
+    log('Subscription creee avec quotas illimites');
     
     // 3. Vérifier
     const result = await pool.query(`
@@ -100,25 +101,25 @@ async function makeSuperAdmin() {
       WHERE u.id = $1
     `, [user_id]);
     
-    console.log('\n========== SUPER ADMIN ==========');
-    console.log('Email:', result.rows[0].email);
-    console.log('Role:', result.rows[0].role);
-    console.log('Plan:', result.rows[0].plan);
-    console.log('Status:', result.rows[0].status);
-    console.log('Google Leads:', result.rows[0].google_leads_quota, '(utilises:', result.rows[0].google_leads_used + ')');
-    console.log('Local Leads:', result.rows[0].local_leads_quota);
-    console.log('Emails:', result.rows[0].emails_quota);
-    console.log('Campagnes:', result.rows[0].campaigns_quota);
-    console.log('Utilisateurs:', result.rows[0].users_quota);
-    console.log('Expire le:', result.rows[0].current_period_end);
-    console.log('=================================\n');
+    log('\n========== SUPER ADMIN ==========');
+    log('Email:', result.rows[0].email);
+    log('Role:', result.rows[0].role);
+    log('Plan:', result.rows[0].plan);
+    log('Status:', result.rows[0].status);
+    log('Google Leads:', result.rows[0].google_leads_quota, '(utilises:', result.rows[0].google_leads_used + ')');
+    log('Local Leads:', result.rows[0].local_leads_quota);
+    log('Emails:', result.rows[0].emails_quota);
+    log('Campagnes:', result.rows[0].campaigns_quota);
+    log('Utilisateurs:', result.rows[0].users_quota);
+    log('Expire le:', result.rows[0].current_period_end);
+    log('=================================\n');
     
     await pool.end();
     process.exit(0);
     
   } catch (error) {
-    console.error('Erreur:', error.message);
-    console.error(error);
+    error('Erreur:', error.message);
+    error(error);
     await pool.end();
     process.exit(1);
   }

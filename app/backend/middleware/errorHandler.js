@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { AppError } from '../lib/errors.js';
 
 export function errorHandler(err, req, res, next) {
@@ -7,7 +8,7 @@ export function errorHandler(err, req, res, next) {
 
   const isDev = process.env.NODE_ENV !== 'production';
   
-  console.error('❌ Erreur:', {
+  error('❌ Erreur:', {
     tenant: req.user?.tenant_id,
     user: req.user?.id,
     method: req.method,

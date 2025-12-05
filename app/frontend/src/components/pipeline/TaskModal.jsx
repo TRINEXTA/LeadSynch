@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, User, Flag, Clock, MessageSquare, Save } from 'lucide-react';
 import api from '../../api/axios';
@@ -47,7 +48,7 @@ export default function TaskModal({ isOpen, onClose, lead, onSuccess, mode = 'cr
       const response = await api.get('/users');
       setUsers(response.data.users || []);
     } catch (error) {
-      console.error('Erreur chargement utilisateurs:', error);
+      error('Erreur chargement utilisateurs:', error);
     }
   };
 
@@ -75,7 +76,7 @@ export default function TaskModal({ isOpen, onClose, lead, onSuccess, mode = 'cr
       onSuccess && onSuccess();
       onClose();
     } catch (error) {
-      console.error('Erreur création tâche:', error);
+      error('Erreur création tâche:', error);
       alert('❌ Erreur lors de la création de la tâche');
     } finally {
       setLoading(false);

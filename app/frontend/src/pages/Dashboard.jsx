@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,7 +72,7 @@ export default function Dashboard() {
       }
 
     } catch (error) {
-      console.error("Erreur dashboard:", error?.response?.data || error.message);
+      error("Erreur dashboard:", error?.response?.data || error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);

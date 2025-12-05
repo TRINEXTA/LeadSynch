@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Router } from "express";
 import { query } from "../lib/db.js";
 import { authMiddleware } from "../middleware/auth.js";
@@ -88,14 +89,14 @@ router.get("/dashboard", async (req, res) => {
       recentActivities: []
     };
 
-    console.log('✅ Dashboard stats:', {
+    log('✅ Dashboard stats:', {
       prospects: response.prospects.count,
       campaigns: response.campaigns.active
     });
 
     res.json(response);
   } catch (err) {
-    console.error('❌ Erreur dashboard:', err);
+    error('❌ Erreur dashboard:', err);
     res.status(500).json({ 
       error: 'Erreur récupération stats',
       details: err.message 
@@ -236,7 +237,7 @@ router.get("/", async (req, res) => {
       daily_actions: dailyActions
     });
   } catch (err) {
-    console.error('❌ Erreur stats:', err);
+    error('❌ Erreur stats:', err);
     res.status(500).json({ error: err.message });
   }
 });

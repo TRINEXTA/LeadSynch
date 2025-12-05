@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 
@@ -99,7 +100,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Sectors error:', error);
+    error('Sectors error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }

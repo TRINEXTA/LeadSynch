@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 
@@ -231,13 +232,13 @@ async function handler(req, res) {
           [tenant_id, lead_id, campaign_id, stage, user_id]
         );
 
-        console.log(`🧩 [PROSPECTION] Lead ${lead_id} déplacé vers ${stage} (qualification: ${qualification})`);
+        log(`🧩 [PROSPECTION] Lead ${lead_id} déplacé vers ${stage} (qualification: ${qualification})`);
       } catch (pipelineError) {
-        console.error('❌ [PROSPECTION] Erreur mise à jour pipeline:', pipelineError.message);
-        console.error(`   - tenant_id: ${tenant_id}`);
-        console.error(`   - lead_id: ${lead_id}`);
-        console.error(`   - campaign_id: ${campaign_id}`);
-        console.error(`   - qualification: ${qualification}`);
+        error('❌ [PROSPECTION] Erreur mise à jour pipeline:', pipelineError.message);
+        error(`   - tenant_id: ${tenant_id}`);
+        error(`   - lead_id: ${lead_id}`);
+        error(`   - campaign_id: ${campaign_id}`);
+        error(`   - qualification: ${qualification}`);
         // Ne pas bloquer l'enregistrement de l'appel si l'injection pipeline échoue
       }
 
@@ -263,7 +264,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Prospection sessions error:', error);
+    error('Prospection sessions error:', error);
     return res.status(500).json({ 
       error: 'Server error',
       details: error.message 

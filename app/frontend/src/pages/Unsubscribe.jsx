@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Mail, CheckCircle, AlertCircle, Loader } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function Unsubscribe() {
       
       setLoading(false);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       setError('Lead introuvable');
       setLoading(false);
     }
@@ -39,7 +40,7 @@ export default function Unsubscribe() {
       await api.post(`/unsubscribe/${lead_id}`, { reason });
       setUnsubscribed(true);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       setError('Erreur lors du désabonnement');
     } finally {
       setProcessing(false);

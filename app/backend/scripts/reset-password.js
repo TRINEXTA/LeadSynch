@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { execute } from '../lib/db.js';
 import bcrypt from 'bcryptjs';
 
@@ -13,14 +14,14 @@ async function resetPassword() {
       [hashedPassword]
     );
 
-    console.log('✅ Mot de passe réinitialisé !');
-    console.log(`📧 Email: vprince@trinexta.fr`);
+    log('✅ Mot de passe réinitialisé !');
+    log(`📧 Email: vprince@trinexta.fr`);
     // ⚠️ SÉCURITÉ: Mot de passe réinitialisé à: password123
     // Le mot de passe n'est jamais loggé pour des raisons de sécurité
 
     process.exit(0);
   } catch (error) {
-    console.error('? Erreur:', error);
+    error('? Erreur:', error);
     process.exit(1);
   }
 }

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 #!/usr/bin/env node
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -11,18 +12,18 @@ async function applyMigration() {
   const client = await pool.connect();
 
   try {
-    console.log('📦 Connexion à la base de données...');
+    log('📦 Connexion à la base de données...');
 
     // Lire le fichier de migration
     const migrationPath = join(__dirname, '../migrations/013_fix_mailing_settings_columns.sql');
     const migrationSQL = readFileSync(migrationPath, 'utf-8');
 
-    console.log('🔄 Application de la migration...');
+    log('🔄 Application de la migration...');
 
     // Exécuter la migration
     await client.query(migrationSQL);
 
-    console.log('✅ Migration appliquée avec succès !');
+    log('✅ Migration appliquée avec succès !');
 
     // Vérifier la structure de la table
     const result = await client.query(`
@@ -32,11 +33,11 @@ async function applyMigration() {
       ORDER BY ordinal_position
     `);
 
-    console.log('\n📋 Structure de la table mailing_settings :');
+    log('\n📋 Structure de la table mailing_settings :');
     console.table(result.rows);
 
   } catch (error) {
-    console.error('❌ Erreur lors de l\'application de la migration :', error);
+    error('❌ Erreur lors de l\'application de la migration :', error);
     throw error;
   } finally {
     client.release();
@@ -46,10 +47,10 @@ async function applyMigration() {
 
 applyMigration()
   .then(() => {
-    console.log('\n✨ Migration terminée !');
+    log('\n✨ Migration terminée !');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('\n💥 Échec de la migration :', error.message);
+    error('\n💥 Échec de la migration :', error.message);
     process.exit(1);
   });

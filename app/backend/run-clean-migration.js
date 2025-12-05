@@ -1,16 +1,17 @@
+import { log, error, warn } from "../lib/logger.js";
 import { readFileSync } from 'fs';
 import pg from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-console.log('========================================');
-console.log('🧹 MIGRATION PROPRE - NETTOYAGE COMPLET');
-console.log('========================================\n');
-console.log('⚠️  ATTENTION: Cette migration va :');
-console.log('   - Supprimer les tables existantes');
-console.log('   - Recréer toutes les tables proprement');
-console.log('   - Initialiser les données par défaut\n');
+log('========================================');
+log('🧹 MIGRATION PROPRE - NETTOYAGE COMPLET');
+log('========================================\n');
+log('⚠️  ATTENTION: Cette migration va :');
+log('   - Supprimer les tables existantes');
+log('   - Recréer toutes les tables proprement');
+log('   - Initialiser les données par défaut\n');
 
 const client = new pg.Client({
   connectionString: process.env.POSTGRES_URL,
@@ -19,43 +20,43 @@ const client = new pg.Client({
 
 async function runCleanMigration() {
   try {
-    console.log('🔄 Connexion à PostgreSQL (Neon)...');
+    log('🔄 Connexion à PostgreSQL (Neon)...');
     await client.connect();
-    console.log('✅ Connecté !\n');
+    log('✅ Connecté !\n');
 
-    console.log('📂 Lecture de 00_CLEAN_SETUP.sql...');
+    log('📂 Lecture de 00_CLEAN_SETUP.sql...');
     const sql = readFileSync('./migrations/00_CLEAN_SETUP.sql', 'utf8');
-    console.log(`✅ Script chargé (${sql.length} caractères)\n`);
+    log(`✅ Script chargé (${sql.length} caractères)\n`);
 
-    console.log('🧹 Nettoyage et recréation des tables...');
+    log('🧹 Nettoyage et recréation des tables...');
     await client.query(sql);
 
-    console.log('\n========================================');
-    console.log('✅ MIGRATION RÉUSSIE !');
-    console.log('========================================\n');
-    console.log('📋 Tables créées (10) :');
-    console.log('   ✓ lead_credits');
-    console.log('   ✓ credit_purchases');
-    console.log('   ✓ credit_usage');
-    console.log('   ✓ services');
-    console.log('   ✓ subscriptions');
-    console.log('   ✓ subscription_invoices');
-    console.log('   ✓ subscription_history');
-    console.log('   ✓ invoices');
-    console.log('   ✓ billing_info');
-    console.log('   ✓ mailing_settings\n');
-    console.log('🔄 Prochaines étapes :');
-    console.log('   1. Redémarrez le backend : npm start');
-    console.log('   2. Testez les pages Statistics, Billing, Users');
-    console.log('   3. Vérifiez qu\'il n\'y a plus d\'erreurs\n');
+    log('\n========================================');
+    log('✅ MIGRATION RÉUSSIE !');
+    log('========================================\n');
+    log('📋 Tables créées (10) :');
+    log('   ✓ lead_credits');
+    log('   ✓ credit_purchases');
+    log('   ✓ credit_usage');
+    log('   ✓ services');
+    log('   ✓ subscriptions');
+    log('   ✓ subscription_invoices');
+    log('   ✓ subscription_history');
+    log('   ✓ invoices');
+    log('   ✓ billing_info');
+    log('   ✓ mailing_settings\n');
+    log('🔄 Prochaines étapes :');
+    log('   1. Redémarrez le backend : npm start');
+    log('   2. Testez les pages Statistics, Billing, Users');
+    log('   3. Vérifiez qu\'il n\'y a plus d\'erreurs\n');
 
   } catch (error) {
-    console.error('\n❌ ERREUR :');
-    console.error('========================================');
-    console.error(error.message);
-    if (error.detail) console.error('Détail:', error.detail);
-    if (error.hint) console.error('Indice:', error.hint);
-    console.error('========================================\n');
+    error('\n❌ ERREUR :');
+    error('========================================');
+    error(error.message);
+    if (error.detail) error('Détail:', error.detail);
+    if (error.hint) error('Indice:', error.hint);
+    error('========================================\n');
     process.exit(1);
   } finally {
     await client.end();

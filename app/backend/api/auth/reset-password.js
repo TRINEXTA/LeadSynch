@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { queryOne, execute } from '../../lib/db.js';
 import { hashPassword } from '../../lib/auth.js';
 import crypto from 'crypto';
@@ -82,7 +83,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('Reset password error:', error);
+    error('Reset password error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Database, Upload, Search, BarChart3, TrendingUp, Eye, Trash2, Archive, RefreshCw, FileSpreadsheet, Zap } from 'lucide-react';
@@ -54,7 +55,7 @@ export default function LeadDatabases() {
       calculateGlobalStats(dbList);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur chargement bases:', error);
+      error('Erreur chargement bases:', error);
       setLoading(false);
     }
   };

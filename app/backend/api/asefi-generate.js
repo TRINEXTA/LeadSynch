@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { authMiddleware } from '../middleware/auth.js';
@@ -18,17 +19,17 @@ const IMPROVEMENT_LEVELS = {
 
 // POST /asefi/generate - Génération template email complet
 router.post('/generate', authMiddleware, async (req, res) => {
-  console.log(' Requête reçue sur /asefi/generate');
+  log(' Requête reçue sur /asefi/generate');
   
   try {
     const { campaignType, objective, audience, tone, mainLink, meetingLink, signature } = req.body;
 
     if (!objective || !objective.trim()) {
-      console.log(' Objectif manquant');
+      log(' Objectif manquant');
       return res.status(400).json({ error: 'Objectif requis' });
     }
 
-    console.log(' Objectif valide, appel à Claude API...');
+    log(' Objectif valide, appel à Claude API...');
 
     const linksPart = (mainLink || meetingLink)
       ? '\n\nLiens à intégrer:\n' + (mainLink ? '- Lien principal: ' + mainLink + '\n' : '') + (meetingLink ? '- Lien RDV: ' + meetingLink : '')
@@ -60,7 +61,7 @@ Réponds UNIQUEMENT en JSON strict sans aucun markdown ni backticks:
   "cta": "..."
 }`;
 
-    console.log(' Envoi du prompt à Claude...');
+    log(' Envoi du prompt à Claude...');
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -68,7 +69,7 @@ Réponds UNIQUEMENT en JSON strict sans aucun markdown ni backticks:
       messages: [{ role: 'user', content: prompt }]
     });
 
-    console.log(' Réponse de Claude reçue');
+    log(' Réponse de Claude reçue');
 
     let content = message.content[0].text.trim();
     
@@ -79,7 +80,7 @@ Réponds UNIQUEMENT en JSON strict sans aucun markdown ni backticks:
     
     const parsed = JSON.parse(content);
 
-    console.log(' Template généré avec succès');
+    log(' Template généré avec succès');
 
     res.json({
       success: true,
@@ -87,7 +88,7 @@ Réponds UNIQUEMENT en JSON strict sans aucun markdown ni backticks:
     });
 
   } catch (error) {
-    console.error(' Erreur Asefi Generate:', error);
+    error(' Erreur Asefi Generate:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la génération',
       details: error.message 
@@ -97,7 +98,7 @@ Réponds UNIQUEMENT en JSON strict sans aucun markdown ni backticks:
 
 // POST /asefi/improve-text - Amélioration de texte (pour Mode Prospection)
 router.post('/improve-text', authMiddleware, async (req, res) => {
-  console.log(' Amélioration de texte avec Asefi');
+  log(' Amélioration de texte avec Asefi');
   
   try {
     const { text, type, lead_context, improvement_level } = req.body;
@@ -178,7 +179,7 @@ IMPORTANT: Réponds UNIQUEMENT avec le texte final amélioré, prêt à être en
 
     const prompt = prompts[userLevel] || prompts.basic;
 
-    console.log(` Amélioration niveau ${userLevel}...`);
+    log(` Amélioration niveau ${userLevel}...`);
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -188,7 +189,7 @@ IMPORTANT: Réponds UNIQUEMENT avec le texte final amélioré, prêt à être en
 
     const improvedText = message.content[0].text.trim();
 
-    console.log(' Texte amélioré avec succès');
+    log(' Texte amélioré avec succès');
 
     res.json({
       success: true,
@@ -200,7 +201,7 @@ IMPORTANT: Réponds UNIQUEMENT avec le texte final amélioré, prêt à être en
     });
 
   } catch (error) {
-    console.error(' Erreur amélioration texte:', error);
+    error(' Erreur amélioration texte:', error);
     res.status(500).json({ 
       error: 'Erreur lors de l\'amélioration',
       details: error.message 
@@ -210,7 +211,7 @@ IMPORTANT: Réponds UNIQUEMENT avec le texte final amélioré, prêt à être en
 
 // POST /asefi/generate-quick-email - Génération rapide email pour prospection
 router.post('/generate-quick-email', authMiddleware, async (req, res) => {
-  console.log(' Génération rapide email pour prospection');
+  log(' Génération rapide email pour prospection');
   
   try {
     const { template_type, lead_info, tone, user_signature } = req.body;
@@ -264,7 +265,7 @@ Réponds en JSON strict:
     
     const parsed = JSON.parse(content);
 
-    console.log(' Email rapide généré');
+    log(' Email rapide généré');
 
     res.json({
       success: true,
@@ -273,7 +274,7 @@ Réponds en JSON strict:
     });
 
   } catch (error) {
-    console.error(' Erreur génération email rapide:', error);
+    error(' Erreur génération email rapide:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la génération',
       details: error.message 
@@ -283,7 +284,7 @@ Réponds en JSON strict:
 
 // POST /asefi/suggest-next-action - Suggérer prochaine action (bonus!)
 router.post('/suggest-next-action', authMiddleware, async (req, res) => {
-  console.log(' Suggestion prochaine action');
+  log(' Suggestion prochaine action');
   
   try {
     const { lead_info, interaction_history } = req.body;
@@ -325,7 +326,7 @@ Analyse et réponds en JSON:
     });
 
   } catch (error) {
-    console.error(' Erreur suggestion action:', error);
+    error(' Erreur suggestion action:', error);
     res.status(500).json({ 
       error: 'Erreur lors de l\'analyse',
       details: error.message 
@@ -335,7 +336,7 @@ Analyse et réponds en JSON:
 
 // POST /asefi/generate-email-from-notes - Génération email depuis notes d'appel
 router.post('/generate-email-from-notes', authMiddleware, async (req, res) => {
-  console.log('📧 Génération email depuis notes d\'appel avec Asefi');
+  log('📧 Génération email depuis notes d\'appel avec Asefi');
   
   try {
     const { lead_info, call_notes, qualification, user_signature } = req.body;
@@ -413,7 +414,7 @@ Réponds en JSON strict sans markdown:
   "suggestions": ["Suggestion 1", "Suggestion 2"]
 }`;
 
-    console.log('🤖 Appel à Claude API pour génération email...');
+    log('🤖 Appel à Claude API pour génération email...');
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -427,7 +428,7 @@ Réponds en JSON strict sans markdown:
     
     const parsed = JSON.parse(content);
 
-    console.log('✅ Email généré avec succès depuis notes d\'appel');
+    log('✅ Email généré avec succès depuis notes d\'appel');
 
     res.json({
       success: true,
@@ -437,7 +438,7 @@ Réponds en JSON strict sans markdown:
     });
 
   } catch (error) {
-    console.error('❌ Erreur génération email depuis notes:', error);
+    error('❌ Erreur génération email depuis notes:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la génération de l\'email',
       details: error.message 
@@ -446,7 +447,7 @@ Réponds en JSON strict sans markdown:
 });
 // POST /asefi/regenerate-email-with-tone - Régénérer email avec nouveau ton
 router.post('/regenerate-email-with-tone', authMiddleware, async (req, res) => {
-  console.log('🎨 Régénération email avec nouveau ton');
+  log('🎨 Régénération email avec nouveau ton');
   
   try {
     const { lead_info, call_notes, qualification, tone, user_signature } = req.body;
@@ -525,7 +526,7 @@ Réponds en JSON strict sans markdown:
   "suggestions": ["Suggestion 1", "Suggestion 2"]
 }`;
 
-    console.log(`🤖 Régénération avec ton: ${tone}`);
+    log(`🤖 Régénération avec ton: ${tone}`);
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -539,7 +540,7 @@ Réponds en JSON strict sans markdown:
     
     const parsed = JSON.parse(content);
 
-    console.log(`✅ Email régénéré avec ton ${tone}`);
+    log(`✅ Email régénéré avec ton ${tone}`);
 
     res.json({
       success: true,
@@ -549,7 +550,7 @@ Réponds en JSON strict sans markdown:
     });
 
   } catch (error) {
-    console.error('❌ Erreur régénération avec ton:', error);
+    error('❌ Erreur régénération avec ton:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la régénération',
       details: error.message 

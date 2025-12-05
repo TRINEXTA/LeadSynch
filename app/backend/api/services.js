@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -35,7 +36,7 @@ router.get('/', async (req, res) => {
 
     res.json({ services: rows });
   } catch (error) {
-    console.error('Erreur récupération services:', error);
+    error('Erreur récupération services:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -60,7 +61,7 @@ router.get('/:id', async (req, res) => {
 
     res.json({ service: rows[0] });
   } catch (error) {
-    console.error('Erreur récupération service:', error);
+    error('Erreur récupération service:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -116,7 +117,7 @@ router.post('/', async (req, res) => {
       service: rows[0]
     });
   } catch (error) {
-    console.error('Erreur création service:', error);
+    error('Erreur création service:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -182,7 +183,7 @@ router.patch('/:id', async (req, res) => {
       service: rows[0]
     });
   } catch (error) {
-    console.error('Erreur mise à jour service:', error);
+    error('Erreur mise à jour service:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -218,7 +219,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ message: 'Service supprimé avec succès' });
   } catch (error) {
-    console.error('Erreur suppression service:', error);
+    error('Erreur suppression service:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -258,7 +259,7 @@ router.get('/stats/summary', async (req, res) => {
       subscriptions_by_service: subscriptionsByService
     });
   } catch (error) {
-    console.error('Erreur stats services:', error);
+    error('Erreur stats services:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

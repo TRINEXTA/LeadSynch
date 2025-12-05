@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import crypto from 'crypto';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
@@ -77,7 +78,7 @@ router.post('/contracts/:id/send-for-signature', authenticateToken, async (req, 
     });
 
   } catch (error) {
-    console.error('❌ Erreur envoi signature:', error);
+    error('❌ Erreur envoi signature:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -125,7 +126,7 @@ router.get('/:token', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    error('❌ Erreur:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -176,7 +177,7 @@ router.post('/:token/request-otp', async (req, res) => {
     return res.json({ success: true, message: 'Code OTP envoyé' });
 
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    error('❌ Erreur:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -253,7 +254,7 @@ router.post('/:token/verify-otp', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    error('❌ Erreur:', error);
     return res.status(500).json({ error: error.message });
   }
 });

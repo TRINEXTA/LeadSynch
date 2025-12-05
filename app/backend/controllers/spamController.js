@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { analyzeEmail } from '../lib/spamAnalyzer.js';
 
 // Analyser un email
@@ -18,7 +19,7 @@ export const analyzeSpam = async (req, res) => {
 
     res.json(analysis);
   } catch (error) {
-    console.error('Erreur analyse spam:', error);
+    error('Erreur analyse spam:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -33,7 +34,7 @@ export const analyzeTemplate = async (req, res) => {
 
     res.json({ message: 'À implémenter' });
   } catch (error) {
-    console.error('Erreur:', error);
+    error('Erreur:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };

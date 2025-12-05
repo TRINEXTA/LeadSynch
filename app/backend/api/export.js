@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -109,7 +110,7 @@ router.get('/leads/csv', async (req, res) => {
     res.write('\uFEFF');
     res.end(csv);
   } catch (error) {
-    console.error('Erreur export leads CSV:', error);
+    error('Erreur export leads CSV:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -155,7 +156,7 @@ router.get('/campaigns/csv', async (req, res) => {
     res.write('\uFEFF');
     res.end(csv);
   } catch (error) {
-    console.error('Erreur export campagnes CSV:', error);
+    error('Erreur export campagnes CSV:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -209,7 +210,7 @@ router.get('/campaign/:id/stats/csv', async (req, res) => {
     res.write('\uFEFF');
     res.end(csv);
   } catch (error) {
-    console.error('Erreur export stats campagne:', error);
+    error('Erreur export stats campagne:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -260,7 +261,7 @@ router.post('/leads/selection/csv', async (req, res) => {
     res.write('\uFEFF');
     res.end(csv);
   } catch (error) {
-    console.error('Erreur export sélection leads:', error);
+    error('Erreur export sélection leads:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

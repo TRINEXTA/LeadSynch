@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 import { execute } from '../lib/db.js';
 
 async function createAttachmentsTable() {
   try {
-    console.log('?? Création table attachments...');
+    log('?? Création table attachments...');
 
     await execute(`
       CREATE TABLE IF NOT EXISTS attachments (
@@ -18,7 +19,7 @@ async function createAttachmentsTable() {
       )
     `);
 
-    console.log('? Table attachments créée');
+    log('? Table attachments créée');
 
     // Ajouter colonne attachment_ids aux campagnes
     await execute(`
@@ -26,7 +27,7 @@ async function createAttachmentsTable() {
       ADD COLUMN IF NOT EXISTS attachment_ids INTEGER[]
     `);
 
-    console.log('? Colonne attachment_ids ajoutée');
+    log('? Colonne attachment_ids ajoutée');
 
     // Créer table quota attachments
     await execute(`
@@ -38,12 +39,12 @@ async function createAttachmentsTable() {
       )
     `);
 
-    console.log('? Quotas attachments initialisés');
-    console.log('?? Migration terminée !');
+    log('? Quotas attachments initialisés');
+    log('?? Migration terminée !');
 
     process.exit(0);
   } catch (error) {
-    console.error('? Erreur:', error);
+    error('? Erreur:', error);
     process.exit(1);
   }
 }

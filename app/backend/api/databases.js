@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne } from '../lib/db.js';
 import { z } from 'zod';
@@ -62,7 +63,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('Lead Databases API error:', error);
+    error('Lead Databases API error:', error);
 
     if (error.name === 'ZodError') {
       return res.status(400).json({ 

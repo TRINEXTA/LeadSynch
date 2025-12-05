@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import db from '../config/db.js';
 
 /**
@@ -35,7 +36,7 @@ class LeadPoolManager {
 
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
-      console.error('Erreur recherche doublon:', error);
+      error('Erreur recherche doublon:', error);
       return null;
     }
   }
@@ -57,7 +58,7 @@ class LeadPoolManager {
       const result = await db.query(query, [databaseId, tenantId]);
       return result.rows;
     } catch (error) {
-      console.error('Erreur récupération leads:', error);
+      error('Erreur récupération leads:', error);
       throw error;
     }
   }
@@ -82,7 +83,7 @@ class LeadPoolManager {
       const result = await db.query(query, [tenantId]);
       return result.rows[0];
     } catch (error) {
-      console.error('Erreur stats pool:', error);
+      error('Erreur stats pool:', error);
       throw error;
     }
   }
@@ -129,7 +130,7 @@ class LeadPoolManager {
 
       return stats;
     } catch (error) {
-      console.error('Erreur export stats:', error);
+      error('Erreur export stats:', error);
       throw error;
     }
   }

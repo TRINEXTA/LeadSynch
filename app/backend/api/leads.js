@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Router } from "express";
 import { z } from "zod";
 import { query, queryOne, execute } from "../lib/db.js";
@@ -59,7 +60,7 @@ router.get("/count", async (req, res, next) => {
       where += ' AND industry = $3';
     }
 
-    const sql = 'SELECT COUNT(*) as count FROM leads WHERE ' + where;
+    const sql = `SELECT COUNT(*) as count FROM leads WHERE ${where}`;
     const { rows } = await query(sql, params);
     
     return res.json({ 
@@ -191,7 +192,7 @@ router.get("/today", async (req, res, next) => {
       params.push(limit);
     }
 
-    const sql = 'SELECT id, company_name, contact_name, email, phone, status, assigned_to, created_at, updated_at FROM leads WHERE ' + where + ' ORDER BY created_at DESC LIMIT ' + limitParam;
+    const sql = `SELECT id, company_name, contact_name, email, phone, status, assigned_to, created_at, updated_at FROM leads WHERE ${where} ORDER BY created_at DESC LIMIT ${limitParam}`;
 
     const { rows } = await query(sql, params);
     return res.json({ success: true, count: rows.length, leads: rows });
@@ -276,7 +277,7 @@ router.post("/", async (req, res, next) => {
       'new'
     ]);
 
-    console.log('✅ Lead créé:', lead.company_name, '- ID:', lead.id);
+    log('✅ Lead créé:', lead.company_name, '- ID:', lead.id);
 
     return res.status(201).json({ 
       success: true, 
@@ -353,7 +354,7 @@ router.put("/:id", async (req, res, next) => {
       tenantId
     ]);
 
-    console.log('✅ Lead mis à jour:', lead.company_name, '- ID:', lead.id);
+    log('✅ Lead mis à jour:', lead.company_name, '- ID:', lead.id);
 
     return res.json({ 
       success: true, 
@@ -392,7 +393,7 @@ router.delete("/:id", async (req, res, next) => {
     await execute('DELETE FROM email_tracking WHERE lead_id = $1', [leadId]);
     await execute('DELETE FROM leads WHERE id = $1 AND tenant_id = $2', [leadId, tenantId]);
 
-    console.log('🗑️ Lead supprimé:', existingLead.company_name, '- ID:', leadId);
+    log('🗑️ Lead supprimé:', existingLead.company_name, '- ID:', leadId);
 
     return res.json({ 
       success: true, 

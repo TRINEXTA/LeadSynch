@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { X, Phone, Clock, MessageSquare, Calendar, CheckCircle, Sparkles, Mail, Loader } from 'lucide-react';
 import api from '../api/axios';
@@ -80,10 +81,10 @@ export default function QualificationModal({ lead, callDuration, notes: initialN
         setGeneratedEmail(response.data.email);
         setGenerationsUsed(1);
         setShowEmailPreview(true);
-        console.log('✅ Email généré par IA:', response.data.email);
+        log('✅ Email généré par IA:', response.data.email);
       }
     } catch (error) {
-      console.error('❌ Erreur génération email:', error);
+      error('❌ Erreur génération email:', error);
       alert('Erreur lors de la génération de l\'email. Réessayez.');
     } finally {
       setGeneratingEmail(false);
@@ -116,10 +117,10 @@ export default function QualificationModal({ lead, callDuration, notes: initialN
       if (response.data.success) {
         setGeneratedEmail(response.data.email);
         setGenerationsUsed(prev => prev + 1);
-        console.log(`✅ Email régénéré avec ton: ${tone}`);
+        log(`✅ Email régénéré avec ton: ${tone}`);
       }
     } catch (error) {
-      console.error('❌ Erreur régénération email:', error);
+      error('❌ Erreur régénération email:', error);
       alert('Erreur lors de la régénération. Réessayez.');
     }
   };

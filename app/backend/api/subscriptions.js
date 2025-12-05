@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -60,7 +61,7 @@ router.get('/', async (req, res) => {
 
     res.json({ subscriptions: rows });
   } catch (error) {
-    console.error('Erreur récupération abonnements:', error);
+    error('Erreur récupération abonnements:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -113,7 +114,7 @@ router.get('/:id', async (req, res) => {
       history
     });
   } catch (error) {
-    console.error('Erreur récupération abonnement:', error);
+    error('Erreur récupération abonnement:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -194,7 +195,7 @@ router.post('/', async (req, res) => {
       subscription
     });
   } catch (error) {
-    console.error('Erreur création abonnement:', error);
+    error('Erreur création abonnement:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -292,7 +293,7 @@ router.patch('/:id', async (req, res) => {
       subscription: updatedSubscription
     });
   } catch (error) {
-    console.error('Erreur mise à jour abonnement:', error);
+    error('Erreur mise à jour abonnement:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -313,7 +314,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ message: 'Abonnement supprimé avec succès' });
   } catch (error) {
-    console.error('Erreur suppression abonnement:', error);
+    error('Erreur suppression abonnement:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -390,7 +391,7 @@ router.get('/stats/summary', async (req, res) => {
       upcoming_renewals: upcomingRenewals
     });
   } catch (error) {
-    console.error('Erreur stats abonnements:', error);
+    error('Erreur stats abonnements:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

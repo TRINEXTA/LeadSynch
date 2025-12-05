@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -5,13 +6,13 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  console.error('❌ ERREUR CRITIQUE : JWT_SECRET non configurée dans les variables d\'environnement');
-  console.error('Le serveur ne peut pas démarrer sans JWT_SECRET pour sécuriser les tokens');
+  error('❌ ERREUR CRITIQUE : JWT_SECRET non configurée dans les variables d\'environnement');
+  error('Le serveur ne peut pas démarrer sans JWT_SECRET pour sécuriser les tokens');
   process.exit(1); // Arrêt immédiat du serveur
 }
 
 if (JWT_SECRET.length < 32) {
-  console.warn('⚠️ ATTENTION : JWT_SECRET trop courte (minimum 32 caractères recommandé)');
+  warn('⚠️ ATTENTION : JWT_SECRET trop courte (minimum 32 caractères recommandé)');
 }
 
 export async function hashPassword(password) {

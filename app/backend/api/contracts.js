@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
@@ -308,9 +309,9 @@ export default async function handler(req, res) {
               htmlBody,
               fromName: providerName
             });
-            console.log(`📧 [CONTRACT] Email de signature envoyé à ${lead.email} pour contrat ${reference}`);
+            log(`📧 [CONTRACT] Email de signature envoyé à ${lead.email} pour contrat ${reference}`);
           } catch (emailError) {
-            console.error(`❌ [CONTRACT] Erreur envoi email:`, emailError);
+            error(`❌ [CONTRACT] Erreur envoi email:`, emailError);
             // Don't fail the request, just log the error
           }
         }
@@ -471,9 +472,9 @@ export default async function handler(req, res) {
               htmlBody,
               fromName: providerName
             });
-            console.log(`📧 [CONTRACT] Email de signature envoyé à ${lead.email} pour contrat ${contract.reference}`);
+            log(`📧 [CONTRACT] Email de signature envoyé à ${lead.email} pour contrat ${contract.reference}`);
           } catch (emailError) {
-            console.error(`❌ [CONTRACT] Erreur envoi email:`, emailError);
+            error(`❌ [CONTRACT] Erreur envoi email:`, emailError);
           }
         }
 
@@ -521,7 +522,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('Error in contracts API:', error);
+    error('Error in contracts API:', error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({

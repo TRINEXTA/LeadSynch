@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { query } from '../lib/db.js';
@@ -14,7 +15,7 @@ router.post('/count-multi', async (req, res) => {
       return res.json({ success: true, count: 0 });
     }
 
-    console.log('📊 Comptage multi avec filtres:', JSON.stringify(filters));
+    log('📊 Comptage multi avec filtres:', JSON.stringify(filters));
 
     // D'abord récupérer les bases de données avec leur segmentation
     const dbIds = filters.map(f => f.database_id).filter(Boolean);
@@ -28,7 +29,7 @@ router.post('/count-multi', async (req, res) => {
       [tenantId, ...dbIds]
     );
 
-    console.log('📊 Bases trouvées:', databases.length);
+    log('📊 Bases trouvées:', databases.length);
 
     // Créer un map des bases par ID
     const dbMap = {};
@@ -63,7 +64,7 @@ router.post('/count-multi', async (req, res) => {
 
     // Si on a des données de segmentation, les utiliser
     if (hasSegmentation && totalFromSegmentation > 0) {
-      console.log('✅ Comptage via segmentation:', totalFromSegmentation);
+      log('✅ Comptage via segmentation:', totalFromSegmentation);
       return res.json({ success: true, count: totalFromSegmentation });
     }
 
@@ -103,17 +104,17 @@ router.post('/count-multi', async (req, res) => {
         AND (${whereOr})
     `;
 
-    console.log('🔍 SQL:', sql);
+    log('🔍 SQL:', sql);
     const { rows } = await query(sql, params);
 
-    console.log('✅ Comptage via leads table:', rows[0]?.count);
+    log('✅ Comptage via leads table:', rows[0]?.count);
 
     return res.json({
       success: true,
       count: rows[0]?.count ?? 0
     });
   } catch (err) {
-    console.error('❌ Erreur count multi:', err);
+    error('❌ Erreur count multi:', err);
     return res.status(500).json({ error: err.message });
   }
 });

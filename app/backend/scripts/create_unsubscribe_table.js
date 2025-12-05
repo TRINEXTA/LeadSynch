@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import db from '../lib/db.js';
 
 async function createUnsubscribeTable() {
   try {
-    console.log('🔄 Création de la table email_unsubscribes...');
+    log('🔄 Création de la table email_unsubscribes...');
     
     await db.query(`
       CREATE TABLE IF NOT EXISTS email_unsubscribes (
@@ -17,14 +18,14 @@ async function createUnsubscribeTable() {
       )
     `);
     
-    console.log('✅ Table email_unsubscribes créée !');
+    log('✅ Table email_unsubscribes créée !');
 
     await db.query(`CREATE INDEX IF NOT EXISTS idx_unsubscribe_lead ON email_unsubscribes(lead_id)`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_unsubscribe_email ON email_unsubscribes(email)`);
     
-    console.log('✅ Index créés !');
+    log('✅ Index créés !');
 
-    console.log('🔄 Ajout colonne unsubscribed dans leads...');
+    log('🔄 Ajout colonne unsubscribed dans leads...');
     
     await db.query(`
       ALTER TABLE leads 
@@ -36,12 +37,12 @@ async function createUnsubscribeTable() {
       ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMP
     `);
     
-    console.log('✅ Colonnes ajoutées !');
-    console.log('🎉 Migration terminée !');
+    log('✅ Colonnes ajoutées !');
+    log('🎉 Migration terminée !');
     
     process.exit(0);
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
+    error('❌ Erreur:', error.message);
     process.exit(1);
   }
 }

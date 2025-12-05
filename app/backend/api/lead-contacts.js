@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -23,7 +24,7 @@ router.get('/:leadId/contacts', authMiddleware, async (req, res) => {
       contacts: result.rows
     });
   } catch (error) {
-    console.error('❌ Erreur GET contacts:', error);
+    error('❌ Erreur GET contacts:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -88,14 +89,14 @@ router.post('/:leadId/contacts', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Contact ${first_name || ''} ${last_name} ajouté`, user_id]
     );
 
-    console.log(`✅ Contact créé pour lead ${leadId}`);
+    log(`✅ Contact créé pour lead ${leadId}`);
 
     res.json({
       success: true,
       contact: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur POST contact:', error);
+    error('❌ Erreur POST contact:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -157,14 +158,14 @@ router.put('/:leadId/contacts/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Contact ${first_name || ''} ${last_name} modifié`, user_id]
     );
 
-    console.log(`✅ Contact ${id} modifié`);
+    log(`✅ Contact ${id} modifié`);
 
     res.json({
       success: true,
       contact: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PUT contact:', error);
+    error('❌ Erreur PUT contact:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -200,14 +201,14 @@ router.delete('/:leadId/contacts/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Contact ${contact.first_name || ''} ${contact.last_name} supprimé`, user_id]
     );
 
-    console.log(`✅ Contact ${id} supprimé`);
+    log(`✅ Contact ${id} supprimé`);
 
     res.json({
       success: true,
       message: 'Contact supprimé'
     });
   } catch (error) {
-    console.error('❌ Erreur DELETE contact:', error);
+    error('❌ Erreur DELETE contact:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -234,14 +235,14 @@ router.patch('/:leadId/contacts/:id/set-primary', authMiddleware, async (req, re
       });
     }
 
-    console.log(`✅ Contact ${id} défini comme principal`);
+    log(`✅ Contact ${id} défini comme principal`);
 
     res.json({
       success: true,
       contact: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PATCH set-primary:', error);
+    error('❌ Erreur PATCH set-primary:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
