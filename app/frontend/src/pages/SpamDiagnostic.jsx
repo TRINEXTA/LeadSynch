@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { log, error, warn } from "./../lib/logger.js";
+=======
+import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 ﻿import React, { useState } from 'react';
 import { Shield, AlertTriangle, CheckCircle, TrendingUp, Mail, Zap, AlertCircle } from 'lucide-react';
 import api from '../api/axios';

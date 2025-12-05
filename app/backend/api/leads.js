@@ -61,7 +61,11 @@ router.get("/count", async (req, res, next) => {
     }
 
     const sql = `SELECT COUNT(*) as count FROM leads WHERE ${where}`;
+<<<<<<< HEAD
     const { rows } = await resolve('db').query(sql, params);
+=======
+    const { rows } = await query(sql, params);
+>>>>>>> origin/main
     
     return res.json({ 
       success: true, 

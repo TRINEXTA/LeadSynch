@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { log, error, warn } from "./lib/logger.js";
+=======
+import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';

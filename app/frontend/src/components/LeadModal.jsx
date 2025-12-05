@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { log, error, warn } from "./../lib/logger.js";
+=======
+import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, Building, User, Mail, Phone, MapPin, Globe, DollarSign, Tag } from 'lucide-react';
 import LeadHistoryPanel from "./LeadHistoryPanel";

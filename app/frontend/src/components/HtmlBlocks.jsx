@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { log, error, warn } from "./../lib/logger.js";
+=======
+import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 ﻿import React, { useState } from 'react';
 import { Code, Mail, MousePointer, Type, Image as ImageIcon, Layout } from 'lucide-react';
 
