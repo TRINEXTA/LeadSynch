@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'

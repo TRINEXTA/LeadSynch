@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 
 const router = express.Router();
@@ -14,7 +15,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    console.log(`🔍 Vérification SIRET: ${siret}`);
+    log(`🔍 Vérification SIRET: ${siret}`);
 
     // Appel à l'API Recherche Entreprises (Gouvernement français - GRATUITE)
     const response = await fetch(
@@ -29,7 +30,7 @@ router.post('/', async (req, res) => {
     );
 
     if (!response.ok) {
-      console.error(`❌ Erreur API: ${response.status}`);
+      error(`❌ Erreur API: ${response.status}`);
       return res.status(404).json({ 
         valid: false,
         error: 'Impossible de vérifier le SIRET. Service temporairement indisponible.'
@@ -40,7 +41,7 @@ router.post('/', async (req, res) => {
     
     // Vérifier si des résultats ont été trouvés
     if (!data.results || data.results.length === 0) {
-      console.log(`❌ SIRET non trouvé: ${siret}`);
+      log(`❌ SIRET non trouvé: ${siret}`);
       return res.status(404).json({ 
         valid: false,
         error: 'SIRET non trouvé dans la base Sirene. Vérifiez le numéro saisi.'
@@ -57,7 +58,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    console.log(`✅ SIRET validé: ${entreprise.nom_complet || entreprise.nom_raison_sociale}`);
+    log(`✅ SIRET validé: ${entreprise.nom_complet || entreprise.nom_raison_sociale}`);
 
     // Retourner les données de l'entreprise
     return res.json({
@@ -73,7 +74,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur vérification SIRET:', error);
+    error('❌ Erreur vérification SIRET:', error);
     return res.status(500).json({ 
       valid: false,
       error: 'Erreur serveur lors de la vérification du SIRET.',

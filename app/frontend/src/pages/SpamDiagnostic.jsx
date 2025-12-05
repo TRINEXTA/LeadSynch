@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState } from 'react';
 import { Shield, AlertTriangle, CheckCircle, TrendingUp, Mail, Zap, AlertCircle } from 'lucide-react';
 import api from '../api/axios';
@@ -23,7 +24,7 @@ export default function SpamDiagnostic() {
       const response = await api.post('/analyze-spam', formData);
       setAnalysis(response.data);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('❌ Erreur lors de l\'analyse');
     } finally {
       setAnalyzing(false);

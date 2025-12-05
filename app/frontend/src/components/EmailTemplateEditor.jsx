@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Eye, Code, Image as ImageIcon, Save, Sparkles, Type, Mail, ChevronDown } from 'lucide-react';
 import DOMPurify from 'dompurify';

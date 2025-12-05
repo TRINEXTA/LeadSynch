@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
@@ -52,7 +53,7 @@ async function scrapeEmailsFromWebsite(url) {
       cleanUrl = 'https://' + cleanUrl;
     }
 
-    console.log(`🔍 Scraping emails sur: ${cleanUrl}`);
+    log(`🔍 Scraping emails sur: ${cleanUrl}`);
 
     const response = await axios.get(cleanUrl, {
       timeout: 5000,
@@ -107,11 +108,11 @@ async function scrapeEmailsFromWebsite(url) {
     });
 
     const foundEmails = Array.from(emails);
-    console.log(`📧 ${foundEmails.length} emails trouvés: ${foundEmails.join(', ')}`);
+    log(`📧 ${foundEmails.length} emails trouvés: ${foundEmails.join(', ')}`);
     return foundEmails;
 
   } catch (error) {
-    console.log(`❌ Erreur scraping ${url}:`, error.message);
+    log(`❌ Erreur scraping ${url}:`, error.message);
     return [];
   }
 }
@@ -136,7 +137,7 @@ function generateCommonEmails(companyName, website) {
       `reception@${domain}`
     ];
 
-    console.log(`💡 Emails générés pour ${domain}:`, patterns);
+    log(`💡 Emails générés pour ${domain}:`, patterns);
     return patterns;
 
   } catch (error) {
@@ -162,12 +163,12 @@ async function findEmailWithHunter(domain) {
 
     if (response.data.data.emails && response.data.data.emails.length > 0) {
       const email = response.data.data.emails[0].value;
-      console.log(`🎯 Hunter.io trouvé: ${email}`);
+      log(`🎯 Hunter.io trouvé: ${email}`);
       return email;
     }
 
   } catch (error) {
-    console.log(`❌ Hunter.io erreur:`, error.message);
+    log(`❌ Hunter.io erreur:`, error.message);
   }
 
   return null;
@@ -222,7 +223,7 @@ async function handler(req, res) {
 
       const { sector, city, radius, quantity } = validatedData;
 
-      console.log(`🔍 Recherche intelligente: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
+      log(`🔍 Recherche intelligente: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 
       // 1. VÉRIFIER LES CRÉDITS DISPONIBLES
       const creditCheck = await queryAll(
@@ -244,7 +245,7 @@ async function handler(req, res) {
       }
 
       const creditsAvailable = creditCheck[0].credits_remaining;
-      console.log(`💳 Crédits disponibles: ${creditsAvailable}`);
+      log(`💳 Crédits disponibles: ${creditsAvailable}`);
 
       if (creditsAvailable < quantity) {
         return res.status(402).json({
@@ -267,8 +268,8 @@ async function handler(req, res) {
       const foundInDatabase = existingLeads.length;
       const missingCount = quantity - foundInDatabase;
 
-      console.log(`✅ ${foundInDatabase} leads trouvés en base (0.10€/lead)`);
-      console.log(`🔍 ${missingCount} leads manquants, recherche Google Maps (0.10€/lead)`);
+      log(`✅ ${foundInDatabase} leads trouvés en base (0.10€/lead)`);
+      log(`🔍 ${missingCount} leads manquants, recherche Google Maps (0.10€/lead)`);
 
       let newLeads = [];
       let googleLeadsGenerated = 0;
@@ -290,13 +291,13 @@ async function handler(req, res) {
           );
         }
 
-        console.log(`💰 ${foundInDatabase} crédits consommés (BDD): ${dbCost.toFixed(2)}€`);
+        log(`💰 ${foundInDatabase} crédits consommés (BDD): ${dbCost.toFixed(2)}€`);
       }
 
       // 3. GÉNÉRER DEPUIS GOOGLE MAPS API (0.10€) SI NÉCESSAIRE
       if (missingCount > 0) {
         if (!GOOGLE_API_KEY) {
-          console.log(`⚠️ Pas de clé Google Maps API configurée, seulement ${foundInDatabase} leads retournés`);
+          log(`⚠️ Pas de clé Google Maps API configurée, seulement ${foundInDatabase} leads retournés`);
         } else {
           const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
 
@@ -338,12 +339,12 @@ async function handler(req, res) {
                   const details = detailsResponse.data.result;
 
                   // 🔥 ENRICHIR AVEC LES EMAILS
-                  console.log(`📧 Recherche emails pour: ${details.name}`);
+                  log(`📧 Recherche emails pour: ${details.name}`);
                   const emails = await enrichLeadWithEmail(details.name, details.website);
                   const primaryEmail = emails[0] || null;
                   const allEmails = emails.join(', ');
 
-                  console.log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
+                  log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
 
                   const newLead = await execute(
                     `INSERT INTO global_leads
@@ -384,15 +385,15 @@ async function handler(req, res) {
                   creditsConsumed++;
                   totalCost += 0.10;
 
-                  console.log(`💰 1 crédit consommé (Google Maps): 0.10€`);
+                  log(`💰 1 crédit consommé (Google Maps): 0.10€`);
 
                 } catch (detailsError) {
-                  console.error(`Erreur détails:`, detailsError.message);
+                  error(`Erreur détails:`, detailsError.message);
                 }
               }
 
             } catch (searchError) {
-              console.error(`Erreur recherche:`, searchError.message);
+              error(`Erreur recherche:`, searchError.message);
             }
           }
         }
@@ -409,7 +410,7 @@ async function handler(req, res) {
           [creditsConsumed, tenant_id]
         );
 
-        console.log(`💳 Total crédits consommés: ${creditsConsumed} (${totalCost.toFixed(2)}€)`);
+        log(`💳 Total crédits consommés: ${creditsConsumed} (${totalCost.toFixed(2)}€)`);
       }
 
       const totalLeads = [...existingLeads, ...newLeads];
@@ -430,7 +431,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Generate leads error:', error);
+    error('Generate leads error:', error);
     return res.status(500).json({ 
       error: 'Server error', 
       details: error.message 

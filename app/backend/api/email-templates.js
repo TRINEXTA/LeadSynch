@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import express from 'express';
 import { z } from 'zod';
 import pkg from 'pg';
@@ -30,7 +31,7 @@ async function getTemplatesHandler(req, res) {
     );
     res.json({ templates: result.rows });
   } catch (error) {
-    console.error('Erreur GET templates:', error);
+    error('Erreur GET templates:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 }
@@ -51,7 +52,7 @@ async function getTemplateByIdHandler(req, res) {
     
     res.json({ success: true, template: result.rows[0] });
   } catch (error) {
-    console.error('Erreur GET template by ID:', error);
+    error('Erreur GET template by ID:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 }
@@ -80,7 +81,7 @@ async function createTemplateHandler(req, res) {
     );
     res.status(201).json({ message: 'Template créé', template: result.rows[0] });
   } catch (error) {
-    console.error('Erreur POST template:', error);
+    error('Erreur POST template:', error);
     res.status(500).json({ error: 'Erreur création' });
   }
 }
@@ -98,7 +99,7 @@ async function deleteTemplateHandler(req, res) {
     }
     res.json({ message: 'Template supprimé' });
   } catch (error) {
-    console.error('Erreur DELETE:', error);
+    error('Erreur DELETE:', error);
     res.status(500).json({ error: 'Erreur suppression' });
   }
 }
@@ -142,7 +143,7 @@ async function updateTemplateHandler(req, res) {
 
     res.json({ message: 'Template mis à jour', template: result.rows[0] });
   } catch (error) {
-    console.error('Erreur PUT template:', error);
+    error('Erreur PUT template:', error);
     res.status(500).json({ error: 'Erreur mise à jour' });
   }
 }

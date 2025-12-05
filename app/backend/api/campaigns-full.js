@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 
@@ -29,7 +30,7 @@ async function handler(req, res) {
           ORDER BY c.created_at DESC`,
           [tenant_id]
         );
-        console.log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
+        log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
       }
       // Manager ou commercial : voir uniquement les campagnes auxquelles ils sont assignés
       else {
@@ -48,7 +49,7 @@ async function handler(req, res) {
           ORDER BY c.created_at DESC`,
           [tenant_id, user_id]
         );
-        console.log(`✅ ${userRole} ${req.user.email} - campagnes assignées: ${campaigns.length}`);
+        log(`✅ ${userRole} ${req.user.email} - campagnes assignées: ${campaigns.length}`);
       }
 
       return res.json({
@@ -127,7 +128,7 @@ async function handler(req, res) {
             leadIndex += leadsPerUser;
           }
 
-          console.log(`✅ ${leads.length} leads distribués à ${assigned_users.length} commerciaux`);
+          log(`✅ ${leads.length} leads distribués à ${assigned_users.length} commerciaux`);
         }
       }
 
@@ -293,7 +294,7 @@ async function handler(req, res) {
         [campaignId]
       );
 
-      console.log(`✅ Campagne ${campaignId} supprimée`);
+      log(`✅ Campagne ${campaignId} supprimée`);
 
       return res.json({ 
         success: true, 
@@ -304,7 +305,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Campaigns error:', error);
+    error('Campaigns error:', error);
     return res.status(500).json({ 
       error: 'Server error',
       details: error.message 

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Phone, MessageSquare, Send, ArrowRight, ArrowLeft, Database, Users, Calendar, Settings, Paperclip, X, Eye, TestTube, Check, Target, Clock, Zap, AlertCircle, Plus, Edit } from 'lucide-react';
@@ -124,7 +125,7 @@ export default function CampaignsManager() {
       setStep(1);
       
     } catch (error) {
-      console.error('Erreur chargement campagne:', error);
+      error('Erreur chargement campagne:', error);
       toast.error('Erreur lors du chargement de la campagne');
       navigate('/campaigns');
     } finally {
@@ -145,7 +146,7 @@ export default function CampaignsManager() {
       const response = await api.get('/lead-databases');
       setDatabases(response.data.databases || []);
     } catch (error) {
-      console.error('Erreur databases:', error);
+      error('Erreur databases:', error);
     }
   };
 
@@ -154,21 +155,21 @@ export default function CampaignsManager() {
       const response = await api.get('/email-templates');
       setTemplates(response.data.templates || []);
     } catch (error) {
-      console.error('Erreur templates:', error);
+      error('Erreur templates:', error);
     }
   };
 
   const loadUsers = async () => {
     try {
-      console.log('🔍 Loading users...');
+      log('🔍 Loading users...');
       const response = await api.get('/users');
-      console.log('✅ Users response:', response.data);
-      console.log('👥 Users array:', response.data.users);
-      console.log('📊 Users count:', response.data.users?.length);
+      log('✅ Users response:', response.data);
+      log('👥 Users array:', response.data.users);
+      log('📊 Users count:', response.data.users?.length);
       setUsers(response.data.users || []);
     } catch (error) {
-      console.error('❌ Erreur users:', error);
-      console.error('Error details:', error.response?.data);
+      error('❌ Erreur users:', error);
+      error('Error details:', error.response?.data);
     }
   };
 
@@ -223,19 +224,19 @@ const calculateLeadsCount = async () => {
       };
     });
 
-    console.log('📊 Comptage leads avec filtres:', filters);
+    log('📊 Comptage leads avec filtres:', filters);
 
     const response = await api.post('/leads-count-multi/count-multi', { filters });
     
-    console.log('✅ Réponse count:', response.data);
+    log('✅ Réponse count:', response.data);
     
     const totalCount = response.data.count || 0;  // ✅ Utilise "count" comme le backend envoie
     setLeadsCount(totalCount);
     
-    console.log('🎯 Total leads:', totalCount);
+    log('🎯 Total leads:', totalCount);
     
   } catch (error) {
-    console.error('❌ Erreur comptage leads:', error);
+    error('❌ Erreur comptage leads:', error);
     setLeadsCount(0);
   } finally {
     setLoadingLeads(false);
@@ -289,7 +290,7 @@ const calculateLeadsCount = async () => {
       setAttachments([...attachments, newAttachment]);
       toast.success('Fichier ajouté avec succès !');
     } catch (error) {
-      console.error('Erreur upload:', error);
+      error('Erreur upload:', error);
       toast.error('Erreur lors de l\'upload du fichier');
     } finally {
       setUploadingFile(false);
@@ -315,7 +316,7 @@ const calculateLeadsCount = async () => {
       setPreviewHtml(template.html_body || '<p>Aucun contenu</p>');
       setShowPreview(true);
     } catch (error) {
-      console.error('Erreur preview:', error);
+      error('Erreur preview:', error);
       toast.error('Erreur lors de la prévisualisation');
     }
   };

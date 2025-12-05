@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from "react";
 import toast from 'react-hot-toast';
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,7 +32,7 @@ export default function Leads() {
       const response = await api.get('/leads');
       setLeads(response.data.leads || []);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       setLeads([]);
     } finally {
       setLoading(false);
@@ -53,7 +54,7 @@ export default function Leads() {
         toast.success('Lead mis à jour avec succès');
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur lors de la mise à jour');
     }
   };
@@ -67,7 +68,7 @@ export default function Leads() {
         setShowDetailsModal(false);
         resolve();
       } catch (error) {
-        console.error('Erreur:', error);
+        error('Erreur:', error);
         reject(error);
       }
     });

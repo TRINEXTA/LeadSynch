@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { queryOne, execute } from './db.js';
 
 const QUOTA_LIMITS = {
@@ -71,7 +72,7 @@ export async function checkQuota(tenant_id, quota_type) {
     };
 
   } catch (error) {
-    console.error('Quota check error:', error);
+    error('Quota check error:', error);
     return {
       allowed: false,
       remaining: 0,
@@ -95,7 +96,7 @@ export async function incrementQuota(tenant_id, quota_type, amount = 1) {
     );
     return true;
   } catch (error) {
-    console.error('Quota increment error:', error);
+    error('Quota increment error:', error);
     return false;
   }
 }

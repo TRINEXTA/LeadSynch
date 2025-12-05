@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
@@ -65,7 +66,7 @@ Réponds UNIQUEMENT avec un JSON valide (pas de markdown):
 }`;
 
   try {
-    console.log('🤖 Génération du template avec Claude...');
+    log('🤖 Génération du template avec Claude...');
     
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -91,11 +92,11 @@ Réponds UNIQUEMENT avec un JSON valide (pas de markdown):
         result = JSON.parse(responseText);
       }
     } catch (parseError) {
-      console.error('Erreur parsing JSON:', parseError);
+      error('Erreur parsing JSON:', parseError);
       throw new Error('Format de réponse invalide de l\'IA');
     }
 
-    console.log('✅ Template généré avec succès !');
+    log('✅ Template généré avec succès !');
     
     return {
       subject: result.subject,
@@ -104,7 +105,7 @@ Réponds UNIQUEMENT avec un JSON valide (pas de markdown):
       generated_at: new Date().toISOString()
     };
   } catch (error) {
-    console.error('❌ Erreur génération IA:', error);
+    error('❌ Erreur génération IA:', error);
     throw error;
   }
 }
@@ -146,7 +147,7 @@ Réponds avec un JSON:
 
     return result;
   } catch (error) {
-    console.error('❌ Erreur amélioration:', error);
+    error('❌ Erreur amélioration:', error);
     throw error;
   }
 }

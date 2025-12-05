@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -23,7 +24,7 @@ router.get('/:leadId/phones', authMiddleware, async (req, res) => {
       phones: result.rows
     });
   } catch (error) {
-    console.error('❌ Erreur GET phones:', error);
+    error('❌ Erreur GET phones:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -84,14 +85,14 @@ router.post('/:leadId/phones', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Téléphone ${phone_number} (${label || phone_type}) ajouté`, user_id]
     );
 
-    console.log(`✅ Téléphone ajouté pour lead ${leadId}`);
+    log(`✅ Téléphone ajouté pour lead ${leadId}`);
 
     res.json({
       success: true,
       phone: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur POST phone:', error);
+    error('❌ Erreur POST phone:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -147,14 +148,14 @@ router.put('/:leadId/phones/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Téléphone ${phone_number} modifié`, user_id]
     );
 
-    console.log(`✅ Téléphone ${id} modifié`);
+    log(`✅ Téléphone ${id} modifié`);
 
     res.json({
       success: true,
       phone: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PUT phone:', error);
+    error('❌ Erreur PUT phone:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -190,14 +191,14 @@ router.delete('/:leadId/phones/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Téléphone ${phone.phone_number} supprimé`, user_id]
     );
 
-    console.log(`✅ Téléphone ${id} supprimé`);
+    log(`✅ Téléphone ${id} supprimé`);
 
     res.json({
       success: true,
       message: 'Téléphone supprimé'
     });
   } catch (error) {
-    console.error('❌ Erreur DELETE phone:', error);
+    error('❌ Erreur DELETE phone:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -224,14 +225,14 @@ router.patch('/:leadId/phones/:id/set-primary', authMiddleware, async (req, res)
       });
     }
 
-    console.log(`✅ Téléphone ${id} défini comme principal`);
+    log(`✅ Téléphone ${id} défini comme principal`);
 
     res.json({
       success: true,
       phone: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PATCH set-primary:', error);
+    error('❌ Erreur PATCH set-primary:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 // ================================================================
 // Script : Fix migration - Supprime les anciennes tables
 // Usage : node fix-migration.js
@@ -20,9 +21,9 @@ async function fixMigration() {
 
   try {
     await client.connect();
-    console.log('✅ Connecté à Neon');
+    log('✅ Connecté à Neon');
 
-    console.log('\n⚠️  Suppression des anciennes tables pour migration propre...\n');
+    log('\n⚠️  Suppression des anciennes tables pour migration propre...\n');
 
     // Supprimer dans l'ordre inverse des dépendances
     const tables = [
@@ -42,17 +43,17 @@ async function fixMigration() {
     for (const table of tables) {
       try {
         await client.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
-        console.log(`✅ Table ${table} supprimée (si elle existait)`);
+        log(`✅ Table ${table} supprimée (si elle existait)`);
       } catch (error) {
-        console.log(`⚠️  Erreur suppression ${table}:`, error.message);
+        log(`⚠️  Erreur suppression ${table}:`, error.message);
       }
     }
 
-    console.log('\n✅ Nettoyage terminé ! Vous pouvez maintenant relancer:');
-    console.log('   npm run migrate\n');
+    log('\n✅ Nettoyage terminé ! Vous pouvez maintenant relancer:');
+    log('   npm run migrate\n');
 
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
+    error('❌ Erreur:', error.message);
     process.exit(1);
   } finally {
     await client.end();

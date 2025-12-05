@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿export class AppError extends Error {
   constructor(message, statusCode, errorCode, details = {}) {
     super(message);

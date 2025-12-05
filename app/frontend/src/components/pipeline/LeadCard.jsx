@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, CheckCircle, HelpCircle, UserCog, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

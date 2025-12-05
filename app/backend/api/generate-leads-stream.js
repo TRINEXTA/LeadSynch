@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 import { Client } from '@googlemaps/google-maps-services-js';
@@ -10,8 +11,8 @@ const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API
 
 // Validation : la clé API doit être définie
 if (!GOOGLE_API_KEY) {
-  console.error('❌ GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY non configurée dans les variables d\'environnement');
-  console.error('💡 Veuillez ajouter GOOGLE_MAPS_API_KEY=votre_clé dans le fichier .env');
+  error('❌ GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY non configurée dans les variables d\'environnement');
+  error('💡 Veuillez ajouter GOOGLE_MAPS_API_KEY=votre_clé dans le fichier .env');
 }
 
 const activeSearches = new Map();
@@ -52,7 +53,7 @@ async function scrapeEmailsFromWebsite(url) {
       cleanUrl = 'https://' + cleanUrl;
     }
 
-    console.log(`🔍 Scraping emails sur: ${cleanUrl}`);
+    log(`🔍 Scraping emails sur: ${cleanUrl}`);
 
     const response = await axios.get(cleanUrl, {
       timeout: 5000,
@@ -107,11 +108,11 @@ async function scrapeEmailsFromWebsite(url) {
     });
 
     const foundEmails = Array.from(emails);
-    console.log(`📧 ${foundEmails.length} emails trouvés: ${foundEmails.join(', ')}`);
+    log(`📧 ${foundEmails.length} emails trouvés: ${foundEmails.join(', ')}`);
     return foundEmails;
 
   } catch (error) {
-    console.log(`❌ Erreur scraping ${url}:`, error.message);
+    log(`❌ Erreur scraping ${url}:`, error.message);
     return [];
   }
 }
@@ -136,7 +137,7 @@ function generateCommonEmails(companyName, website) {
       `reception@${domain}`
     ];
 
-    console.log(`💡 Emails générés pour ${domain}:`, patterns);
+    log(`💡 Emails générés pour ${domain}:`, patterns);
     return patterns;
 
   } catch (error) {
@@ -162,12 +163,12 @@ async function findEmailWithHunter(domain) {
 
     if (response.data.data.emails && response.data.data.emails.length > 0) {
       const email = response.data.data.emails[0].value;
-      console.log(`🎯 Hunter.io trouvé: ${email}`);
+      log(`🎯 Hunter.io trouvé: ${email}`);
       return email;
     }
 
   } catch (error) {
-    console.log(`❌ Hunter.io erreur:`, error.message);
+    log(`❌ Hunter.io erreur:`, error.message);
   }
 
   return null;
@@ -220,7 +221,7 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'Secteur et ville requis' });
       }
 
-      console.log(`🔍 Recherche: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
+      log(`🔍 Recherche: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 
       // 1. VÉRIFIER LES QUOTAS (système basé sur tenants.plan)
       const LEGACY_PLAN_QUOTAS = {
@@ -260,7 +261,7 @@ async function handler(req, res) {
         available = Math.max(0, planQuotas.google_leads_quota - used + bonusCredits);
       }
 
-      console.log(`💳 Quota disponible: ${available === -1 ? 'illimité' : available} leads Google`);
+      log(`💳 Quota disponible: ${available === -1 ? 'illimité' : available} leads Google`);
 
       if (available !== -1 && available < quantity) {
         return res.status(403).json({
@@ -280,7 +281,7 @@ async function handler(req, res) {
       const foundCount = existingLeads.length;
       const missingCount = Math.max(0, Math.min(quantity - foundCount, available));
 
-      console.log(`✅ ${foundCount} leads en base, il manque ${missingCount}`);
+      log(`✅ ${foundCount} leads en base, il manque ${missingCount}`);
 
       let newLeads = [];
       let googleLeadsGenerated = 0;
@@ -327,12 +328,12 @@ async function handler(req, res) {
                 const details = detailsResponse.data.result;
 
                 // 🔥 ENRICHIR AVEC LES EMAILS
-                console.log(`📧 Recherche emails pour: ${details.name}`);
+                log(`📧 Recherche emails pour: ${details.name}`);
                 const emails = await enrichLeadWithEmail(details.name, details.website);
                 const primaryEmail = emails[0] || null;
                 const allEmails = emails.join(', ');
 
-                console.log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
+                log(`✅ ${emails.length} emails trouvés: ${allEmails || 'aucun'}`);
 
                 const newLead = await execute(
                   `INSERT INTO global_leads 
@@ -365,12 +366,12 @@ async function handler(req, res) {
                 googleLeadsGenerated++;
 
               } catch (detailsError) {
-                console.error(`Erreur détails:`, detailsError.message);
+                error(`Erreur détails:`, detailsError.message);
               }
             }
 
           } catch (searchError) {
-            console.error(`Erreur recherche:`, searchError.message);
+            error(`Erreur recherche:`, searchError.message);
           }
         }
       }
@@ -465,7 +466,7 @@ async function handler(req, res) {
           const bonusCredits = parseInt(creditsResult[0]?.credits || 0);
           const available = Math.max(0, planQuotas.google_leads_quota - used + bonusCredits);
 
-          console.log(`💳 Quota pour ${req.user.email}: Plan ${plan}, Utilisé ${used}/${planQuotas.google_leads_quota}, Bonus ${bonusCredits}, Disponible ${available}`);
+          log(`💳 Quota pour ${req.user.email}: Plan ${plan}, Utilisé ${used}/${planQuotas.google_leads_quota}, Bonus ${bonusCredits}, Disponible ${available}`);
 
           if (available < quantity) {
             return res.status(403).json({
@@ -479,10 +480,10 @@ async function handler(req, res) {
             });
           }
         } else {
-          console.log(`💳 Plan ${plan} avec quotas illimités pour ${req.user.email}`);
+          log(`💳 Plan ${plan} avec quotas illimités pour ${req.user.email}`);
         }
       } else {
-        console.log(`👑 Super admin ${req.user.email} - pas de limite de quota`);
+        log(`👑 Super admin ${req.user.email} - pas de limite de quota`);
       }
 
       res.setHeader('Content-Type', 'text/event-stream');
@@ -500,7 +501,7 @@ async function handler(req, res) {
         sendProgress({ type: 'start', message: 'Demarrage...' });
         sendProgress({ type: 'progress', percent: 10, message: 'Recherche en base...' });
 
-        console.log(`🔍 Recherche: sector=${sector}, city=${city}, quantity=${quantity}`);
+        log(`🔍 Recherche: sector=${sector}, city=${city}, quantity=${quantity}`);
 
         const existingLeads = await queryAll(
           `SELECT * FROM global_leads WHERE industry = $1 AND city ILIKE $2 ORDER BY last_verified_at DESC LIMIT $3`,
@@ -510,8 +511,8 @@ async function handler(req, res) {
         const foundCount = existingLeads.length;
         const missingCount = quantity - foundCount;
 
-        console.log(`📊 Résultat cache: foundCount=${foundCount}, missingCount=${missingCount}`);
-        console.log(`🔑 GOOGLE_API_KEY configurée: ${GOOGLE_API_KEY ? 'OUI (' + GOOGLE_API_KEY.substring(0, 10) + '...)' : 'NON ❌'}`);
+        log(`📊 Résultat cache: foundCount=${foundCount}, missingCount=${missingCount}`);
+        log(`🔑 GOOGLE_API_KEY configurée: ${GOOGLE_API_KEY ? 'OUI (' + GOOGLE_API_KEY.substring(0, 10) + '...)' : 'NON ❌'}`);
 
         sendProgress({ type: 'cache_results', percent: 30, found: foundCount, missing: missingCount, leads: existingLeads });
 
@@ -519,17 +520,17 @@ async function handler(req, res) {
         let generated = 0;
 
         if (missingCount > 0 && searchState.active) {
-          console.log(`🌐 Lancement recherche Google Maps (${missingCount} leads manquants)`);
+          log(`🌐 Lancement recherche Google Maps (${missingCount} leads manquants)`);
 
           if (!GOOGLE_API_KEY) {
-            console.error('❌ GOOGLE_API_KEY non configurée - impossible de chercher sur Google Maps');
+            error('❌ GOOGLE_API_KEY non configurée - impossible de chercher sur Google Maps');
             sendProgress({ type: 'error', message: 'Clé API Google Maps non configurée' });
             res.end();
             return;
           }
 
           const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
-          console.log(`📍 Types Google à rechercher: ${googleTypes.join(', ')}`);
+          log(`📍 Types Google à rechercher: ${googleTypes.join(', ')}`);
 
           for (const type of googleTypes) {
             if (!searchState.active || generated >= missingCount) break;
@@ -538,27 +539,27 @@ async function handler(req, res) {
               await new Promise(resolve => setTimeout(resolve, 500));
             }
 
-            console.log(`🔎 Recherche Google: "${type} ${city}" (rayon: ${radius}km)`);
+            log(`🔎 Recherche Google: "${type} ${city}" (rayon: ${radius}km)`);
             sendProgress({ type: 'progress', percent: 35, message: `Recherche Google Maps: ${type}...` });
 
             let googleResults = [];
             try {
-              console.log(`📡 Appel Google textSearch avec query="${type} ${city}"`);
+              log(`📡 Appel Google textSearch avec query="${type} ${city}"`);
               const response = await googleMapsClient.textSearch({
                 params: { query: `${type} ${city}`, radius: radius * 1000, key: GOOGLE_API_KEY, language: 'fr' }
               });
               googleResults = response.data.results || [];
-              console.log(`✅ Google retourne ${googleResults.length} résultats pour "${type}"`);
+              log(`✅ Google retourne ${googleResults.length} résultats pour "${type}"`);
 
               if (googleResults.length === 0) {
-                console.log(`⚠️ Aucun résultat Google pour "${type} ${city}" - essai du type suivant`);
+                log(`⚠️ Aucun résultat Google pour "${type} ${city}" - essai du type suivant`);
                 sendProgress({ type: 'progress', percent: 40, message: `Aucun résultat pour ${type}, recherche suivante...` });
               }
             } catch (googleError) {
-              console.error(`❌ Erreur Google Maps API pour "${type}":`, googleError.message);
+              error(`❌ Erreur Google Maps API pour "${type}":`, googleError.message);
               if (googleError.response?.status === 403 || googleError.message.includes('403')) {
-                console.error('❌ Google Maps 403 - Clé API invalide ou Places API non activée');
-                console.error('   Clé utilisée:', GOOGLE_API_KEY?.substring(0, 15) + '...');
+                error('❌ Google Maps 403 - Clé API invalide ou Places API non activée');
+                error('   Clé utilisée:', GOOGLE_API_KEY?.substring(0, 15) + '...');
                 sendProgress({ type: 'error', message: 'Erreur Google Maps API (403) - Vérifiez que votre clé API est valide et que l\'API Places est activée dans la Google Cloud Console' });
                 res.end();
                 return;
@@ -576,10 +577,10 @@ async function handler(req, res) {
 
               const existing = await queryAll('SELECT id FROM global_leads WHERE google_place_id = $1', [place.place_id]);
               if (existing.length > 0) {
-                console.log(`⏭️ Skip "${place.name}" - déjà en base (place_id: ${place.place_id.substring(0, 20)}...)`);
+                log(`⏭️ Skip "${place.name}" - déjà en base (place_id: ${place.place_id.substring(0, 20)}...)`);
                 continue;
               }
-              console.log(`🆕 Traitement nouveau lieu: "${place.name}"`);
+              log(`🆕 Traitement nouveau lieu: "${place.name}"`);
               sendProgress({ type: 'progress', percent: 45 + Math.floor((generated / missingCount) * 45), message: `Analyse: ${place.name}...` });
 
               try {
@@ -599,11 +600,11 @@ async function handler(req, res) {
                 generated++;
                 const percent = 30 + Math.floor((generated / missingCount) * 60);
                 const newLead = result.rows[0];
-                console.log(`✅ Lead inséré: "${newLead?.company_name}" (${generated}/${missingCount})`);
+                log(`✅ Lead inséré: "${newLead?.company_name}" (${generated}/${missingCount})`);
                 sendProgress({ type: 'new_lead', percent, generated, total: foundCount + generated, lead: newLead });
 
               } catch (error) {
-                console.error(`❌ Erreur traitement "${place.name}":`, error.message);
+                error(`❌ Erreur traitement "${place.name}":`, error.message);
                 // Continuer avec le lieu suivant
               }
             }
@@ -613,16 +614,16 @@ async function handler(req, res) {
         const totalLeads = foundCount + (missingCount > 0 ? generated : 0);
 
         if (missingCount <= 0) {
-          console.log(`✅ Tous les leads demandés (${quantity}) trouvés en cache, pas besoin de Google Maps`);
+          log(`✅ Tous les leads demandés (${quantity}) trouvés en cache, pas besoin de Google Maps`);
         } else {
-          console.log(`📈 Génération terminée: ${generated} nouveaux leads générés via Google Maps`);
+          log(`📈 Génération terminée: ${generated} nouveaux leads générés via Google Maps`);
         }
 
         // Message de fin plus informatif
         let completeMessage = `Terminé ! ${totalLeads} leads trouvés`;
         if (totalLeads === 0) {
           completeMessage = 'Aucun lead trouvé pour cette recherche. Essayez un autre secteur ou une autre ville.';
-          console.log(`⚠️ Recherche terminée sans résultats pour ${sector} à ${city}`);
+          log(`⚠️ Recherche terminée sans résultats pour ${sector} à ${city}`);
         } else if (foundCount > 0 && generated === 0) {
           completeMessage = `${foundCount} leads trouvés en cache (déjà enregistrés)`;
         } else if (foundCount === 0 && generated > 0) {
@@ -634,8 +635,8 @@ async function handler(req, res) {
         return;
 
       } catch (error) {
-        console.error('❌ ERREUR GENERATION:', error.message);
-        console.error('❌ Stack:', error.stack);
+        error('❌ ERREUR GENERATION:', error.message);
+        error('❌ Stack:', error.stack);
 
         // Identifier la source de l'erreur pour un message plus clair
         let userMessage = error.message;
@@ -643,7 +644,7 @@ async function handler(req, res) {
         if (error.message.includes('403')) {
           if (error.config?.url?.includes('maps.googleapis.com')) {
             userMessage = 'Erreur Google Maps API (403) - Vérifiez que la clé API est valide et que l\'API Places est activée';
-            console.error('❌ Google Maps API Error - Clé:', GOOGLE_API_KEY?.substring(0, 15) + '...');
+            error('❌ Google Maps API Error - Clé:', GOOGLE_API_KEY?.substring(0, 15) + '...');
           } else if (error.config?.url?.includes('hunter.io')) {
             userMessage = 'Erreur Hunter.io API (403) - Clé API invalide ou quota dépassé';
           } else {
@@ -655,7 +656,7 @@ async function handler(req, res) {
           userMessage = 'Clé API Google Maps invalide';
         }
 
-        console.error('❌ Message envoyé au frontend:', userMessage);
+        error('❌ Message envoyé au frontend:', userMessage);
         sendProgress({ type: 'error', message: userMessage });
         res.end();
         return;
@@ -687,7 +688,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Generate leads error:', error);
+    error('Generate leads error:', error);
     return res.status(500).json({ 
       error: 'Server error', 
       details: error.message 

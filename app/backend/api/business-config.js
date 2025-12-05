@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Business Configuration
  * Gestion des produits, CGV et liens de paiement pour les clients
@@ -77,7 +78,7 @@ router.get('/products', async (req, res) => {
 
     res.json({ success: true, products: rows });
   } catch (error) {
-    console.error('❌ Erreur GET products:', error);
+    error('❌ Erreur GET products:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -102,7 +103,7 @@ router.get('/products/:id', async (req, res) => {
 
     res.json({ success: true, product: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur GET product:', error);
+    error('❌ Erreur GET product:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -143,10 +144,10 @@ router.post('/products', async (req, res) => {
       ]
     );
 
-    console.log(`✅ Produit créé: ${rows[0].id}`);
+    log(`✅ Produit créé: ${rows[0].id}`);
     res.status(201).json({ success: true, product: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur POST product:', error);
+    error('❌ Erreur POST product:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
@@ -197,10 +198,10 @@ router.patch('/products/:id', async (req, res) => {
       return res.status(404).json({ error: 'Produit non trouvé' });
     }
 
-    console.log(`✅ Produit mis à jour: ${id}`);
+    log(`✅ Produit mis à jour: ${id}`);
     res.json({ success: true, product: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur PATCH product:', error);
+    error('❌ Erreur PATCH product:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
@@ -226,10 +227,10 @@ router.delete('/products/:id', async (req, res) => {
       return res.status(404).json({ error: 'Produit non trouvé' });
     }
 
-    console.log(`🗑️ Produit supprimé: ${id}`);
+    log(`🗑️ Produit supprimé: ${id}`);
     res.json({ success: true, message: 'Produit supprimé' });
   } catch (error) {
-    console.error('❌ Erreur DELETE product:', error);
+    error('❌ Erreur DELETE product:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -266,7 +267,7 @@ router.get('/legal-documents', async (req, res) => {
 
     res.json({ success: true, documents: rows });
   } catch (error) {
-    console.error('❌ Erreur GET legal-documents:', error);
+    error('❌ Erreur GET legal-documents:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -304,10 +305,10 @@ router.post('/legal-documents', async (req, res) => {
       [tenant_id, data.type, data.title, data.content, version, data.is_active, data.notes, user_id]
     );
 
-    console.log(`✅ Document légal créé: ${rows[0].id} (${data.type} v${version})`);
+    log(`✅ Document légal créé: ${rows[0].id} (${data.type} v${version})`);
     res.status(201).json({ success: true, document: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur POST legal-document:', error);
+    error('❌ Erreur POST legal-document:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
@@ -367,10 +368,10 @@ router.patch('/legal-documents/:id', async (req, res) => {
       return res.status(404).json({ error: 'Document non trouvé' });
     }
 
-    console.log(`✅ Document légal mis à jour: ${id}`);
+    log(`✅ Document légal mis à jour: ${id}`);
     res.json({ success: true, document: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur PATCH legal-document:', error);
+    error('❌ Erreur PATCH legal-document:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
@@ -396,10 +397,10 @@ router.delete('/legal-documents/:id', async (req, res) => {
       return res.status(404).json({ error: 'Document non trouvé' });
     }
 
-    console.log(`🗑️ Document légal supprimé: ${id}`);
+    log(`🗑️ Document légal supprimé: ${id}`);
     res.json({ success: true, message: 'Document supprimé' });
   } catch (error) {
-    console.error('❌ Erreur DELETE legal-document:', error);
+    error('❌ Erreur DELETE legal-document:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -430,7 +431,7 @@ router.get('/payment-links', async (req, res) => {
 
     res.json({ success: true, payment_links: rows });
   } catch (error) {
-    console.error('❌ Erreur GET payment-links:', error);
+    error('❌ Erreur GET payment-links:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -464,10 +465,10 @@ router.post('/payment-links', async (req, res) => {
       ]
     );
 
-    console.log(`✅ Lien de paiement créé: ${rows[0].id}`);
+    log(`✅ Lien de paiement créé: ${rows[0].id}`);
     res.status(201).json({ success: true, payment_link: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur POST payment-link:', error);
+    error('❌ Erreur POST payment-link:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
@@ -512,10 +513,10 @@ router.patch('/payment-links/:id', async (req, res) => {
       return res.status(404).json({ error: 'Lien de paiement non trouvé' });
     }
 
-    console.log(`✅ Lien de paiement mis à jour: ${id}`);
+    log(`✅ Lien de paiement mis à jour: ${id}`);
     res.json({ success: true, payment_link: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur PATCH payment-link:', error);
+    error('❌ Erreur PATCH payment-link:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
@@ -541,10 +542,10 @@ router.delete('/payment-links/:id', async (req, res) => {
       return res.status(404).json({ error: 'Lien de paiement non trouvé' });
     }
 
-    console.log(`🗑️ Lien de paiement supprimé: ${id}`);
+    log(`🗑️ Lien de paiement supprimé: ${id}`);
     res.json({ success: true, message: 'Lien de paiement supprimé' });
   } catch (error) {
-    console.error('❌ Erreur DELETE payment-link:', error);
+    error('❌ Erreur DELETE payment-link:', error);
     res.status(500).json({ error: error.message });
   }
 });

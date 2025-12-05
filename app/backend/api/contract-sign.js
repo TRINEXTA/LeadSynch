@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import crypto from 'crypto';
 import { sendEmail } from '../services/elasticEmail.js';
@@ -39,7 +40,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('❌ [CONTRACT-SIGN] Erreur:', error);
+    error('❌ [CONTRACT-SIGN] Erreur:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }
@@ -203,7 +204,7 @@ async function sendVerificationCode(req, res, token) {
       fromName: contract.provider_name || 'LeadSynch'
     });
 
-    console.log(`📧 Code de vérification envoyé à ${signer_email} pour contrat ${contract.reference}`);
+    log(`📧 Code de vérification envoyé à ${signer_email} pour contrat ${contract.reference}`);
 
     return res.json({
       success: true,
@@ -212,7 +213,7 @@ async function sendVerificationCode(req, res, token) {
     });
 
   } catch (error) {
-    console.error('Erreur envoi code:', error);
+    error('Erreur envoi code:', error);
     return res.status(500).json({ error: 'Erreur lors de l\'envoi du code' });
   }
 }
@@ -425,9 +426,9 @@ async function sendSignatureNotifications(contract, signerName) {
         [contract.tenant_id, contract.id, contract.commercial_email, subject, `Signé par ${contract.signer_email}`]
       );
 
-      console.log(`📧 Notification signature envoyée au commercial: ${contract.commercial_email}`);
+      log(`📧 Notification signature envoyée au commercial: ${contract.commercial_email}`);
     } catch (e) {
-      console.error('Erreur envoi notification commercial:', e);
+      error('Erreur envoi notification commercial:', e);
     }
   }
 
@@ -453,9 +454,9 @@ async function sendSignatureNotifications(contract, signerName) {
         [contract.tenant_id, contract.id, manager.email, subject, `Signé par ${contract.signer_email}`]
       );
 
-      console.log(`📧 Notification signature envoyée au manager: ${manager.email}`);
+      log(`📧 Notification signature envoyée au manager: ${manager.email}`);
     } catch (e) {
-      console.error('Erreur envoi notification manager:', e);
+      error('Erreur envoi notification manager:', e);
     }
   }
 }
@@ -493,9 +494,9 @@ async function sendSignerConfirmation(contract, signerName) {
       htmlBody,
       fromName: 'LeadSynch'
     });
-    console.log(`📧 Confirmation envoyée au signataire: ${contract.signer_email}`);
+    log(`📧 Confirmation envoyée au signataire: ${contract.signer_email}`);
   } catch (e) {
-    console.error('Erreur envoi confirmation signataire:', e);
+    error('Erreur envoi confirmation signataire:', e);
   }
 }
 

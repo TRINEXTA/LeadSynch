@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -7,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function runMigrations() {
-  console.log('🔄 Exécution des migrations...\n');
+  log('🔄 Exécution des migrations...\n');
 
   const migrations = [
     'add_tenant_owner.sql',
@@ -16,7 +17,7 @@ async function runMigrations() {
 
   for (const migration of migrations) {
     try {
-      console.log(`📄 Exécution : ${migration}`);
+      log(`📄 Exécution : ${migration}`);
       const sql = readFileSync(
         join(__dirname, '../migrations', migration),
         'utf-8'
@@ -24,15 +25,15 @@ async function runMigrations() {
 
       // Exécuter le SQL
       await db.query(sql);
-      console.log(`✅ ${migration} terminée\n`);
+      log(`✅ ${migration} terminée\n`);
     } catch (error) {
-      console.error(`❌ Erreur dans ${migration}:`, error.message);
-      console.error(error);
+      error(`❌ Erreur dans ${migration}:`, error.message);
+      error(error);
       process.exit(1);
     }
   }
 
-  console.log('✅ Toutes les migrations terminées avec succès !');
+  log('✅ Toutes les migrations terminées avec succès !');
   process.exit(0);
 }
 

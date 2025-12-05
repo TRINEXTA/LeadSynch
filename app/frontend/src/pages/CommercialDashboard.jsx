@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import {
   Target, Phone, Mail, CheckCircle, Clock, TrendingUp,
@@ -39,7 +40,7 @@ export default function CommercialDashboard() {
       setTodayLeads(leadsRes.data.leads || []);
       setStats(statsRes.data.stats || {});
     } catch (error) {
-      console.error('Erreur chargement dashboard:', error);
+      error('Erreur chargement dashboard:', error);
     } finally {
       setLoading(false);
     }

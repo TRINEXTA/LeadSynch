@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Geographic Sectors - Gestion des secteurs géographiques
  * Permet d'attribuer des commerciaux à des zones géographiques
@@ -59,7 +60,7 @@ router.get('/', authMiddleware, async (req, res) => {
       sectors
     });
   } catch (error) {
-    console.error('❌ Erreur liste secteurs:', error);
+    error('❌ Erreur liste secteurs:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -99,7 +100,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       sector
     });
   } catch (error) {
-    console.error('❌ Erreur get secteur:', error);
+    error('❌ Erreur get secteur:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -173,14 +174,14 @@ router.post('/', authMiddleware, async (req, res) => {
       ]
     );
 
-    console.log(`✅ Secteur créé: ${sector.name} (${sector.code})`);
+    log(`✅ Secteur créé: ${sector.name} (${sector.code})`);
 
     res.status(201).json({
       success: true,
       sector
     });
   } catch (error) {
-    console.error('❌ Erreur création secteur:', error);
+    error('❌ Erreur création secteur:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -234,14 +235,14 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Secteur introuvable' });
     }
 
-    console.log(`✅ Secteur mis à jour: ${sector.name}`);
+    log(`✅ Secteur mis à jour: ${sector.name}`);
 
     res.json({
       success: true,
       sector
     });
   } catch (error) {
-    console.error('❌ Erreur update secteur:', error);
+    error('❌ Erreur update secteur:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -280,11 +281,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       [id, tenant_id]
     );
 
-    console.log(`✅ Secteur supprimé: ${id}`);
+    log(`✅ Secteur supprimé: ${id}`);
 
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ Erreur suppression secteur:', error);
+    error('❌ Erreur suppression secteur:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -368,7 +369,7 @@ router.post('/:sector_id/assign', authMiddleware, async (req, res) => {
       [uuidv4(), tenant_id, user_id, sector_id, assignment_role, assigned_by_id, is_primary, notes]
     );
 
-    console.log(`✅ ${user.first_name} ${user.last_name} assigné(e) au secteur ${sector.name}`);
+    log(`✅ ${user.first_name} ${user.last_name} assigné(e) au secteur ${sector.name}`);
 
     res.status(201).json({
       success: true,
@@ -376,7 +377,7 @@ router.post('/:sector_id/assign', authMiddleware, async (req, res) => {
       message: `${user.first_name} ${user.last_name} assigné(e) au secteur ${sector.name}`
     });
   } catch (error) {
-    console.error('❌ Erreur assignation secteur:', error);
+    error('❌ Erreur assignation secteur:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -403,11 +404,11 @@ router.delete('/:sector_id/assign/:user_id', authMiddleware, async (req, res) =>
       [sector_id, user_id, tenant_id]
     );
 
-    console.log(`✅ Assignation retirée: user ${user_id} du secteur ${sector_id}`);
+    log(`✅ Assignation retirée: user ${user_id} du secteur ${sector_id}`);
 
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ Erreur retrait assignation:', error);
+    error('❌ Erreur retrait assignation:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -436,7 +437,7 @@ router.get('/user/:user_id/assignments', authMiddleware, async (req, res) => {
       assignments
     });
   } catch (error) {
-    console.error('❌ Erreur get assignations user:', error);
+    error('❌ Erreur get assignations user:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -471,7 +472,7 @@ router.get('/:id/stats', authMiddleware, async (req, res) => {
       stats
     });
   } catch (error) {
-    console.error('❌ Erreur stats secteur:', error);
+    error('❌ Erreur stats secteur:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

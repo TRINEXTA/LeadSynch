@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -36,7 +37,7 @@ router.get('/', async (req, res) => {
 
     res.json({ credits: rows[0] });
   } catch (error) {
-    console.error('Erreur récupération crédits:', error);
+    error('Erreur récupération crédits:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -59,7 +60,7 @@ router.get('/history', async (req, res) => {
 
     res.json({ purchases: rows });
   } catch (error) {
-    console.error('Erreur historique crédits:', error);
+    error('Erreur historique crédits:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -110,7 +111,7 @@ router.get('/usage', async (req, res) => {
       }, {})
     });
   } catch (error) {
-    console.error('Erreur usage crédits:', error);
+    error('Erreur usage crédits:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -195,7 +196,7 @@ router.post('/purchase', async (req, res) => {
       credits_remaining: updatedCredits[0].credits_remaining
     });
   } catch (error) {
-    console.error('Erreur achat crédits:', error);
+    error('Erreur achat crédits:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -258,7 +259,7 @@ router.post('/complete-purchase/:purchase_id', async (req, res) => {
       credits_added: purchase.amount_credits
     });
   } catch (error) {
-    console.error('Erreur finalisation achat:', error);
+    error('Erreur finalisation achat:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });
@@ -314,7 +315,7 @@ router.post('/consume', async (req, res) => {
       cost_euros: cost
     });
   } catch (error) {
-    console.error('Erreur consommation crédit:', error);
+    error('Erreur consommation crédit:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
   }
 });

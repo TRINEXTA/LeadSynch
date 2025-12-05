@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
@@ -383,9 +384,9 @@ export default async function handler(req, res) {
               htmlBody,
               fromName: providerName
             });
-            console.log(`📧 [PROPOSAL] Email avec lien d'acceptation envoyé à ${lead.email} pour proposition ${proposal.reference}`);
+            log(`📧 [PROPOSAL] Email avec lien d'acceptation envoyé à ${lead.email} pour proposition ${proposal.reference}`);
           } catch (emailError) {
-            console.error(`❌ [PROPOSAL] Erreur envoi email:`, emailError);
+            error(`❌ [PROPOSAL] Erreur envoi email:`, emailError);
             // Don't fail the request, just log the error
           }
         }
@@ -422,7 +423,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('Error in proposals API:', error);
+    error('Error in proposals API:', error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({

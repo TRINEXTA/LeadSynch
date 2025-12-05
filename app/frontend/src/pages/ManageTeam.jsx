@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit2, Trash2, UserPlus, Crown, X, UserMinus } from 'lucide-react';
 import api from '../api/axios';
@@ -30,7 +31,7 @@ export default function ManageTeam() {
       const response = await api.get('/teams');
       setTeams(response.data.teams || []);
     } catch (error) {
-      console.error('Erreur teams:', error);
+      error('Erreur teams:', error);
     } finally {
       setLoading(false);
     }
@@ -41,7 +42,7 @@ export default function ManageTeam() {
       const response = await api.get('/users');
       setUsers(response.data.users || []);
     } catch (error) {
-      console.error('Erreur users:', error);
+      error('Erreur users:', error);
     }
   };
 
@@ -50,7 +51,7 @@ export default function ManageTeam() {
       const response = await api.get(`/teams/${teamId}/members`);
       setTeamMembers(response.data.members || []);
     } catch (error) {
-      console.error('Erreur chargement membres:', error);
+      error('Erreur chargement membres:', error);
       setTeamMembers([]);
     }
   };

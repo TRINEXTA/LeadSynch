@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Send, Sparkles, Loader, Mail, Save } from 'lucide-react';
 import api from '../../api/axios';
@@ -40,7 +41,7 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
         setBody(response.data.email.body);
       }
     } catch (error) {
-      console.error('❌ Erreur génération:', error);
+      error('❌ Erreur génération:', error);
       alert('Erreur lors de la génération IA');
     } finally {
       setGenerating(false);
@@ -65,7 +66,7 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
-      console.error('❌ Erreur sauvegarde:', error);
+      error('❌ Erreur sauvegarde:', error);
       alert('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
@@ -96,7 +97,7 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
         onClose();
       }, 500);
     } catch (error) {
-      console.error('❌ Erreur:', error);
+      error('❌ Erreur:', error);
       alert('Erreur lors de l\'enregistrement');
     } finally {
       setSending(false);

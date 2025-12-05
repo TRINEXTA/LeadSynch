@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -25,7 +26,7 @@ router.get('/:leadId/notes', authMiddleware, async (req, res) => {
       notes: result.rows
     });
   } catch (error) {
-    console.error('❌ Erreur GET notes:', error);
+    error('❌ Erreur GET notes:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -78,14 +79,14 @@ router.post('/:leadId/notes', authMiddleware, async (req, res) => {
       [leadId, tenant_id, `Note de type ${note_type || 'general'} ajoutée`, user_id]
     );
 
-    console.log(`✅ Note ajoutée pour lead ${leadId}`);
+    log(`✅ Note ajoutée pour lead ${leadId}`);
 
     res.json({
       success: true,
       note: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur POST note:', error);
+    error('❌ Erreur POST note:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -131,14 +132,14 @@ router.put('/:leadId/notes/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, user_id]
     );
 
-    console.log(`✅ Note ${id} modifiée`);
+    log(`✅ Note ${id} modifiée`);
 
     res.json({
       success: true,
       note: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PUT note:', error);
+    error('❌ Erreur PUT note:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -172,14 +173,14 @@ router.delete('/:leadId/notes/:id', authMiddleware, async (req, res) => {
       [leadId, tenant_id, user_id]
     );
 
-    console.log(`✅ Note ${id} supprimée`);
+    log(`✅ Note ${id} supprimée`);
 
     res.json({
       success: true,
       message: 'Note supprimée'
     });
   } catch (error) {
-    console.error('❌ Erreur DELETE note:', error);
+    error('❌ Erreur DELETE note:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -201,14 +202,14 @@ router.patch('/:leadId/notes/:id/toggle-pin', authMiddleware, async (req, res) =
       });
     }
 
-    console.log(`✅ Note ${id} épinglée/désépinglée`);
+    log(`✅ Note ${id} épinglée/désépinglée`);
 
     res.json({
       success: true,
       note: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PATCH toggle-pin:', error);
+    error('❌ Erreur PATCH toggle-pin:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -230,14 +231,14 @@ router.patch('/:leadId/notes/:id/toggle-important', authMiddleware, async (req, 
       });
     }
 
-    console.log(`✅ Note ${id} marquée importante/normale`);
+    log(`✅ Note ${id} marquée importante/normale`);
 
     res.json({
       success: true,
       note: result.rows[0]
     });
   } catch (error) {
-    console.error('❌ Erreur PATCH toggle-important:', error);
+    error('❌ Erreur PATCH toggle-important:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

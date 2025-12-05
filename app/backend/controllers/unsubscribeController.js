@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * Unsubscribe Controller - RGPD Compliant
  * Gestion des désabonnements avec tenant_id
@@ -31,7 +32,7 @@ export const getUnsubscribePage = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erreur get unsubscribe:', error);
+    error('Erreur get unsubscribe:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -83,7 +84,7 @@ export const processUnsubscribe = async (req, res) => {
       [lead_id]
     );
 
-    console.log(`✅ Unsubscribe: ${lead.email} (${lead_id}) pour tenant ${lead.tenant_id}`);
+    log(`✅ Unsubscribe: ${lead.email} (${lead_id}) pour tenant ${lead.tenant_id}`);
 
     // Envoyer email de notification au tenant
     await notifyTenantOfUnsubscribe(lead);
@@ -93,7 +94,7 @@ export const processUnsubscribe = async (req, res) => {
       success: true
     });
   } catch (error) {
-    console.error('Erreur unsubscribe:', error);
+    error('Erreur unsubscribe:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -110,7 +111,7 @@ async function notifyTenantOfUnsubscribe(lead) {
     );
 
     if (!tenant || !tenant.email) {
-      console.log('⚠️ Pas d\'email tenant pour notification');
+      log('⚠️ Pas d\'email tenant pour notification');
       return;
     }
 
@@ -160,7 +161,7 @@ async function notifyTenantOfUnsubscribe(lead) {
       html: html
     });
 
-    console.log(`📧 Email désabonnement envoyé à ${tenant.email}`);
+    log(`📧 Email désabonnement envoyé à ${tenant.email}`);
 
     // Marquer comme notifié
     await execute(
@@ -171,7 +172,7 @@ async function notifyTenantOfUnsubscribe(lead) {
     );
 
   } catch (error) {
-    console.error('❌ Erreur notification tenant:', error);
+    error('❌ Erreur notification tenant:', error);
   }
 }
 
@@ -209,7 +210,7 @@ export const resubscribe = async (req, res) => {
 
     // ===== RÈGLE ANTI-SPAM : BAN APRÈS 3 RÉABONNEMENTS =====
     if (resubscribeCount >= 3) {
-      console.error(`🚨 TENTATIVE DE BAN AUTOMATIQUE - Tenant ${lead.tenant_id} a réabonné ${resubscribeCount} fois le lead ${lead.email}`);
+      error(`🚨 TENTATIVE DE BAN AUTOMATIQUE - Tenant ${lead.tenant_id} a réabonné ${resubscribeCount} fois le lead ${lead.email}`);
 
       // Bannir le tenant
       await execute(
@@ -221,7 +222,7 @@ export const resubscribe = async (req, res) => {
         [lead.tenant_id]
       );
 
-      console.error(`🚨 TENANT BANNI: ${lead.tenant_id} - Raison: Réabonnement abusif (${resubscribeCount} réabonnements du même lead)`);
+      error(`🚨 TENANT BANNI: ${lead.tenant_id} - Raison: Réabonnement abusif (${resubscribeCount} réabonnements du même lead)`);
 
       // Notifier le super admin
       await notifySuperAdminOfBan(lead.tenant_id, resubscribeCount, lead.email);
@@ -247,7 +248,7 @@ export const resubscribe = async (req, res) => {
     //   [lead_id, lead.tenant_id]
     // );
 
-    console.log(`⚠️ Resubscribe: lead ${lead_id} (${resubscribeCount + 1}ème réabonnement) - Attention: ${3 - resubscribeCount - 1} essais restants avant BAN`);
+    log(`⚠️ Resubscribe: lead ${lead_id} (${resubscribeCount + 1}ème réabonnement) - Attention: ${3 - resubscribeCount - 1} essais restants avant BAN`);
 
     res.json({
       message: 'Lead réabonné avec succès',
@@ -256,7 +257,7 @@ export const resubscribe = async (req, res) => {
       remaining_attempts: Math.max(0, 3 - resubscribeCount - 1)
     });
   } catch (error) {
-    console.error('Erreur resubscribe:', error);
+    error('Erreur resubscribe:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -317,10 +318,10 @@ async function notifySuperAdminOfBan(tenantId, resubscribeCount, leadEmail) {
       html: html
     });
 
-    console.log(`📧 Notification de ban envoyée à support@leadsynch.com`);
+    log(`📧 Notification de ban envoyée à support@leadsynch.com`);
 
   } catch (error) {
-    console.error('❌ Erreur notification ban:', error);
+    error('❌ Erreur notification ban:', error);
   }
 }
 
@@ -345,7 +346,7 @@ export const getUnsubscribeStats = async (req, res) => {
 
     res.json({ stats: result });
   } catch (error) {
-    console.error('Erreur stats:', error);
+    error('Erreur stats:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -380,7 +381,7 @@ export const getUnsubscribedEmails = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erreur getUnsubscribedEmails:', error);
+    error('Erreur getUnsubscribedEmails:', error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import multer from 'multer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,7 +29,7 @@ const upload = multer({
 export const uploadImage = async (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
-      console.error('Erreur upload:', err);
+      error('Erreur upload:', err);
       return res.status(400).json({ message: err.message });
     }
 
@@ -74,7 +75,7 @@ export const uploadImage = async (req, res) => {
         ]
       );
 
-      console.log(`✅ Image uploadée: ${filename} (${stats.size} bytes)`);
+      log(`✅ Image uploadée: ${filename} (${stats.size} bytes)`);
 
       res.json({
         success: true,
@@ -89,7 +90,7 @@ export const uploadImage = async (req, res) => {
         }
       });
     } catch (error) {
-      console.error('Erreur traitement image:', error);
+      error('Erreur traitement image:', error);
       res.status(500).json({ message: 'Erreur lors du traitement de l\'image' });
     }
   });
@@ -109,7 +110,7 @@ export const getImages = async (req, res) => {
 
     res.json({ images: result.rows });
   } catch (error) {
-    console.error('Erreur get images:', error);
+    error('Erreur get images:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -136,11 +137,11 @@ export const deleteImage = async (req, res) => {
     // Supprimer de la DB
     await db.query('DELETE FROM email_images WHERE id = $1', [id]);
 
-    console.log(`✅ Image supprimée: ${image.filename}`);
+    log(`✅ Image supprimée: ${image.filename}`);
 
     res.json({ message: 'Image supprimée' });
   } catch (error) {
-    console.error('Erreur delete image:', error);
+    error('Erreur delete image:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };

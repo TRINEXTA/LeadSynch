@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Package, FileText, CreditCard, Plus, Edit, Trash2, Eye, EyeOff, Save, X } from 'lucide-react';
 import api from '../api/axios';
@@ -39,7 +40,7 @@ export default function BusinessSettings() {
       setLegalDocs(legalRes.data.documents || []);
       setPaymentLinks(paymentRes.data.payment_links || []);
     } catch (error) {
-      console.error('Erreur chargement:', error);
+      error('Erreur chargement:', error);
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);

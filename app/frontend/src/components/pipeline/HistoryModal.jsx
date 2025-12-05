@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Mail, Phone, FileText, User } from 'lucide-react';
 import api from '../../api/axios';
@@ -16,7 +17,7 @@ export default function HistoryModal({ lead, onClose }) {
       setHistory(response.data.history || []);
       setLoading(false);
     } catch (error) {
-      console.error('❌ Erreur chargement historique:', error);
+      error('❌ Erreur chargement historique:', error);
       setLoading(false);
     }
   };

@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 import { execute } from '../lib/db.js';
 
 async function createTables() {
   try {
-    console.log('?? Création des tables campagnes...');
+    log('?? Création des tables campagnes...');
 
     await execute(`
       CREATE TABLE IF NOT EXISTS campaign_assignments (
@@ -16,7 +17,7 @@ async function createTables() {
       )
     `);
 
-    console.log('? Table campaign_assignments créée');
+    log('? Table campaign_assignments créée');
 
     await execute(`
       ALTER TABLE campaigns 
@@ -28,12 +29,12 @@ async function createTables() {
       ADD COLUMN IF NOT EXISTS leads_count INTEGER DEFAULT 0
     `);
 
-    console.log('? Colonnes ajoutées à campaigns');
-    console.log('?? Tables créées avec succès !');
+    log('? Colonnes ajoutées à campaigns');
+    log('?? Tables créées avec succès !');
 
     process.exit(0);
   } catch (error) {
-    console.error('? Erreur:', error);
+    error('? Erreur:', error);
     process.exit(1);
   }
 }

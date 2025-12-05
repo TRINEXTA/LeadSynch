@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { X, Mail, Copy, Sparkles, RefreshCw, Send, CheckCircle, MessageSquare } from 'lucide-react';
 

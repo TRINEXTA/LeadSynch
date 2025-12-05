@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * Script de génération automatique de base de prospects pour TRINEXTA
  * Secteurs ciblés: Services IT, Conseil Informatique, Développement
@@ -52,8 +53,8 @@ const TARGET_CITIES = [
 ];
 
 async function generateTrinextaDatabase(tenantId, databaseId) {
-  console.log('🚀 Démarrage génération base prospects Trinexta...');
-  console.log(`📊 Tenant: ${tenantId}, Database: ${databaseId}`);
+  log('🚀 Démarrage génération base prospects Trinexta...');
+  log(`📊 Tenant: ${tenantId}, Database: ${databaseId}`);
 
   // Vérifier que la base existe
   const database = await queryOne(
@@ -65,7 +66,7 @@ async function generateTrinextaDatabase(tenantId, databaseId) {
     throw new Error('Base de données introuvable');
   }
 
-  console.log(`✅ Base trouvée: "${database.name}"`);
+  log(`✅ Base trouvée: "${database.name}"`);
 
   let totalCompanies = 0;
   let totalImported = 0;
@@ -74,7 +75,7 @@ async function generateTrinextaDatabase(tenantId, databaseId) {
 
   // Pour chaque code NAF
   for (const nafCode of TARGET_NAF_CODES) {
-    console.log(`\n🔍 Recherche pour NAF ${nafCode}...`);
+    log(`\n🔍 Recherche pour NAF ${nafCode}...`);
 
     // Pour chaque département
     for (const dept of TARGET_DEPARTMENTS) {
@@ -82,11 +83,11 @@ async function generateTrinextaDatabase(tenantId, databaseId) {
         const companies = await searchCompaniesApiGouv(nafCode, dept);
 
         if (companies.length === 0) {
-          console.log(`  ⚠️ Aucune entreprise trouvée (NAF=${nafCode}, Dept=${dept})`);
+          log(`  ⚠️ Aucune entreprise trouvée (NAF=${nafCode}, Dept=${dept})`);
           continue;
         }
 
-        console.log(`  📦 ${companies.length} entreprises trouvées (Dept ${dept})`);
+        log(`  📦 ${companies.length} entreprises trouvées (Dept ${dept})`);
         totalCompanies += companies.length;
 
         // Importer dans la base
@@ -99,20 +100,20 @@ async function generateTrinextaDatabase(tenantId, databaseId) {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
       } catch (error) {
-        console.error(`  ❌ Erreur NAF=${nafCode} Dept=${dept}:`, error.message);
+        error(`  ❌ Erreur NAF=${nafCode} Dept=${dept}:`, error.message);
         totalErrors++;
       }
     }
   }
 
-  console.log('\n' + '='.repeat(60));
-  console.log('📊 RÉSUMÉ GÉNÉRATION BASE TRINEXTA');
-  console.log('='.repeat(60));
-  console.log(`✅ Entreprises trouvées: ${totalCompanies}`);
-  console.log(`✅ Entreprises importées: ${totalImported}`);
-  console.log(`⚠️  Doublons ignorés: ${totalDuplicates}`);
-  console.log(`❌ Erreurs: ${totalErrors}`);
-  console.log('='.repeat(60));
+  log('\n' + '='.repeat(60));
+  log('📊 RÉSUMÉ GÉNÉRATION BASE TRINEXTA');
+  log('='.repeat(60));
+  log(`✅ Entreprises trouvées: ${totalCompanies}`);
+  log(`✅ Entreprises importées: ${totalImported}`);
+  log(`⚠️  Doublons ignorés: ${totalDuplicates}`);
+  log(`❌ Erreurs: ${totalErrors}`);
+  log('='.repeat(60));
 
   return {
     total_found: totalCompanies,
@@ -138,7 +139,7 @@ async function searchCompaniesApiGouv(nafCode, department) {
     });
 
     if (!response.ok) {
-      console.warn(`⚠️ API Gouv erreur ${response.status}`);
+      warn(`⚠️ API Gouv erreur ${response.status}`);
       return [];
     }
 
@@ -181,7 +182,7 @@ async function searchCompaniesApiGouv(nafCode, department) {
       }));
 
   } catch (error) {
-    console.error('Erreur searchCompaniesApiGouv:', error.message);
+    error('Erreur searchCompaniesApiGouv:', error.message);
     return [];
   }
 }
@@ -244,7 +245,7 @@ async function importCompanies(companies, tenantId, databaseId) {
       imported++;
 
     } catch (leadError) {
-      console.error('Erreur import lead:', leadError.message);
+      error('Erreur import lead:', leadError.message);
       errors++;
     }
   }
@@ -277,18 +278,18 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   const databaseId = process.argv[3];
 
   if (!tenantId || !databaseId) {
-    console.error('Usage: node generate-trinexta-database.js <tenant_id> <database_id>');
+    error('Usage: node generate-trinexta-database.js <tenant_id> <database_id>');
     process.exit(1);
   }
 
   generateTrinextaDatabase(tenantId, databaseId)
     .then(result => {
-      console.log('\n✅ Génération terminée avec succès!');
-      console.log(JSON.stringify(result, null, 2));
+      log('\n✅ Génération terminée avec succès!');
+      log(JSON.stringify(result, null, 2));
       process.exit(0);
     })
     .catch(error => {
-      console.error('\n❌ Erreur fatale:', error);
+      error('\n❌ Erreur fatale:', error);
       process.exit(1);
     });
 }

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 // ================================================================
 // API : Super-Admin TRINEXTA
 // Description : Gestion complète des clients, abonnements, facturation
@@ -91,7 +92,7 @@ router.get('/dashboard/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur stats dashboard super-admin:', error);
+    error('❌ Erreur stats dashboard super-admin:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -116,7 +117,7 @@ router.get('/dashboard/revenue-chart', async (req, res) => {
     res.json({ success: true, data: rows });
 
   } catch (error) {
-    console.error('❌ Erreur revenue chart:', error);
+    error('❌ Erreur revenue chart:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -178,7 +179,7 @@ router.get('/tenants', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur liste tenants:', error);
+    error('❌ Erreur liste tenants:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -249,7 +250,7 @@ router.get('/tenants/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur détails tenant:', error);
+    error('❌ Erreur détails tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -360,7 +361,7 @@ router.post('/tenants', async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
-    console.error('❌ Erreur création tenant:', error);
+    error('❌ Erreur création tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -451,7 +452,7 @@ router.patch('/tenants/:id', async (req, res) => {
     res.json({ success: true, tenant: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur modification tenant:', error);
+    error('❌ Erreur modification tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -490,7 +491,7 @@ router.post('/tenants/:id/suspend', async (req, res) => {
     res.json({ success: true, tenant: rows[0], message: 'Client suspendu' });
 
   } catch (error) {
-    console.error('❌ Erreur suspension tenant:', error);
+    error('❌ Erreur suspension tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -527,7 +528,7 @@ router.post('/tenants/:id/activate', async (req, res) => {
     res.json({ success: true, tenant: rows[0], message: 'Client réactivé' });
 
   } catch (error) {
-    console.error('❌ Erreur activation tenant:', error);
+    error('❌ Erreur activation tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -571,7 +572,7 @@ router.put('/tenants/:id', async (req, res) => {
     res.json({ success: true, tenant: rows[0], message: 'Client mis à jour' });
 
   } catch (error) {
-    console.error('❌ Erreur mise à jour tenant:', error);
+    error('❌ Erreur mise à jour tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -599,7 +600,7 @@ router.delete('/tenants/:id', async (req, res) => {
     res.json({ success: true, message: 'Client supprimé définitivement' });
 
   } catch (error) {
-    console.error('❌ Erreur suppression tenant:', error);
+    error('❌ Erreur suppression tenant:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -649,7 +650,7 @@ router.post('/tenants/:id/gift-credits', async (req, res) => {
     res.json({ success: true, message: `${amount} crédits offerts à ${tenant.name}` });
 
   } catch (error) {
-    console.error('❌ Erreur cadeau crédits:', error);
+    error('❌ Erreur cadeau crédits:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -687,7 +688,7 @@ router.post('/tenants/:id/refund', async (req, res) => {
     res.json({ success: true, message: `Remboursement de ${amount}€ créé pour ${tenant.name}` });
 
   } catch (error) {
-    console.error('❌ Erreur remboursement:', error);
+    error('❌ Erreur remboursement:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -704,7 +705,7 @@ router.get('/plans', async (req, res) => {
     );
     res.json({ success: true, plans });
   } catch (error) {
-    console.error('❌ Erreur liste plans:', error);
+    error('❌ Erreur liste plans:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -742,7 +743,7 @@ router.post('/plans', async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
-    console.error('❌ Erreur création plan:', error);
+    error('❌ Erreur création plan:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -809,7 +810,7 @@ router.patch('/plans/:id', async (req, res) => {
     res.json({ success: true, plan: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur modification plan:', error);
+    error('❌ Erreur modification plan:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -870,7 +871,7 @@ router.get('/subscriptions', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur liste abonnements:', error);
+    error('❌ Erreur liste abonnements:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -940,7 +941,7 @@ router.post('/subscriptions', async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
-    console.error('❌ Erreur création abonnement:', error);
+    error('❌ Erreur création abonnement:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -970,7 +971,7 @@ router.post('/subscriptions/:id/cancel', async (req, res) => {
     res.json({ success: true, subscription: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur annulation abonnement:', error);
+    error('❌ Erreur annulation abonnement:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1029,7 +1030,7 @@ router.get('/invoices', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur liste factures:', error);
+    error('❌ Erreur liste factures:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1085,7 +1086,7 @@ router.post('/invoices', async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation échouée', details: error.errors });
     }
-    console.error('❌ Erreur création facture:', error);
+    error('❌ Erreur création facture:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1117,7 +1118,7 @@ router.post('/invoices/:id/mark-paid', async (req, res) => {
     res.json({ success: true, invoice: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur marquer facture payée:', error);
+    error('❌ Erreur marquer facture payée:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1142,7 +1143,7 @@ router.get('/subscriptions/stats', async (req, res) => {
 
     res.json({ success: true, stats: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur stats abonnements:', error);
+    error('❌ Erreur stats abonnements:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1188,7 +1189,7 @@ router.post('/subscriptions/:id/renew', async (req, res) => {
     res.json({ success: true, subscription: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur renouvellement abonnement:', error);
+    error('❌ Erreur renouvellement abonnement:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1216,7 +1217,7 @@ router.post('/subscriptions/:id/suspend', async (req, res) => {
     res.json({ success: true, subscription: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur suspension abonnement:', error);
+    error('❌ Erreur suspension abonnement:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1244,7 +1245,7 @@ router.post('/subscriptions/:id/activate', async (req, res) => {
     res.json({ success: true, subscription: rows[0] });
 
   } catch (error) {
-    console.error('❌ Erreur activation abonnement:', error);
+    error('❌ Erreur activation abonnement:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1270,7 +1271,7 @@ router.get('/invoices/stats', async (req, res) => {
 
     res.json({ success: true, stats: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur stats factures:', error);
+    error('❌ Erreur stats factures:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1298,14 +1299,14 @@ router.post('/invoices/:id/send-reminder', async (req, res) => {
     const invoice = rows[0];
 
     // TODO: Implémenter envoi email avec Nodemailer
-    console.log('📧 Envoi rappel facture à:', invoice.tenant_email);
+    log('📧 Envoi rappel facture à:', invoice.tenant_email);
 
     await req.logSuperAdminAction('send_invoice_reminder', 'invoice', id);
 
     res.json({ success: true, message: 'Rappel envoyé' });
 
   } catch (error) {
-    console.error('❌ Erreur envoi rappel:', error);
+    error('❌ Erreur envoi rappel:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1474,7 +1475,7 @@ router.get('/invoices/:id/pdf', async (req, res) => {
     res.send(pdfBuffer);
 
   } catch (error) {
-    console.error('❌ Erreur génération PDF:', error);
+    error('❌ Erreur génération PDF:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1520,7 +1521,7 @@ router.get('/activity-log', async (req, res) => {
     res.json({ success: true, logs: rows });
 
   } catch (error) {
-    console.error('❌ Erreur activity log:', error);
+    error('❌ Erreur activity log:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import express from 'express';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -5,7 +6,7 @@ import db from '../config/db.js';
 const router = express.Router();
 const q = (text, params=[]) => db.query(text, params);
 
-console.log('🔥 FICHIER lead-databases.js CHARGÉ');
+log('🔥 FICHIER lead-databases.js CHARGÉ');
 
 // GET /lead-databases - Liste toutes les bases
 router.get('/', authenticateToken, async (req, res) => {
@@ -26,7 +27,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, databases: rows });
   } catch (error) {
-    console.error('❌ Erreur GET lead-databases:', error);
+    error('❌ Erreur GET lead-databases:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -62,7 +63,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       [id]
     );
 
-    console.log(`✅ Base ${id}: ${leadRows.length} leads trouvés`);
+    log(`✅ Base ${id}: ${leadRows.length} leads trouvés`);
 
     // 3. Retourner la base avec ses leads
     const database = {
@@ -72,7 +73,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, database });
   } catch (error) {
-    console.error('❌ Erreur GET lead-database:', error);
+    error('❌ Erreur GET lead-database:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -83,7 +84,7 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
 
-    console.log(`📊 Récupération secteurs pour base ${id}`);
+    log(`📊 Récupération secteurs pour base ${id}`);
 
     // Récupérer la base avec son champ segmentation
     const { rows: dbRows } = await q(
@@ -104,7 +105,7 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
         lead_count: count
       })).sort((a, b) => b.lead_count - a.lead_count);
 
-      console.log(`✅ ${sectors.length} secteurs trouvés via segmentation`);
+      log(`✅ ${sectors.length} secteurs trouvés via segmentation`);
 
       return res.json({
         success: true,
@@ -127,7 +128,7 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
       [id]
     );
 
-    console.log(`✅ ${rows.length} secteurs trouvés via leads table`);
+    log(`✅ ${rows.length} secteurs trouvés via leads table`);
 
     return res.json({
       success: true,
@@ -135,7 +136,7 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
       total: rows.reduce((sum, s) => sum + parseInt(s.lead_count), 0)
     });
   } catch (error) {
-    console.error('❌ Erreur GET sectors:', error);
+    error('❌ Erreur GET sectors:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -158,10 +159,10 @@ router.post('/', authenticateToken, async (req, res) => {
       [tenantId, name, description || null, userId]
     );
 
-    console.log('✅ Base créée:', rows[0].id);
+    log('✅ Base créée:', rows[0].id);
     return res.status(201).json({ success: true, database: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur POST lead-database:', error);
+    error('❌ Erreur POST lead-database:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -187,10 +188,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    console.log('✅ Base mise à jour:', id);
+    log('✅ Base mise à jour:', id);
     return res.json({ success: true, database: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur PUT lead-database:', error);
+    error('❌ Erreur PUT lead-database:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -214,10 +215,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    console.log('✅ Base supprimée:', id);
+    log('✅ Base supprimée:', id);
     return res.json({ success: true, message: 'Base supprimée' });
   } catch (error) {
-    console.error('❌ Erreur DELETE lead-database:', error);
+    error('❌ Erreur DELETE lead-database:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -274,10 +275,10 @@ router.post('/:id/add-lead', authenticateToken, async (req, res) => {
       [databaseId]
     );
 
-    console.log(`✅ Lead ${lead_id} ajouté à la base ${databaseId}`);
+    log(`✅ Lead ${lead_id} ajouté à la base ${databaseId}`);
     return res.json({ success: true, message: 'Lead ajouté à la base' });
   } catch (error) {
-    console.error('❌ Erreur POST add-lead:', error);
+    error('❌ Erreur POST add-lead:', error);
     return res.status(500).json({ error: error.message });
   }
 });

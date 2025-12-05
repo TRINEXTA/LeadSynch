@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { authMiddleware } from '../middleware/auth.js';
@@ -7,11 +8,11 @@ const router = express.Router();
 
 // Vérifier que la clé API est configurée
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('⚠️ ========================================');
-  console.error('⚠️ ANTHROPIC_API_KEY non configurée !');
-  console.error('⚠️ L\'IA Asefi ne fonctionnera pas en production');
-  console.error('⚠️ Configurez ANTHROPIC_API_KEY dans vos variables d\'environnement');
-  console.error('⚠️ ========================================');
+  error('⚠️ ========================================');
+  error('⚠️ ANTHROPIC_API_KEY non configurée !');
+  error('⚠️ L\'IA Asefi ne fonctionnera pas en production');
+  error('⚠️ Configurez ANTHROPIC_API_KEY dans vos variables d\'environnement');
+  error('⚠️ ========================================');
 }
 
 const anthropic = new Anthropic({
@@ -20,12 +21,12 @@ const anthropic = new Anthropic({
 
 // POST / - Chatbot Asefi intelligent (s'alimente des vraies données)
 router.post('/', authMiddleware, async (req, res) => {
-  console.log('💬 Asefi chatbot - Question utilisateur');
+  log('💬 Asefi chatbot - Question utilisateur');
 
   try {
     // Vérifier la clé API
     if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'sk-ant-dummy-key') {
-      console.error('❌ ANTHROPIC_API_KEY manquante - L\'IA ne peut pas fonctionner');
+      error('❌ ANTHROPIC_API_KEY manquante - L\'IA ne peut pas fonctionner');
       return res.status(503).json({
         error: 'Service IA temporairement indisponible',
         message: 'L\'intelligence artificielle Asefi n\'est pas configurée. Veuillez contacter le support technique.',
@@ -153,7 +154,7 @@ INSTRUCTIONS RÉPONSE:
 
     const response = message.content[0].text.trim();
 
-    console.log('✅ Asefi réponse générée');
+    log('✅ Asefi réponse générée');
 
     res.json({
       success: true,
@@ -167,7 +168,7 @@ INSTRUCTIONS RÉPONSE:
     });
 
   } catch (error) {
-    console.error('❌ Erreur Asefi chatbot:', error);
+    error('❌ Erreur Asefi chatbot:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération de la réponse',
       details: error.message
@@ -177,7 +178,7 @@ INSTRUCTIONS RÉPONSE:
 
 // POST /categorize - Catégoriser un lead avec l'IA
 router.post('/categorize', authMiddleware, async (req, res) => {
-  console.log('🏷️ Asefi categorization - Lead category detection');
+  log('🏷️ Asefi categorization - Lead category detection');
 
   try {
     const { company_name, description, website, address } = req.body;
@@ -241,7 +242,7 @@ Réponds UNIQUEMENT avec le nom exact de la catégorie, sans explication.`;
 
     const finalCategory = validCategories.includes(category) ? category : 'autre';
 
-    console.log(`✅ Catégorie détectée: ${finalCategory}`);
+    log(`✅ Catégorie détectée: ${finalCategory}`);
 
     res.json({
       success: true,
@@ -250,7 +251,7 @@ Réponds UNIQUEMENT avec le nom exact de la catégorie, sans explication.`;
     });
 
   } catch (error) {
-    console.error('❌ Erreur Asefi categorization:', error);
+    error('❌ Erreur Asefi categorization:', error);
     res.status(500).json({
       error: 'Erreur lors de la catégorisation',
       details: error.message

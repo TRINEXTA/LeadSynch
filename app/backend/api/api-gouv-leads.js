@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Gouv Leads - Génération de leads à partir de l'API Entreprise du gouvernement français
  * Sources légales: API Sirene (INSEE), API Entreprise
@@ -28,7 +29,7 @@ router.post('/search', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`🔍 Recherche API Sirene: query="${query}" dept="${department}" city="${city}" naf="${activity_code}"`);
+    log(`🔍 Recherche API Sirene: query="${query}" dept="${department}" city="${city}" naf="${activity_code}"`);
 
     // Construire la requête API Sirene
     const params = new URLSearchParams();
@@ -63,7 +64,7 @@ router.post('/search', authMiddleware, async (req, res) => {
 
     if (!response.ok) {
       // Même sans clé API, certaines requêtes fonctionnent en mode limité
-      console.warn(`⚠️ Erreur API Sirene (${response.status}). Essai en mode public...`);
+      warn(`⚠️ Erreur API Sirene (${response.status}). Essai en mode public...`);
 
       // Fallback: API publique sans auth (limitée mais fonctionnelle)
       const publicUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query || city || '')}&per_page=${max_results}`;
@@ -96,7 +97,7 @@ router.post('/search', authMiddleware, async (req, res) => {
 
     const companies = formatSireneResults(data.etablissements);
 
-    console.log(`✅ ${companies.length} entreprises trouvées via API Sirene`);
+    log(`✅ ${companies.length} entreprises trouvées via API Sirene`);
 
     return res.json({
       success: true,
@@ -106,7 +107,7 @@ router.post('/search', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur API Gouv search:', error);
+    error('❌ Erreur API Gouv search:', error);
     return res.status(500).json({
       success: false,
       error: error.message
@@ -149,7 +150,7 @@ router.post('/import', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`📥 Import de ${companies.length} entreprises dans la base "${database.name}"`);
+    log(`📥 Import de ${companies.length} entreprises dans la base "${database.name}"`);
 
     let imported = 0;
     let duplicates = 0;
@@ -209,12 +210,12 @@ router.post('/import', authMiddleware, async (req, res) => {
         imported++;
 
       } catch (leadError) {
-        console.error('Erreur import lead:', leadError);
+        error('Erreur import lead:', leadError);
         errors++;
       }
     }
 
-    console.log(`✅ Import terminé: ${imported} importés, ${duplicates} doublons, ${errors} erreurs`);
+    log(`✅ Import terminé: ${imported} importés, ${duplicates} doublons, ${errors} erreurs`);
 
     return res.json({
       success: true,
@@ -226,7 +227,7 @@ router.post('/import', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur import API Gouv:', error);
+    error('❌ Erreur import API Gouv:', error);
     return res.status(500).json({
       success: false,
       error: error.message
@@ -284,7 +285,7 @@ router.get('/naf-codes', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur NAF codes:', error);
+    error('❌ Erreur NAF codes:', error);
     return res.status(500).json({
       success: false,
       error: error.message

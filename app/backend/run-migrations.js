@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 // ================================================================
 // Script : Exécution des migrations SQL sur Neon
 // Usage : node run-migrations.js
@@ -17,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function runMigration(migrationFile) {
-  console.log(`\n🔄 Exécution de la migration: ${migrationFile}`);
+  log(`\n🔄 Exécution de la migration: ${migrationFile}`);
 
   const client = new Client({
     connectionString: process.env.POSTGRES_URL,
@@ -28,21 +29,21 @@ async function runMigration(migrationFile) {
 
   try {
     await client.connect();
-    console.log('✅ Connecté à Neon');
+    log('✅ Connecté à Neon');
 
     // Lire le fichier SQL
     const sqlPath = join(__dirname, 'migrations', migrationFile);
     const sql = await readFile(sqlPath, 'utf-8');
 
-    console.log('📝 Exécution du SQL...');
+    log('📝 Exécution du SQL...');
 
     // Exécuter la migration
     await client.query(sql);
 
-    console.log(`✅ Migration ${migrationFile} exécutée avec succès !`);
+    log(`✅ Migration ${migrationFile} exécutée avec succès !`);
 
   } catch (error) {
-    console.error(`❌ Erreur lors de la migration ${migrationFile}:`, error.message);
+    error(`❌ Erreur lors de la migration ${migrationFile}:`, error.message);
     throw error;
   } finally {
     await client.end();
@@ -59,25 +60,25 @@ const migrations = [
 ];
 
 async function runAllMigrations() {
-  console.log('🚀 Démarrage des migrations Neon');
-  console.log('=====================================\n');
+  log('🚀 Démarrage des migrations Neon');
+  log('=====================================\n');
 
   for (const migration of migrations) {
     try {
       await runMigration(migration);
     } catch (error) {
-      console.error(`\n❌ Migration ${migration} échouée. Arrêt.`);
+      error(`\n❌ Migration ${migration} échouée. Arrêt.`);
       process.exit(1);
     }
   }
 
-  console.log('\n=====================================');
-  console.log('✅ Toutes les migrations sont terminées !');
-  console.log('=====================================\n');
+  log('\n=====================================');
+  log('✅ Toutes les migrations sont terminées !');
+  log('=====================================\n');
 }
 
 // Exécuter
 runAllMigrations().catch(error => {
-  console.error('❌ Erreur fatale:', error);
+  error('❌ Erreur fatale:', error);
   process.exit(1);
 });

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 
@@ -70,10 +71,10 @@ export async function sendTemporaryPassword(email, firstName, tempPassword) {
       .api('/users/noreply@leadsynch.com/sendMail')
       .post({ message });
 
-    console.log(`✅ Email envoyé à ${email} via Microsoft Graph`);
+    log(`✅ Email envoyé à ${email} via Microsoft Graph`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Erreur Graph API:', error.message);
+    error('❌ Erreur Graph API:', error.message);
     throw error;
   }
 }
@@ -122,10 +123,10 @@ export async function sendPasswordResetEmail(email, firstName, resetToken) {
       .api('/users/noreply@leadsynch.com/sendMail')
       .post({ message });
 
-    console.log(`✅ Email de réinitialisation envoyé à ${email} via Microsoft Graph`);
+    log(`✅ Email de réinitialisation envoyé à ${email} via Microsoft Graph`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Erreur Graph API (reset):', error.message);
+    error('❌ Erreur Graph API (reset):', error.message);
     throw error;
   }
 }
@@ -157,12 +158,12 @@ export async function sendEmail({ to, subject, html }) {
       .api('/users/noreply@leadsynch.com/sendMail')
       .post({ message });
 
-    console.log(`✅ Email envoyé à ${to} - ${subject}`);
+    log(`✅ Email envoyé à ${to} - ${subject}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Erreur envoi email:', error.message);
+    error('❌ Erreur envoi email:', error.message);
     // Ne pas throw l'erreur pour éviter de bloquer le système
-    console.warn('⚠️ Email non envoyé mais processus continue');
+    warn('⚠️ Email non envoyé mais processus continue');
     return { success: false, error: error.message };
   }
 }

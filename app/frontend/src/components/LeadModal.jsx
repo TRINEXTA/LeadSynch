@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, Building, User, Mail, Phone, MapPin, Globe, DollarSign, Tag } from 'lucide-react';
 import LeadHistoryPanel from "./LeadHistoryPanel";
@@ -79,7 +80,7 @@ export default function LeadModal({ lead, stage, onClose, onSave }) {
       
       await onSave(cleanedData);
     } catch (error) {
-      console.error('Erreur sauvegarde:', error);
+      error('Erreur sauvegarde:', error);
     } finally {
       setLoading(false);
     }
@@ -94,10 +95,10 @@ export default function LeadModal({ lead, stage, onClose, onSave }) {
 
     try {
       // TODO: Implémenter la suppression
-      console.log('Suppression du lead:', lead.id);
+      log('Suppression du lead:', lead.id);
       onClose();
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      error('Erreur suppression:', error);
       alert('Erreur lors de la suppression');
     }
   };

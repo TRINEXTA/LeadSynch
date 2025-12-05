@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * RGPD Controller
  * Gestion des désabonnements et violations RGPD
@@ -33,7 +34,7 @@ export const checkBlacklist = async (req, res) => {
       count: blacklisted.length
     });
   } catch (error) {
-    console.error('❌ Erreur checkBlacklist:', error);
+    error('❌ Erreur checkBlacklist:', error);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -69,7 +70,7 @@ export const recordViolation = async (tenantId, violationType, leadEmail, leadId
 
     const violationCount = tenant.violation_count;
 
-    console.log(`⚠️ Violation RGPD enregistrée pour tenant ${tenantId}: ${violationType} (${violationCount}/3)`);
+    log(`⚠️ Violation RGPD enregistrée pour tenant ${tenantId}: ${violationType} (${violationCount}/3)`);
 
     // Système 3 strikes
     if (violationCount === 1) {
@@ -90,7 +91,7 @@ export const recordViolation = async (tenantId, violationType, leadEmail, leadId
 
       await sendAccountBlockedEmail(tenant, leadEmail);
 
-      console.log(`🔴 COMPTE BLOQUÉ pour violations RGPD: ${tenant.name} (${tenantId})`);
+      log(`🔴 COMPTE BLOQUÉ pour violations RGPD: ${tenant.name} (${tenantId})`);
     }
 
     return {
@@ -100,7 +101,7 @@ export const recordViolation = async (tenantId, violationType, leadEmail, leadId
     };
 
   } catch (error) {
-    console.error('❌ Erreur recordViolation:', error);
+    error('❌ Erreur recordViolation:', error);
     throw error;
   }
 };
@@ -178,10 +179,10 @@ async function sendViolationWarning(tenant, strikeNumber, leadEmail) {
       html: html
     });
 
-    console.log(`📧 Email avertissement ${strikeNumber}/3 envoyé à ${tenant.tenant_email}`);
+    log(`📧 Email avertissement ${strikeNumber}/3 envoyé à ${tenant.tenant_email}`);
 
   } catch (error) {
-    console.error('❌ Erreur envoi email avertissement:', error);
+    error('❌ Erreur envoi email avertissement:', error);
   }
 }
 
@@ -260,10 +261,10 @@ async function sendAccountBlockedEmail(tenant, leadEmail) {
       `
     });
 
-    console.log(`📧 Email blocage compte envoyé à ${tenant.tenant_email}`);
+    log(`📧 Email blocage compte envoyé à ${tenant.tenant_email}`);
 
   } catch (error) {
-    console.error('❌ Erreur envoi email blocage:', error);
+    error('❌ Erreur envoi email blocage:', error);
   }
 }
 
@@ -300,7 +301,7 @@ export const getViolationStats = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur getViolationStats:', error);
+    error('❌ Erreur getViolationStats:', error);
     return res.status(500).json({ error: error.message });
   }
 };

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Crown, Mail, Phone, Loader2, TrendingUp, Award } from 'lucide-react';
@@ -30,7 +31,7 @@ export default function Teams() {
         averageMembersPerTeam: teamsList.length > 0 ? (totalMembers / teamsList.length).toFixed(1) : 0
       });
     } catch (error) {
-      console.error('Erreur chargement teams:', error);
+      error('Erreur chargement teams:', error);
     } finally {
       setLoading(false);
     }

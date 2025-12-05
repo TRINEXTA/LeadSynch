@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -126,7 +127,7 @@ export default function AdminDashboard() {
       setTopPerformers(performers);
 
     } catch (error) {
-      console.error('Erreur chargement dashboard admin:', error);
+      error('Erreur chargement dashboard admin:', error);
       if (!silent) {
         toast.error('Erreur lors du chargement des données');
       }

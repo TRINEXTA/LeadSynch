@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { queryOne } from '../lib/db.js';
@@ -41,7 +42,7 @@ router.get('/campaign/:campaign_id/stats', async (req, res) => {
       stats: stats || { sent: 0, delivered: 0, opens: 0, clicks: 0, bounces: 0 }
     });
   } catch (error) {
-    console.error('Erreur stats:', error);
+    error('Erreur stats:', error);
     return res.status(500).json({ error: error.message });
   }
 });

@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 import { queryAll } from '../lib/db.js';
 
 async function checkTeamMembers() {
   try {
-    console.log('?? Vérification table team_members:\n');
+    log('?? Vérification table team_members:\n');
 
     const columns = await queryAll(`
       SELECT column_name, data_type 
@@ -12,18 +13,18 @@ async function checkTeamMembers() {
     `);
 
     if (columns.length === 0) {
-      console.log('? Table team_members n\'existe pas !');
-      console.log('\n?? On va la créer !');
+      log('? Table team_members n\'existe pas !');
+      log('\n?? On va la créer !');
     } else {
-      console.log('? Colonnes de la table team_members:');
+      log('? Colonnes de la table team_members:');
       columns.forEach(col => {
-        console.log(`  - ${col.column_name} (${col.data_type})`);
+        log(`  - ${col.column_name} (${col.data_type})`);
       });
     }
 
     process.exit(0);
   } catch (error) {
-    console.error('? Erreur:', error.message);
+    error('? Erreur:', error.message);
     process.exit(1);
   }
 }

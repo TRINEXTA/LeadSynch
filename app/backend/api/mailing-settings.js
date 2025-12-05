@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query as q } from '../lib/db.js';
 
 /**
@@ -54,7 +55,7 @@ export async function getMailingSettings(req, res) {
       }
     });
   } catch (error) {
-    console.error('Erreur récupération mailing settings:', error);
+    error('Erreur récupération mailing settings:', error);
     res.status(500).json({
       error: 'Erreur serveur',
       message: error.message
@@ -178,7 +179,7 @@ export async function updateMailingSettings(req, res) {
       }
     });
   } catch (error) {
-    console.error('Erreur mise à jour mailing settings:', error);
+    error('Erreur mise à jour mailing settings:', error);
     res.status(500).json({
       error: 'Erreur serveur',
       message: error.message
@@ -227,15 +228,15 @@ export async function testMailingSettings(req, res) {
 
     // TODO: Implémenter l'envoi réel via ElasticEmail
     // Pour l'instant, simuler le succès
-    console.log(`📧 Email de test envoyé à ${test_email} depuis ${settings.from_email}`);
-    console.log(`🔑 Utilisation clé API: ${apiKey.substring(0, 8)}...`);
+    log(`📧 Email de test envoyé à ${test_email} depuis ${settings.from_email}`);
+    log(`🔑 Utilisation clé API: ${apiKey.substring(0, 8)}...`);
 
     res.json({
       message: 'Email de test envoyé avec succès',
       test_email
     });
   } catch (error) {
-    console.error('Erreur envoi email test:', error);
+    error('Erreur envoi email test:', error);
     res.status(500).json({
       error: 'Erreur serveur',
       message: error.message

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import db from '../lib/db.js';
 
 async function getLeadId() {
@@ -8,19 +9,19 @@ async function getLeadId() {
     );
     
     if (result) {
-      console.log('\n✅ Lead trouvé !');
-      console.log('ID:', result.id);
-      console.log('Email:', result.email);
-      console.log('Company:', result.company_name);
-      console.log('\n🔗 URL de test:');
-      console.log(`http://localhost:5173/unsubscribe/${result.id}`);
+      log('\n✅ Lead trouvé !');
+      log('ID:', result.id);
+      log('Email:', result.email);
+      log('Company:', result.company_name);
+      log('\n🔗 URL de test:');
+      log(`http://localhost:5173/unsubscribe/${result.id}`);
     } else {
-      console.log('❌ Lead introuvable');
+      log('❌ Lead introuvable');
     }
     
     process.exit(0);
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
+    error('❌ Erreur:', error.message);
     process.exit(1);
   }
 }

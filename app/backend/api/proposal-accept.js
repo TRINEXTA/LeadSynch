@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import crypto from 'crypto';
 import { sendEmail } from '../services/elasticEmail.js';
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('❌ [PROPOSAL-ACCEPT] Erreur:', error);
+    error('❌ [PROPOSAL-ACCEPT] Erreur:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }
@@ -259,9 +260,9 @@ async function sendAcceptanceNotifications(proposal, acceptorName, acceptorEmail
         [proposal.tenant_id, proposal.id, proposal.commercial_email, subject, `Accepté par ${acceptorEmail}`]
       );
 
-      console.log(`📧 Notification envoyée au commercial: ${proposal.commercial_email}`);
+      log(`📧 Notification envoyée au commercial: ${proposal.commercial_email}`);
     } catch (e) {
-      console.error('Erreur envoi notification commercial:', e);
+      error('Erreur envoi notification commercial:', e);
     }
   }
 
@@ -287,9 +288,9 @@ async function sendAcceptanceNotifications(proposal, acceptorName, acceptorEmail
         [proposal.tenant_id, proposal.id, manager.email, subject, `Accepté par ${acceptorEmail}`]
       );
 
-      console.log(`📧 Notification envoyée au manager: ${manager.email}`);
+      log(`📧 Notification envoyée au manager: ${manager.email}`);
     } catch (e) {
-      console.error('Erreur envoi notification manager:', e);
+      error('Erreur envoi notification manager:', e);
     }
   }
 }

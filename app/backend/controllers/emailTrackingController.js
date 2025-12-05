@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿// controllers/emailTrackingController.js
 import { query, queryOne } from '../lib/db.js';
 
@@ -27,7 +28,7 @@ export const trackOpen = async (req, res) => {
     res.set('Content-Type', 'image/gif');
     res.send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
   } catch (error) {
-    console.error('Erreur track open:', error);
+    error('Erreur track open:', error);
     res.status(200).send();
   }
 };
@@ -64,13 +65,13 @@ export const trackClick = async (req, res) => {
           [lead.tenant_id, lead_id, campaign_id]
         );
 
-        console.log('🧩 [TRACK] Lead injecté/MAJ dans pipeline (leads_click):', lead_id);
+        log('🧩 [TRACK] Lead injecté/MAJ dans pipeline (leads_click):', lead_id);
       }
     }
 
     res.redirect(url || 'https://trinexta.fr');
   } catch (error) {
-    console.error('Erreur track click:', error);
+    error('Erreur track click:', error);
     res.redirect('https://trinexta.fr');
   }
 };
@@ -98,7 +99,7 @@ export const getLeadEvents = async (req, res) => {
     );
     return res.json({ success: true, events: rows });
   } catch (error) {
-    console.error('Erreur:', error);
+    error('Erreur:', error);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -142,7 +143,7 @@ export const getCampaignStats = async (req, res) => {
     const stats = rows[0] || { sent: 0, delivered: 0, opens: 0, clicks: 0, bounces: 0, spam: 0, unsubscribes: 0 };
     return res.json({ success: true, stats });
   } catch (error) {
-    console.error('Erreur stats campagne:', error);
+    error('Erreur stats campagne:', error);
     return res.status(500).json({ error: error.message });
   }
 };

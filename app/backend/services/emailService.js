@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 
@@ -60,10 +61,10 @@ export async function sendEmailViaGraph({ to, subject, html, attachments = [] })
       .api(`/users/${senderEmail}/sendMail`)
       .post({ message });
 
-    console.log(`✅ Email envoyé à ${to}`);
+    log(`✅ Email envoyé à ${to}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Erreur envoi email:', error);
+    error('❌ Erreur envoi email:', error);
     throw error;
   }
 }

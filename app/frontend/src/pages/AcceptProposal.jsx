@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, FileText, Building, User, Euro, Calendar, Clock, ThumbsUp, Shield, Send } from 'lucide-react';
@@ -43,7 +44,7 @@ export default function AcceptProposal() {
 
       setLoading(false);
     } catch (err) {
-      console.error('Erreur:', err);
+      error('Erreur:', err);
       setError(err.response?.data?.error || 'Lien invalide ou expiré');
       setLoading(false);
     }

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import pg from 'pg';
 import dotenv from 'dotenv';
 
@@ -11,7 +12,7 @@ const pool = new Pool({
 
 async function addColumn() {
   try {
-    console.log('🔧 Ajout de la colonne requires_password_change...');
+    log('🔧 Ajout de la colonne requires_password_change...');
     
     const query = `
       ALTER TABLE users 
@@ -20,7 +21,7 @@ async function addColumn() {
     
     await pool.query(query);
     
-    console.log('✅ Colonne ajoutée avec succès !');
+    log('✅ Colonne ajoutée avec succès !');
     
     // Vérifier
     const checkQuery = `
@@ -32,15 +33,15 @@ async function addColumn() {
     const result = await pool.query(checkQuery);
     
     if (result.rows.length > 0) {
-      console.log('📋 Colonne trouvée:', result.rows[0]);
+      log('📋 Colonne trouvée:', result.rows[0]);
     } else {
-      console.log('⚠️  Colonne non trouvée');
+      log('⚠️  Colonne non trouvée');
     }
     
     await pool.end();
     process.exit(0);
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
+    error('❌ Erreur:', error.message);
     await pool.end();
     process.exit(1);
   }

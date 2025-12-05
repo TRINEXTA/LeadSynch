@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Users, TrendingUp, Building, Mail, Phone, MapPin, Globe, Filter, Search, Download, Send, Trash2, RefreshCw, BarChart3, Target, Plus } from 'lucide-react';
@@ -62,7 +63,7 @@ export default function DatabaseDetails() {
       calculateStats(dbData.leads || []);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur chargement base:', error);
+      error('Erreur chargement base:', error);
       toast.error('Erreur lors du chargement de la base');
       navigate('/LeadDatabases');
     }

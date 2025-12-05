@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -68,7 +69,7 @@ export default function GeographicSectors() {
       setTeamMembers(commercials);
 
     } catch (error) {
-      console.error('Erreur chargement données:', error);
+      error('Erreur chargement données:', error);
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
@@ -201,7 +202,7 @@ export default function GeographicSectors() {
       const res = await api.get(`/geographic-sectors/${sector.id}`);
       setSelectedSector(res.data.sector);
     } catch (error) {
-      console.error('Erreur chargement secteur:', error);
+      error('Erreur chargement secteur:', error);
     }
 
     setShowAssignModal(true);

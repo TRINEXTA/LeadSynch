@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query as q } from './db.js';
 
 /**
@@ -166,7 +167,7 @@ function getScoreGrade(score) {
  */
 export async function calculateAllLeadScores(tenantId) {
   try {
-    console.log(`🎯 Calcul des scores pour tenant ${tenantId}...`);
+    log(`🎯 Calcul des scores pour tenant ${tenantId}...`);
 
     // Récupérer tous les leads du tenant
     const { rows: leads } = await q(
@@ -179,7 +180,7 @@ export async function calculateAllLeadScores(tenantId) {
       [tenantId]
     );
 
-    console.log(`📊 ${leads.length} leads à scorer`);
+    log(`📊 ${leads.length} leads à scorer`);
 
     let updated = 0;
 
@@ -202,11 +203,11 @@ export async function calculateAllLeadScores(tenantId) {
       updated++;
     }
 
-    console.log(`✅ ${updated} scores mis à jour`);
+    log(`✅ ${updated} scores mis à jour`);
 
     return { updated };
   } catch (error) {
-    console.error('Erreur calcul scores:', error);
+    error('Erreur calcul scores:', error);
     throw error;
   }
 }
@@ -234,9 +235,9 @@ export async function ensureScoreColumns() {
       $$;
     `);
 
-    console.log('✅ Colonnes de scoring vérifiées');
+    log('✅ Colonnes de scoring vérifiées');
   } catch (error) {
-    console.error('Erreur création colonnes score:', error);
+    error('Erreur création colonnes score:', error);
     throw error;
   }
 }
@@ -259,7 +260,7 @@ export async function getTopLeads(tenantId, limit = 50) {
 
     return rows;
   } catch (error) {
-    console.error('Erreur récupération top leads:', error);
+    error('Erreur récupération top leads:', error);
     throw error;
   }
 }
@@ -281,7 +282,7 @@ export async function getLeadsByGrade(tenantId, grade) {
 
     return rows;
   } catch (error) {
-    console.error('Erreur récupération leads par grade:', error);
+    error('Erreur récupération leads par grade:', error);
     throw error;
   }
 }

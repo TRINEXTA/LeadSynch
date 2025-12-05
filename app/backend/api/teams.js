@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne, execute } from '../lib/db.js';
 import { z } from 'zod';
@@ -41,7 +42,7 @@ async function handler(req, res) {
            ORDER BY t.created_at DESC`,
           [tenant_id]
         );
-        console.log(`✅ Admin - toutes les équipes: ${teams?.length}`);
+        log(`✅ Admin - toutes les équipes: ${teams?.length}`);
       }
       // Manager : voir uniquement les équipes où il est manager ou membre
       else if (userRole === 'manager') {
@@ -57,7 +58,7 @@ async function handler(req, res) {
            ORDER BY t.created_at DESC`,
           [tenant_id, userId]
         );
-        console.log(`✅ Manager - ses équipes: ${teams?.length}`);
+        log(`✅ Manager - ses équipes: ${teams?.length}`);
       }
       // User/commercial : voir uniquement les équipes dont il est membre
       else {
@@ -73,7 +74,7 @@ async function handler(req, res) {
            ORDER BY t.created_at DESC`,
           [tenant_id, userId]
         );
-        console.log(`✅ User - ses équipes: ${teams?.length}`);
+        log(`✅ User - ses équipes: ${teams?.length}`);
       }
 
       return res.json({ success: true, teams: teams || [] });
@@ -175,7 +176,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Teams error:', error);
+    error('Teams error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }

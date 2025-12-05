@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -104,7 +105,7 @@ export default function DashboardManager() {
       setSentTasks(myCreatedTasks);
 
     } catch (error) {
-      console.error('Erreur chargement dashboard manager:', error);
+      error('Erreur chargement dashboard manager:', error);
       toast.error('Erreur lors du chargement du dashboard');
     } finally {
       setLoading(false);
@@ -943,7 +944,7 @@ export default function DashboardManager() {
                     setTaskDueDate('');
                     fetchDashboard();
                   } catch (error) {
-                    console.error('Erreur création tâche:', error);
+                    error('Erreur création tâche:', error);
                     toast.error('Erreur lors de la création de la tâche');
                   }
                 }}

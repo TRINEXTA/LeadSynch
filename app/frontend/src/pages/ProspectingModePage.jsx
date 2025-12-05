@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function ProspectingModePage() {
       setLeads(prospecableLeads);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur chargement leads:', error);
+      error('Erreur chargement leads:', error);
       setLoading(false);
     }
   };

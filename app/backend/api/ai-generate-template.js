@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { authMiddleware } from '../middleware/auth.js';
@@ -112,7 +113,7 @@ Réponds en JSON strict sans markdown ni backticks:
     });
 
   } catch (error) {
-    console.error('Erreur AI Generate Template:', error);
+    error('Erreur AI Generate Template:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du template',
       message: error.message

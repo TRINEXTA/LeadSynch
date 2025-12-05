@@ -1,3 +1,4 @@
+import { log, error, warn } from "./lib/logger.js";
 // server.js
 import express from 'express';
 import cors from 'cors';
@@ -15,18 +16,18 @@ dotenv.config();
 
 // Validation des variables d'environnement critiques
 if (!process.env.POSTGRES_URL) {
-  console.error('❌ ERREUR: POSTGRES_URL manquant');
+  error('❌ ERREUR: POSTGRES_URL manquant');
   process.exit(1);
 }
 
 if (!process.env.JWT_SECRET) {
-  console.error('❌ ERREUR: JWT_SECRET manquant - La sécurité de l\'authentification nécessite cette variable');
+  error('❌ ERREUR: JWT_SECRET manquant - La sécurité de l\'authentification nécessite cette variable');
   process.exit(1);
 }
 
 if (!process.env.ELASTIC_EMAIL_API_KEY) {
-  console.error('❌ ERREUR: ELASTIC_EMAIL_API_KEY manquant - Requis pour l\'envoi d\'emails via Elastic Email');
-  console.error('   Configurez votre clé API dans le fichier .env (voir .env.example)');
+  error('❌ ERREUR: ELASTIC_EMAIL_API_KEY manquant - Requis pour l\'envoi d\'emails via Elastic Email');
+  error('   Configurez votre clé API dans le fichier .env (voir .env.example)');
   process.exit(1);
 }
 
@@ -47,8 +48,8 @@ const allowedOrigins = [
 // Pattern pour accepter tous les déploiements Vercel (preview + production)
 const vercelPattern = /https:\/\/leadsynch-.*\.vercel\.app$/;
 
-console.log('🌐 CORS configuré pour:', allowedOrigins.join(', '));
-console.log('🌐 CORS pattern Vercel: *.vercel.app');
+log('🌐 CORS configuré pour:', allowedOrigins.join(', '));
+log('🌐 CORS pattern Vercel: *.vercel.app');
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -62,12 +63,12 @@ app.use(cors({
 
     // Vérifier le pattern Vercel (tous les déploiements preview)
     if (vercelPattern.test(origin)) {
-      console.log('✅ Origin Vercel autorisée:', origin);
+      log('✅ Origin Vercel autorisée:', origin);
       return callback(null, true);
     }
 
     // Sinon refuser
-    console.log('❌ Origin refusée:', origin);
+    log('❌ Origin refusée:', origin);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -114,17 +115,17 @@ const trackingLimiter = rateLimit({
 app.use('/api/', globalLimiter);
 app.use('/api/track/', trackingLimiter);
 
-console.log('🔒 Sécurité activée: Helmet + Rate Limiting');
-console.log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
-console.log(`   Auth: ${process.env.NODE_ENV === 'production' ? '5' : '50'} req/15min`);
+log('🔒 Sécurité activée: Helmet + Rate Limiting');
+log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
+log(`   Auth: ${process.env.NODE_ENV === 'production' ? '5' : '50'} req/15min`);
 
 app.use((req, res, next) => {
   const start = Date.now();
-  console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
+  log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
   
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
+    log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
   });
   
   next();
@@ -326,7 +327,7 @@ app.get('/api/unsubscribes/stats', authMiddleware, unsubscribeController.getUnsu
 app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
 app.post('/api/unsubscribe/:lead_id', unsubscribeController.processUnsubscribe);
 
-console.log('✅ Routes RGPD configurées');
+log('✅ Routes RGPD configurées');
 
 // ========== ?? ROUTES LEAD MANAGEMENT AVANC� ==========
 app.use('/api/leads', leadContactsRoute);
@@ -360,7 +361,7 @@ app.use(errorHandler);
 
 // ========== ROUTE 404 ==========
 app.use((req, res) => {
-  console.log('? 404 Not Found:', req.method, req.url);
+  log('? 404 Not Found:', req.method, req.url);
   res.status(404).json({ 
     error: 'Route non trouv�e',
     method: req.method,
@@ -371,39 +372,39 @@ app.use((req, res) => {
 // ========== LANCEMENT ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('');
-  console.log('========================================');
-  console.log('?? Backend LeadSynch d�marr�');
-  console.log('========================================');
-  console.log('?? Port:', PORT);
-  console.log('?? CORS:', allowedOrigins.join(', '));
-  console.log('📧 Elastic Email: Configuré ✅');
-  console.log('   Email expéditeur:' , process.env.EMAIL_FROM || 'b2b@trinexta.fr');
-  console.log('?? Date:', new Date().toLocaleString('fr-FR'));
-  console.log('========================================');
-  console.log('');
+  log('');
+  log('========================================');
+  log('?? Backend LeadSynch d�marr�');
+  log('========================================');
+  log('?? Port:', PORT);
+  log('?? CORS:', allowedOrigins.join(', '));
+  log('📧 Elastic Email: Configuré ✅');
+  log('   Email expéditeur:' , process.env.EMAIL_FROM || 'b2b@trinexta.fr');
+  log('?? Date:', new Date().toLocaleString('fr-FR'));
+  log('========================================');
+  log('');
 
   import('./workers/emailWorker.js')
     .then((module) => {
       const startEmailWorker = module.default;
-      console.log('?? [EMAIL WORKER] D�marrage');
+      log('?? [EMAIL WORKER] D�marrage');
       startEmailWorker();
     })
-    .catch(err => console.error('? Erreur email worker:', err));
+    .catch(err => error('? Erreur email worker:', err));
 
   import('./lib/elasticEmailPolling.js')
     .then(({ pollingService }) => {
-      console.log('?? [POLLING] Premier run');
-      pollingService.syncAllActiveCampaigns().catch(e => console.error('? Erreur polling:', e));
+      log('?? [POLLING] Premier run');
+      pollingService.syncAllActiveCampaigns().catch(e => error('? Erreur polling:', e));
       
       setInterval(async () => {
         try {
-          console.log('?? [POLLING] Run automatique');
+          log('?? [POLLING] Run automatique');
           await pollingService.syncAllActiveCampaigns();
         } catch (e) {
-          console.error('? Erreur polling auto:', e);
+          error('? Erreur polling auto:', e);
         }
       }, 10 * 60 * 1000);
     })
-    .catch(err => console.error('? Erreur polling:', err));
+    .catch(err => error('? Erreur polling:', err));
 });

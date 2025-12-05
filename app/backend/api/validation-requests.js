@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Validation Requests - Demandes de validation et d'aide
  * Permet aux commerciaux de demander validation ou aide aux managers
@@ -174,7 +175,7 @@ export default async function handler(req, res) {
         ]
       );
 
-      console.log(`✅ Demande ${type} créée:`, newRequest.id);
+      log(`✅ Demande ${type} créée:`, newRequest.id);
 
       const messages = {
         validation: 'validation',
@@ -264,7 +265,7 @@ export default async function handler(req, res) {
 
       const updatedRequest = await queryOne(updateQuery, params);
 
-      console.log(`✅ Demande ${requestId} mise à jour:`, newStatus);
+      log(`✅ Demande ${requestId} mise à jour:`, newStatus);
 
       return res.json({
         success: true,
@@ -299,7 +300,7 @@ export default async function handler(req, res) {
         [requestId, tenantId]
       );
 
-      console.log(`✅ Demande ${requestId} supprimée`);
+      log(`✅ Demande ${requestId} supprimée`);
 
       return res.json({
         success: true,
@@ -310,7 +311,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('❌ Erreur validation-requests:', error);
+    error('❌ Erreur validation-requests:', error);
     return res.status(500).json({ error: error.message });
   }
 }
