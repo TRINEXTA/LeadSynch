@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 
@@ -17,7 +18,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'campaignId requis' });
     }
 
-    console.log(`🔄 Injection manuelle pipeline pour campagne: ${campaignId}`);
+    log(`🔄 Injection manuelle pipeline pour campagne: ${campaignId}`);
 
     // Récupérer la campagne
     const campaign = await queryAll(
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
 
     if (campaignSectors && Object.keys(campaignSectors).length > 0) {
       // ✅ Appliquer le filtre de secteurs
-      console.log(`🎯 Application du filtre de secteurs:`, campaignSectors);
+      log(`🎯 Application du filtre de secteurs:`, campaignSectors);
 
       const sectorConditions = [];
       const params = [tenantId, camp.database_id];
@@ -69,7 +70,7 @@ export default async function handler(req, res) {
       }
     } else {
       // ✅ Pas de filtre de secteurs : récupérer tous les leads
-      console.log(`📋 Récupération de tous les leads (pas de filtre secteurs)`);
+      log(`📋 Récupération de tous les leads (pas de filtre secteurs)`);
       leads = await queryAll(
         `SELECT DISTINCT l.*
          FROM leads l
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Aucun lead trouvé avec le filtre appliqué' });
     }
 
-    console.log(`📊 ${leads.length} leads trouvés avec filtre, injection dans pipeline...`);
+    log(`📊 ${leads.length} leads trouvés avec filtre, injection dans pipeline...`);
 
     await execute('BEGIN');
 
@@ -111,7 +112,7 @@ export default async function handler(req, res) {
       }
 
       await execute('COMMIT');
-      console.log(`✅ ${injected} leads injectés dans le pipeline`);
+      log(`✅ ${injected} leads injectés dans le pipeline`);
 
       return res.json({
         success: true,
@@ -122,12 +123,12 @@ export default async function handler(req, res) {
 
     } catch (e) {
       await execute('ROLLBACK');
-      console.error('❌ Erreur injection:', e);
+      error('❌ Erreur injection:', e);
       throw e;
     }
 
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    error('❌ Erreur:', error);
     return res.status(500).json({ error: error.message });
   }
 }

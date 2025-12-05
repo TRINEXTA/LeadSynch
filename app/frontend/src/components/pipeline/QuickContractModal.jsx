@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, FileCheck, Save, Send, AlertCircle, Download, Mail, Loader2, Sparkles, ClipboardCheck, Shield } from 'lucide-react';
 import api from '../../api/axios';
@@ -126,7 +127,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
           setOffers(TRINEXTA_OFFERS);
         }
       } catch (error) {
-        console.error('Error loading custom products:', error);
+        error('Error loading custom products:', error);
         setOffers(TRINEXTA_OFFERS);
       } finally {
         setLoadingProducts(false);
@@ -214,7 +215,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
       }
 
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('Erreur lors de la création du contrat');
     } finally {
       setSaving(false);
@@ -249,7 +250,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
         alert('PDF téléchargé avec succès !');
       }
     } catch (error) {
-      console.error('Erreur téléchargement PDF:', error);
+      error('Erreur téléchargement PDF:', error);
       alert('Erreur lors du téléchargement du PDF');
     } finally {
       setDownloading(false);
@@ -277,7 +278,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       // If task creation fails, still show success for contract
       alert('Contrat créé. La validation sera demandée manuellement.');
       if (onSuccess) onSuccess();
@@ -320,7 +321,7 @@ Réponds uniquement avec le corps de l'email.`
           emailBody = asefiResponse.data.content;
         }
       } catch (asefiError) {
-        console.warn('Asefi non disponible, email par défaut');
+        warn('Asefi non disponible, email par défaut');
         emailBody = `Bonjour ${lead.contact_name || ''},
 
 Veuillez trouver ci-joint votre contrat pour l'${getSelectedOfferDetails()?.name}.
@@ -341,13 +342,13 @@ L'équipe Trinexta`;
       try {
         await api.put(`/contracts/${contractId}`, { status: 'sent' });
       } catch (e) {
-        console.warn('Could not update contract status');
+        warn('Could not update contract status');
       }
 
       if (onSuccess) onSuccess();
 
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('Erreur lors de la préparation de l\'email');
     } finally {
       setSendingEmail(false);

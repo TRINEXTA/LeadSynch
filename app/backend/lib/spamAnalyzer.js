@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿/**
  * Analyseur Anti-Spam - Score de délivrabilité email
  * Objectif : Garantir 90% de délivrabilité

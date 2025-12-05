@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import fetch from 'node-fetch';
 
 const ELASTIC_EMAIL_API_KEY = process.env.ELASTIC_EMAIL_API_KEY;
@@ -7,7 +8,7 @@ const ELASTIC_EMAIL_API_URL = 'https://api.elasticemail.com/v2/email/send';
 // ==================== SEND EMAIL ====================
 export const sendEmail = async ({ to, subject, htmlBody, textBody, fromName = 'LeadSync' }) => {
   try {
-    console.log(`📧 Envoi email à ${to}...`);
+    log(`📧 Envoi email à ${to}...`);
 
     if (!ELASTIC_EMAIL_API_KEY) {
       throw new Error('ELASTIC_EMAIL_API_KEY non configurée');
@@ -35,11 +36,11 @@ export const sendEmail = async ({ to, subject, htmlBody, textBody, fromName = 'L
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      console.error('❌ Erreur Elastic Email:', result);
+      error('❌ Erreur Elastic Email:', result);
       throw new Error(result.error || 'Erreur envoi email');
     }
 
-    console.log(`✅ Email envoyé avec succès à ${to} - TransactionID: ${result.data.transactionid}`);
+    log(`✅ Email envoyé avec succès à ${to} - TransactionID: ${result.data.transactionid}`);
 
     return {
       success: true,
@@ -48,14 +49,14 @@ export const sendEmail = async ({ to, subject, htmlBody, textBody, fromName = 'L
     };
 
   } catch (error) {
-    console.error('❌ Erreur sendEmail:', error);
+    error('❌ Erreur sendEmail:', error);
     throw error;
   }
 };
 
 // ==================== SEND BULK EMAILS ====================
 export const sendBulkEmails = async (emails) => {
-  console.log(`📧 Envoi de ${emails.length} emails en masse...`);
+  log(`📧 Envoi de ${emails.length} emails en masse...`);
   
   const results = {
     success: [],
@@ -77,14 +78,14 @@ export const sendBulkEmails = async (emails) => {
     }
   }
 
-  console.log(`✅ Envoi terminé: ${results.success.length} succès, ${results.failed.length} échecs`);
+  log(`✅ Envoi terminé: ${results.success.length} succès, ${results.failed.length} échecs`);
 
   return results;
 };
 
 // ==================== SEND TEST EMAIL ====================
 export const sendTestEmail = async ({ to, templateHtml, subject }) => {
-  console.log(`🧪 Envoi email de test à ${to}...`);
+  log(`🧪 Envoi email de test à ${to}...`);
 
   return await sendEmail({
     to,

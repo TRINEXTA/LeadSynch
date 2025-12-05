@@ -1,134 +1,32 @@
-// server.js
+import { log, error } from "./lib/logger.js";
 import express from 'express';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
-
-import { authMiddleware } from './middleware/auth.js';
+import { setupMiddlewares, authLimiter } from './config/middleware.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
 
 // Validation des variables d'environnement critiques
 if (!process.env.POSTGRES_URL) {
-  console.error('❌ ERREUR: POSTGRES_URL manquant');
+  error('❌ ERREUR: POSTGRES_URL manquant');
   process.exit(1);
 }
 
 if (!process.env.JWT_SECRET) {
-  console.error('❌ ERREUR: JWT_SECRET manquant - La sécurité de l\'authentification nécessite cette variable');
+  error('❌ ERREUR: JWT_SECRET manquant - La sécurité de l\\'authentification nécessite cette variable');
   process.exit(1);
 }
 
 if (!process.env.ELASTIC_EMAIL_API_KEY) {
-  console.error('❌ ERREUR: ELASTIC_EMAIL_API_KEY manquant - Requis pour l\'envoi d\'emails via Elastic Email');
-  console.error('   Configurez votre clé API dans le fichier .env (voir .env.example)');
+  error('❌ ERREUR: ELASTIC_EMAIL_API_KEY manquant - Requis pour l\\'envoi d\\'emails via Elastic Email');
+  error('   Configurez votre clé API dans le fichier .env (voir .env.example)');
   process.exit(1);
 }
 
 const app = express();
-app.set('trust proxy', 1);
 
-// ========= 🌐 CORS FIX COMPLET =========
-const allowedOrigins = [
-  'https://app.leadsynch.com',
-  'https://www.leadsynch.com',
-  'https://leadsynch.com',
-  'https://leadsynch.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:5174', // Website local
-  'http://localhost:3000'
-];
-
-// Pattern pour accepter tous les déploiements Vercel (preview + production)
-const vercelPattern = /https:\/\/leadsynch-.*\.vercel\.app$/;
-
-console.log('🌐 CORS configuré pour:', allowedOrigins.join(', '));
-console.log('🌐 CORS pattern Vercel: *.vercel.app');
-
-app.use(cors({
-  origin: function(origin, callback) {
-    // Pas d'origine (comme Postman ou curl) → autoriser
-    if (!origin) return callback(null, true);
-
-    // Vérifier la liste des origines exactes
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Vérifier le pattern Vercel (tous les déploiements preview)
-    if (vercelPattern.test(origin)) {
-      console.log('✅ Origin Vercel autorisée:', origin);
-      return callback(null, true);
-    }
-
-    // Sinon refuser
-    console.log('❌ Origin refusée:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  exposedHeaders: ['Authorization']
-}));
-
-app.use(express.json({ limit: '50mb' }));
-app.use(cookieParser());
-
-// ========= 🔒 SÉCURITÉ - Helmet + Rate Limiting =========
-app.use(helmet({
-  contentSecurityPolicy: false, // Désactivé pour éviter conflit avec frontend
-  crossOriginEmbedderPolicy: false
-}));
-
-// Rate limiter global
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Plus permissif en dev
-  message: 'Trop de requêtes, veuillez réessayer plus tard',
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// Rate limiter pour auth - PLUS PERMISSIF EN DÉVELOPPEMENT
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 5 : 50, // 50 en dev, 5 en prod
-  skipSuccessfulRequests: true,
-  message: 'Trop de tentatives de connexion, réessayez dans 15 minutes'
-});
-
-// Rate limiter pour tracking - Protection contre le spam de faux events
-const trackingLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requêtes par minute par IP
-  message: 'Too many tracking requests',
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-app.use('/api/', globalLimiter);
-app.use('/api/track/', trackingLimiter);
-
-console.log('🔒 Sécurité activée: Helmet + Rate Limiting');
-console.log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
-console.log(`   Auth: ${process.env.NODE_ENV === 'production' ? '5' : '50'} req/15min`);
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  console.log(`?? [${req.method}] ${req.url} from ${req.headers.origin || 'no-origin'}`);
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`?? [${req.method}] ${req.url} ? ${res.statusCode} (${duration}ms)`);
-  });
-  
-  next();
-});
+// Configuration des middlewares
+setupMiddlewares(app);
 
 // ========== ROUTES AUTH ==========
 app.get('/api/health', (req, res) => {
@@ -145,11 +43,11 @@ import changePasswordRoute from './api/auth/change-password.js';
 import resetPassword from './api/auth/reset-password.js';
 import authLogout from './api/auth/logout.js';
 
-app.all('/api/auth/login', authLimiter, authLogin); // Rate limit strict sur login
-app.all('/api/auth/me', authMe);
-app.all('/api/auth/change-password', changePasswordRoute);
-app.all('/api/auth/reset-password', authLimiter, resetPassword); // Rate limit sur reset password
-if (authLogout) app.all('/api/auth/logout', authLogout);
+app.post('/api/auth/login', authLimiter, authLogin);
+app.get('/api/auth/me', authMe);
+app.post('/api/auth/change-password', changePasswordRoute);
+app.post('/api/auth/reset-password', authLimiter, resetPassword);
+if (authLogout) app.post('/api/auth/logout', authLogout);
 
 // ========== ?? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
 import leadsRoute from './api/leads.js';
@@ -220,12 +118,12 @@ app.use('/api/leads', leadsRoute);
 app.use('/api/leads-count-multi', leadsCountMultiRoute);
 app.use('/api/sectors', sectorsRoute);
 
-// ? USERS : Monter la route AVANT les autres pour �viter les conflits
+// ? USERS : Monter la route AVANT les autres pour viter les conflits
 app.use('/api/users', usersRoute);
 
 app.use('/api/teams', teamsRoute);
 
-// ? CAMPAIGNS : Routes sp�cifiques AVANT la route g�n�rique
+// ? CAMPAIGNS : Routes spcifiques AVANT la route gnrique
 app.use('/api/campaigns', campaignsRoute);
 app.use('/api/campaign-detailed-stats', campaignDetailedStatsRoute);
 
@@ -238,10 +136,10 @@ app.use('/api/lead-sector-assignment', leadSectorAssignmentRoute);
 app.use('/api/stats', statsRoute);
 app.use('/api/templates', templatesRoute);
 app.use('/api/generate-leads', generateLeadsRoute);
-app.all('/api/generate-leads-stream', generateLeadsStreamRoute);
-app.all('/api/pause-search', generateLeadsStreamRoute);
-app.all('/api/resume-search', generateLeadsStreamRoute);
-app.all('/api/stop-search', generateLeadsStreamRoute);
+app.use('/api/generate-leads-stream', generateLeadsStreamRoute);
+app.use('/api/pause-search', generateLeadsStreamRoute);
+app.use('/api/resume-search', generateLeadsStreamRoute);
+app.use('/api/stop-search', generateLeadsStreamRoute);
 app.use('/api/quotas', quotasRoute);
 app.use('/api/follow-ups', followUpsRoute);
 
@@ -265,7 +163,7 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
-app.all('/api/inject-pipeline', injectPipelineRoute);
+app.use('/api/inject-pipeline', injectPipelineRoute);
 app.use('/api/api-gouv', apiGouvLeadsRoute);
 app.use('/api/geographic-sectors', geographicSectorsRoute);
 
@@ -273,137 +171,69 @@ app.use('/api/geographic-sectors', geographicSectorsRoute);
 app.use('/api/sign', signaturesRoute);
 
 // ========== ?? ROUTES DEVIS & CONTRATS ==========
-app.all('/api/proposals', proposalsRoute);
-app.all('/api/proposals/:id', proposalsRoute);
-app.all('/api/contracts', contractsRoute);
-app.all('/api/contracts/:id', contractsRoute);
+app.use('/api/proposals', proposalsRoute);
+app.use('/api/proposals/:id', proposalsRoute);
+app.use('/api/contracts', contractsRoute);
+app.use('/api/contracts/:id', contractsRoute);
 
 // ========== ?? ROUTES PUBLIQUES E-SIGNATURE (pas d'auth) ==========
 // Acceptation proposition (bon pour accord)
 app.get('/api/proposal-accept/:token', proposalAcceptRoute);
-app.post('/api/proposal-accept/:token', proposalAcceptRoute);
-// Signature contrat avec code email
+
+// Signature contrat
 app.get('/api/contract-sign/:token', contractSignRoute);
-app.post('/api/contract-sign/:token', contractSignRoute);
+
+// ========== ?? ROUTES LEAD MANAGEMENT ==========
+app.use('/api/leads/:leadId/contacts', leadContactsRoute);
+app.use('/api/leads/:leadId/phones', leadPhonesRoute);
+app.use('/api/leads/:leadId/offices', leadOfficesRoute);
+app.use('/api/leads/:leadId/notes', leadNotesRoute);
 
 // ========== ?? ROUTES MAILING SETTINGS ==========
-app.get('/api/mailing-settings', authMiddleware, getMailingSettings);
-app.post('/api/mailing-settings', authMiddleware, updateMailingSettings);
-app.post('/api/mailing-settings/test', authMiddleware, testMailingSettings);
+app.get('/api/settings/mailing', getMailingSettings);
+app.put('/api/settings/mailing', updateMailingSettings);
+app.post('/api/settings/mailing/test', testMailingSettings);
 
-// ========== ?? ROUTES BILLING & STRIPE ==========
+// ========== ?? ROUTES BILLING & SUBSCRIPTIONS ==========
 app.use('/api/billing', billingRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes);
 
-// ========== ?? ROUTES DUPLICATES MANAGEMENT ==========
+// ========== ?? ROUTES DUPLICATES & EXPORT ==========
 app.use('/api/duplicates', duplicatesRoutes);
-
-// ========== ?? ROUTES EXPORT CSV ==========
 app.use('/api/export', exportRoutes);
 
-// ========== ?? ROUTES LEAD CREDITS (SYSTÈME 0.03€/0.06€) ==========
+// ========== ?? ROUTES LEAD CREDITS & SERVICES ==========
 app.use('/api/lead-credits', leadCreditsRoutes);
-
-// ========== ?? ROUTES SERVICES & ABONNEMENTS ==========
 app.use('/api/services', servicesRoutes);
-app.use('/api/subscriptions', subscriptionsRoutes);
+
+// ========== ?? ROUTES BUSINESS CONFIG ==========
 app.use('/api/business-config', businessConfigRoutes);
 
-// ========== 👑 ROUTES SUPER-ADMIN TRINEXTA ==========
+// ========== ?? ROUTES SUPER ADMIN ==========
 app.use('/api/super-admin', superAdminRoutes);
 
-// ========== 🔒 ROUTES RGPD & BLACKLIST ==========
-import checkBlacklistRoute from './api/check-blacklist.js';
-import rgpdController from './controllers/rgpdController.js';
-import unsubscribeController from './controllers/unsubscribeController.js';
-
-app.use('/api/check-blacklist', checkBlacklistRoute);
-app.post('/api/rgpd/check-blacklist', authMiddleware, rgpdController.checkBlacklist);
-app.get('/api/rgpd/violations', authMiddleware, rgpdController.getViolationStats);
-app.get('/api/unsubscribes', authMiddleware, unsubscribeController.getUnsubscribedEmails);
-app.get('/api/unsubscribes/stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
-
-// Routes publiques unsubscribe (sans auth)
-app.get('/api/unsubscribe/:lead_id', unsubscribeController.getUnsubscribePage);
-app.post('/api/unsubscribe/:lead_id', unsubscribeController.processUnsubscribe);
-
-console.log('✅ Routes RGPD configurées');
-
-// ========== ?? ROUTES LEAD MANAGEMENT AVANC� ==========
-app.use('/api/leads', leadContactsRoute);
-app.use('/api/leads', leadPhonesRoute);
-app.use('/api/leads', leadOfficesRoute);
-app.use('/api/leads', leadNotesRoute);
-
-// ========== ROUTES TRACKING ==========
-app.post('/api/unsubscribe/:lead_id', authMiddleware, unsubscribeController.processUnsubscribe);
-app.post('/api/resubscribe/:lead_id', authMiddleware, unsubscribeController.resubscribe);
-app.get('/api/unsubscribe-stats', authMiddleware, unsubscribeController.getUnsubscribeStats);
-
-import * as emailTrackingController from './controllers/emailTrackingController.js';
-app.get('/api/track/click', emailTrackingController.trackClick);
-app.get('/api/track/open', emailTrackingController.trackOpen);
-app.get('/api/tracking/lead/:lead_id/events', authMiddleware, emailTrackingController.getLeadEvents);
-app.get('/api/tracking/campaign/:campaign_id/stats', authMiddleware, emailTrackingController.getCampaignStats);
-
-import * as imageUploadController from './controllers/imageUploadController.js';
-app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage);
-app.get('/api/images', authMiddleware, imageUploadController.getImages);
-app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
-
-// ========== STATIC FILES ==========
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// ========== ERROR HANDLER (DOIT �TRE EN DERNIER) ==========
-app.use(errorHandler);
-
-// ========== ROUTE 404 ==========
-app.use((req, res) => {
-  console.log('? 404 Not Found:', req.method, req.url);
-  res.status(404).json({ 
-    error: 'Route non trouv�e',
-    method: req.method,
-    url: req.url
-  });
+// ========== GESTION ERREURS & 404 ==========
+app.use((req, res, next) => {
+  log('? 404 Not Found:', req.method, req.url);
+  res.status(404).json({ error: 'Route non trouvée' });
 });
 
-// ========== LANCEMENT ==========
+app.use(errorHandler);
+
+// ========== DÉMARRAGE SERVEUR ==========
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('');
-  console.log('========================================');
-  console.log('?? Backend LeadSynch d�marr�');
-  console.log('========================================');
-  console.log('?? Port:', PORT);
-  console.log('?? CORS:', allowedOrigins.join(', '));
-  console.log('📧 Elastic Email: Configuré ✅');
-  console.log('   Email expéditeur:' , process.env.EMAIL_FROM || 'b2b@trinexta.fr');
-  console.log('?? Date:', new Date().toLocaleString('fr-FR'));
-  console.log('========================================');
-  console.log('');
 
-  import('./workers/emailWorker.js')
-    .then((module) => {
-      const startEmailWorker = module.default;
-      console.log('?? [EMAIL WORKER] D�marrage');
-      startEmailWorker();
-    })
-    .catch(err => console.error('? Erreur email worker:', err));
-
-  import('./lib/elasticEmailPolling.js')
-    .then(({ pollingService }) => {
-      console.log('?? [POLLING] Premier run');
-      pollingService.syncAllActiveCampaigns().catch(e => console.error('? Erreur polling:', e));
-      
-      setInterval(async () => {
-        try {
-          console.log('?? [POLLING] Run automatique');
-          await pollingService.syncAllActiveCampaigns();
-        } catch (e) {
-          console.error('? Erreur polling auto:', e);
-        }
-      }, 10 * 60 * 1000);
-    })
-    .catch(err => console.error('? Erreur polling:', err));
+app.listen(PORT, () => {
+  log('');
+  log('========================================');
+  log('?? Backend LeadSynch démarré');
+  log('?? Port:', PORT);
+  log('?? CORS:', allowedOrigins.join(', '));
+  if (process.env.ELASTIC_EMAIL_API_KEY) {
+    log('📧 Elastic Email: Configuré ✅');
+    log('   Email expéditeur:' , process.env.EMAIL_FROM || 'b2b@trinexta.fr');
+  }
+  log('?? Date:', new Date().toLocaleString('fr-FR'));
+  log('========================================');
+  log('');
 });

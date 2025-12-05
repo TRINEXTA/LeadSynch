@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import pg from 'pg';
 import dotenv from 'dotenv';
 
@@ -15,17 +16,17 @@ async function checkTables() {
       ORDER BY table_name
     `);
     
-    console.log('\n=== TABLES EXISTANTES ===');
+    log('\n=== TABLES EXISTANTES ===');
     result.rows.forEach(row => {
-      console.log(`- ${row.table_name}`);
+      log(`- ${row.table_name}`);
     });
-    console.log('=========================\n');
+    log('=========================\n');
     
     // Vérifier si search_jobs existe
     const searchJobsExists = result.rows.some(r => r.table_name === 'search_jobs');
     
     if (searchJobsExists) {
-      console.log('✅ Table search_jobs existe deja !');
+      log('✅ Table search_jobs existe deja !');
       
       // Voir sa structure
       const cols = await pool.query(`
@@ -35,19 +36,19 @@ async function checkTables() {
         ORDER BY ordinal_position
       `);
       
-      console.log('\nStructure search_jobs:');
+      log('\nStructure search_jobs:');
       cols.rows.forEach(col => {
-        console.log(`  ${col.column_name}: ${col.data_type}`);
+        log(`  ${col.column_name}: ${col.data_type}`);
       });
     } else {
-      console.log('❌ Table search_jobs n\'existe PAS');
+      log('❌ Table search_jobs n\'existe PAS');
     }
     
     await pool.end();
     process.exit(0);
     
   } catch (error) {
-    console.error('Erreur:', error.message);
+    error('Erreur:', error.message);
     await pool.end();
     process.exit(1);
   }

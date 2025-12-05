@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import express from 'express';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -58,11 +59,11 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const { rows } = await q(query, params);
 
-    console.log(`📅 Rappels trouvés: ${rows.length} pour tenant ${tenant_id}`);
+    log(`📅 Rappels trouvés: ${rows.length} pour tenant ${tenant_id}`);
 
     return res.status(200).json({ success: true, followups: rows || [] });
   } catch (error) {
-    console.error('❌ Erreur GET follow-ups:', error);
+    error('❌ Erreur GET follow-ups:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -101,10 +102,10 @@ router.post('/', authenticateToken, async (req, res) => {
       ]
     );
 
-    console.log('✅ Rappel créé:', rows[0].id);
+    log('✅ Rappel créé:', rows[0].id);
     return res.status(201).json({ success: true, followup: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur POST follow-ups:', error);
+    error('❌ Erreur POST follow-ups:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -133,10 +134,10 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Rappel non trouvé' });
     }
 
-    console.log('✅ Rappel complété:', followupId);
+    log('✅ Rappel complété:', followupId);
     return res.status(200).json({ success: true, followup: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur complete:', error);
+    error('❌ Erreur complete:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -167,10 +168,10 @@ const rescheduleHandler = async (req, res) => {
       return res.status(404).json({ error: 'Rappel non trouvé' });
     }
 
-    console.log('✅ Rappel reprogrammé:', followupId);
+    log('✅ Rappel reprogrammé:', followupId);
     return res.status(200).json({ success: true, followup: rows[0] });
   } catch (error) {
-    console.error('❌ Erreur reschedule:', error);
+    error('❌ Erreur reschedule:', error);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -196,10 +197,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Rappel non trouvé' });
     }
 
-    console.log('✅ Rappel supprimé:', followupId);
+    log('✅ Rappel supprimé:', followupId);
     return res.status(200).json({ success: true, message: 'Rappel supprimé' });
   } catch (error) {
-    console.error('❌ Erreur delete:', error);
+    error('❌ Erreur delete:', error);
     return res.status(500).json({ error: error.message });
   }
 });

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * Contenu de formation par rôle
  * Formation obligatoire au premier login

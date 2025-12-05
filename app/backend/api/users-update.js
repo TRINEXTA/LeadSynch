@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryOne, execute } from '../lib/db.js';
 import { z } from 'zod';
@@ -60,7 +61,7 @@ async function handler(req, res) {
         [userId]
       );
 
-      console.log('✅ Utilisateur mis à jour:', userId);
+      log('✅ Utilisateur mis à jour:', userId);
 
       return res.json({ 
         success: true, 
@@ -86,7 +87,7 @@ async function handler(req, res) {
         [newStatus, userId]
       );
 
-      console.log(`✅ Utilisateur ${newStatus ? 'activé' : 'désactivé'}:`, userId);
+      log(`✅ Utilisateur ${newStatus ? 'activé' : 'désactivé'}:`, userId);
 
       return res.json({ 
         success: true, 
@@ -98,7 +99,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('Users update API error:', error);
+    error('Users update API error:', error);
     return res.status(500).json({
       error: 'Erreur serveur',
       message: error.message

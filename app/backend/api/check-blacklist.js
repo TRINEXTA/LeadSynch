@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Check Blacklist
  * Vérifier si des emails CSV sont dans la blacklist RGPD
@@ -69,7 +70,7 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`🔍 Vérification blacklist: ${emails.length} emails pour tenant ${tenant_id}`);
+    log(`🔍 Vérification blacklist: ${emails.length} emails pour tenant ${tenant_id}`);
 
     // Vérifier lesquels sont blacklistés pour CE tenant
     const blacklisted = await queryAll(
@@ -89,7 +90,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const blacklistedCount = blacklisted.length;
     const percentage = ((blacklistedCount / emails.length) * 100).toFixed(1);
 
-    console.log(`⚠️ ${blacklistedCount}/${emails.length} emails blacklistés (${percentage}%)`);
+    log(`⚠️ ${blacklistedCount}/${emails.length} emails blacklistés (${percentage}%)`);
 
     return res.json({
       success: true,
@@ -106,7 +107,7 @@ router.post('/', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur check-blacklist:', error);
+    error('❌ Erreur check-blacklist:', error);
     return res.status(500).json({
       success: false,
       error: error.message

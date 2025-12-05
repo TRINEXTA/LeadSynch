@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { Upload, X, Trash2, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import api from '../api/axios';
@@ -18,7 +19,7 @@ export default function ImageGallery({ onInsert }) {
       setImages(response.data.images || []);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       setLoading(false);
     }
   };
@@ -45,7 +46,7 @@ export default function ImageGallery({ onInsert }) {
       setImages([response.data.image, ...images]);
       alert('✅ Image uploadée !');
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('❌ Erreur lors de l\'upload');
     } finally {
       setUploading(false);
@@ -60,7 +61,7 @@ export default function ImageGallery({ onInsert }) {
       setImages(images.filter(img => img.id !== id));
       alert('✅ Image supprimée !');
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('❌ Erreur lors de la suppression');
     }
   };

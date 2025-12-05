@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { addUnsubscribeFooter, addUnsubscribeFooterText } from './emailFooter.js';
 
 // Exemple 1 : Email HTML
@@ -17,9 +18,9 @@ const companyInfo = {
 };
 
 const emailWithFooter = addUnsubscribeFooter(htmlEmail, leadId, companyInfo);
-console.log(emailWithFooter);
+log(emailWithFooter);
 
 // Exemple 2 : Email texte
 const textEmail = "Bonjour,\n\nVoici notre newsletter...";
 const textWithFooter = addUnsubscribeFooterText(textEmail, leadId, companyInfo);
-console.log(textWithFooter);
+log(textWithFooter);

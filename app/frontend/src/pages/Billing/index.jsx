@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -114,7 +115,7 @@ export default function Billing() {
       setCurrentPlan(data.subscription.plan);
       setSubscription(data.subscription);
     } catch (error) {
-      console.error('Erreur chargement abonnement:', error);
+      error('Erreur chargement abonnement:', error);
     } finally {
       setLoading(false);
     }
@@ -126,7 +127,7 @@ export default function Billing() {
       // Rediriger vers Stripe Checkout
       window.location.href = data.url;
     } catch (error) {
-      console.error('Erreur création session:', error);
+      error('Erreur création session:', error);
       alert('Erreur lors de la création de la session de paiement');
     }
   };

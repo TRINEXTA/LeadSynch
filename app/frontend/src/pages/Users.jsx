@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key } from 'lucide-react';
@@ -42,10 +43,10 @@ export default function Users() {
     setLoading(true);
     try {
       const response = await api.get('/users');
-      console.log('👥 Users chargés:', response.data.users);
+      log('👥 Users chargés:', response.data.users);
       setUsers(response.data.users || []);
     } catch (error) {
-      console.error('❌ Erreur users:', error);
+      error('❌ Erreur users:', error);
       toast.error('Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
@@ -57,7 +58,7 @@ export default function Users() {
       const response = await api.get('/teams');
       setTeams(response.data.teams || []);
     } catch (error) {
-      console.error('❌ Erreur teams:', error);
+      error('❌ Erreur teams:', error);
     }
   };
 
@@ -99,7 +100,7 @@ export default function Users() {
       });
       loadUsers();
     } catch (error) {
-      console.error('❌ Erreur:', error);
+      error('❌ Erreur:', error);
       toast.error(error.response?.data?.error || 'Erreur lors de la sauvegarde');
     }
   };

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import "dotenv/config";
 import { sendGraphMail } from "../src/services/email/graphMail.js";
 
@@ -10,10 +11,10 @@ import { sendGraphMail } from "../src/services/email/graphMail.js";
       html: "<h2>OK ✅</h2><p>Mail envoyé via Microsoft Graph (app-only).</p>",
       from: process.env.MS_SENDER, // ex: noreply@leadsynch.com (boîte partagée)
     });
-    console.log("✔ Mail envoyé:", res);
+    log("✔ Mail envoyé:", res);
     process.exit(0);
   } catch (e) {
-    console.error("✖ Erreur:", e?.message || e);
+    error("✖ Erreur:", e?.message || e);
     process.exit(1);
   }
 })();

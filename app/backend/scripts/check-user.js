@@ -1,8 +1,9 @@
+import { log, error, warn } from "../lib/logger.js";
 import { queryAll } from '../lib/db.js';
 
 async function checkUser() {
   try {
-    console.log('?? Recherche de ton compte...\n');
+    log('?? Recherche de ton compte...\n');
 
     const users = await queryAll(
       `SELECT id, email, role, tenant_id, created_at 
@@ -11,15 +12,15 @@ async function checkUser() {
     );
 
     if (users.length > 0) {
-      console.log('? Compte trouvé:');
-      console.log(users[0]);
+      log('? Compte trouvé:');
+      log(users[0]);
     } else {
-      console.log('? Aucun compte trouvé avec cet email !');
+      log('? Aucun compte trouvé avec cet email !');
     }
 
     process.exit(0);
   } catch (error) {
-    console.error('? Erreur:', error);
+    error('? Erreur:', error);
     process.exit(1);
   }
 }

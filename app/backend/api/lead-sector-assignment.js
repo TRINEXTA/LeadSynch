@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Lead Sector Assignment - Gestion assignation leads aux secteurs géographiques
  * Permet de réassigner manuellement, obtenir stats, et filtrer leads par secteur
@@ -63,7 +64,7 @@ export default async function handler(req, res) {
         [sector_id, lead_id]
       );
 
-      console.log(`✅ Lead ${lead_id} assigné au secteur ${sector_id}`);
+      log(`✅ Lead ${lead_id} assigné au secteur ${sector_id}`);
 
       return res.json({
         success: true,
@@ -92,7 +93,7 @@ export default async function handler(req, res) {
 
       const assigned = result.rows.filter(r => r.geographic_sector_id !== null).length;
 
-      console.log(`✅ ${assigned}/${lead_ids.length} leads assignés aux secteurs`);
+      log(`✅ ${assigned}/${lead_ids.length} leads assignés aux secteurs`);
 
       return res.json({
         success: true,
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
 
       const count = result.rows.length;
 
-      console.log(`✅ ${count} leads réassignés aux secteurs pour tenant ${tenantId}`);
+      log(`✅ ${count} leads réassignés aux secteurs pour tenant ${tenantId}`);
 
       return res.json({
         success: true,
@@ -210,7 +211,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('❌ Erreur lead-sector-assignment:', error);
+    error('❌ Erreur lead-sector-assignment:', error);
     return res.status(500).json({ error: error.message });
   }
 }

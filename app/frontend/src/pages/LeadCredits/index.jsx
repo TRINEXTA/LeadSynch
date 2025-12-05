@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -34,7 +35,7 @@ export default function LeadCredits() {
       setPurchases(purchasesRes.data.purchases);
       setUsage(usageRes.data);
     } catch (error) {
-      console.error('Erreur chargement crédits:', error);
+      error('Erreur chargement crédits:', error);
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function LeadCredits() {
       setProspectCount('');
       await fetchData();
     } catch (error) {
-      console.error('Erreur achat:', error);
+      error('Erreur achat:', error);
       const errorMsg = error.response?.data?.message || 'Erreur lors de l\'achat des prospects';
       alert(`❌ Erreur : ${errorMsg}`);
     } finally {

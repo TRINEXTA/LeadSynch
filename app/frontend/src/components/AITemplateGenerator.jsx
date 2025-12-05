@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState } from 'react';
 import { Sparkles, Loader } from 'lucide-react';
 import api from '../api/axios';
@@ -37,7 +38,7 @@ export default function AITemplateGenerator({ onGenerated }) {
 
       toast.success('Template généré ! Passez en mode HTML pour l\'éditer.');
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur : ' + (error.response?.data?.message || error.message));
     } finally {
       setGenerating(false);

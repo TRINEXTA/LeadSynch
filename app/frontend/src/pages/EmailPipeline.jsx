@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { TrendingUp, Users, DollarSign, Clock, Mail, Phone, MapPin, Star, X, Filter } from 'lucide-react';
@@ -36,11 +37,11 @@ export default function EmailPipeline() {
     try {
       const response = await api.get('/leads');
       const leadsData = response.data.leads || [];
-      console.log('Leads chargés:', leadsData.length);
+      log('Leads chargés:', leadsData.length);
       setLeads(leadsData);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       setLoading(false);
     }
   };
@@ -50,7 +51,7 @@ export default function EmailPipeline() {
       const response = await api.get('/campaigns');
       setCampaigns(response.data.campaigns || []);
     } catch (error) {
-      console.error('Erreur campaigns:', error);
+      error('Erreur campaigns:', error);
     }
   };
 
@@ -84,7 +85,7 @@ export default function EmailPipeline() {
     try {
       await api.patch(`/leads/${draggableId}`, { status: destination.droppableId });
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       loadLeads();
     }
   };
@@ -103,7 +104,7 @@ export default function EmailPipeline() {
       setLeads(updatedLeads);
       setSelectedLead(null);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       alert('Erreur lors de la mise à jour');
     }
   };

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import puppeteer from 'puppeteer';
 import fs from 'fs/promises';
 import path from 'path';
@@ -26,7 +27,7 @@ export async function generatePDFFromHTML(htmlContent, options = {}) {
 
     return pdfBuffer;
   } catch (error) {
-    console.error('Erreur generation PDF:', error);
+    error('Erreur generation PDF:', error);
     throw error;
   } finally {
     if (browser) {
@@ -45,7 +46,7 @@ export async function savePDF(pdfBuffer, filename) {
 
     return `/uploads/contracts/${filename}`;
   } catch (error) {
-    console.error('Erreur sauvegarde PDF:', error);
+    error('Erreur sauvegarde PDF:', error);
     throw error;
   }
 }

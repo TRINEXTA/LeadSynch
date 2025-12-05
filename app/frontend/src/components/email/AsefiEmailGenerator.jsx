@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 ﻿import { useState } from 'react';
 import { Send, Sparkles, Mail, Users, TrendingUp, Link as LinkIcon } from 'lucide-react';
 import api from '../../api/axios';
@@ -78,7 +79,7 @@ export default function AsefiEmailGenerator({ onGenerated, onCancel }) {
       }
       
     } catch (error) {
-      console.error('Erreur Asefi:', error);
+      error('Erreur Asefi:', error);
       alert('Erreur lors de la génération: ' + (error.response?.data?.error || error.message));
     } finally {
       setIsLoading(false);

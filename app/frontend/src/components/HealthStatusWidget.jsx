@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import {
@@ -37,7 +38,7 @@ export default function HealthStatusWidget() {
         plan: quotas.email?.plan || 'FREE'
       });
     } catch (error) {
-      console.error('Erreur health check:', error);
+      error('Erreur health check:', error);
       // En cas d'erreur, afficher quand même le widget
       setHealth({
         emailConfigured: false,

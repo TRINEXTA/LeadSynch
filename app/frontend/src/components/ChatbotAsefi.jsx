@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Mic, MicOff, Loader, Minimize2, Maximize2, FileText } from 'lucide-react';
 import api from '../api/axios';
@@ -129,7 +130,7 @@ export default function ChatbotAsefi({ isOpen, onClose }) {
       }
 
     } catch (error) {
-      console.error('Erreur Asefi:', error);
+      error('Erreur Asefi:', error);
       const errorMessage = {
         id: Date.now() + 1,
         type: 'bot',

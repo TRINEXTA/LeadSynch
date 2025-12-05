@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import { useState, useEffect } from 'react';
 import {
   Users, DollarSign, TrendingUp, AlertTriangle,
@@ -29,7 +30,7 @@ export default function SuperAdminDashboard() {
       setStats(statsRes.data.stats);
       setRevenueChart(revenueRes.data.data.reverse()); // Plus ancien → plus récent
     } catch (error) {
-      console.error('Erreur chargement dashboard:', error);
+      error('Erreur chargement dashboard:', error);
     } finally {
       setLoading(false);
     }

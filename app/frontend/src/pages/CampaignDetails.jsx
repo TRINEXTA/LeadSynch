@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -38,7 +39,7 @@ export default function CampaignDetails() {
         const statsRes = await api.get(`/tracking/campaign/${campaignId}/stats`);
         setStats(statsRes.data.stats);
       } catch (e) {
-        console.error('Erreur stats:', e);
+        error('Erreur stats:', e);
         setStats({ sent: 0, opened: 0, clicked: 0, open_rate: 0, click_rate: 0 });
       }
 
@@ -46,12 +47,12 @@ export default function CampaignDetails() {
         const commercialsRes = await api.get(`/campaigns/${campaignId}/commercials`);
         setCommercials(commercialsRes.data.commercials || []);
       } catch (e) {
-        console.error('Erreur commercials:', e);
+        error('Erreur commercials:', e);
         setCommercials([]);
       }
 
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur chargement campagne');
     } finally {
       setLoading(false);
@@ -69,7 +70,7 @@ export default function CampaignDetails() {
       toast.success('Campagne supprimée');
       navigate('/Campaigns');
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur lors de la suppression');
     } finally {
       setDeleting(false);

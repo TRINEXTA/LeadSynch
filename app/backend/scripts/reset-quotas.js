@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { queryAll, execute } from '../lib/db.js';
 import dotenv from 'dotenv';
 
@@ -5,7 +6,7 @@ dotenv.config();
 
 async function resetMonthlyQuotas() {
   try {
-    console.log('🔄 Démarrage reset quotas mensuel...');
+    log('🔄 Démarrage reset quotas mensuel...');
 
     // Récupérer les abonnements à reset
     const toReset = await queryAll(
@@ -15,7 +16,7 @@ async function resetMonthlyQuotas() {
       []
     );
 
-    console.log(`📊 ${toReset.length} abonnement(s) à réinitialiser`);
+    log(`📊 ${toReset.length} abonnement(s) à réinitialiser`);
 
     // Reset les quotas
     if (toReset.length > 0) {
@@ -32,7 +33,7 @@ async function resetMonthlyQuotas() {
         []
       );
 
-      console.log(`✅ ${toReset.length} abonnement(s) réinitialisé(s)`);
+      log(`✅ ${toReset.length} abonnement(s) réinitialisé(s)`);
     }
 
     // Expirer les packs one-shot
@@ -52,14 +53,14 @@ async function resetMonthlyQuotas() {
         []
       );
 
-      console.log(`📦 ${expiredPacks.length} pack(s) expiré(s)`);
+      log(`📦 ${expiredPacks.length} pack(s) expiré(s)`);
     }
 
-    console.log('✅ Reset quotas terminé !');
+    log('✅ Reset quotas terminé !');
     process.exit(0);
 
   } catch (error) {
-    console.error('❌ Erreur reset quotas:', error);
+    error('❌ Erreur reset quotas:', error);
     process.exit(1);
   }
 }

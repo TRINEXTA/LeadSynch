@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne, execute } from '../lib/db.js';
 import { sendEmail } from '../services/elasticEmail.js';
@@ -63,7 +64,7 @@ async function handler(req, res) {
     const fromEmail = process.env.EMAIL_FROM || 'contact@leadsynch.com';
     const replyToEmail = process.env.EMAIL_REPLY_TO || fromEmail;
     
-    console.log('📧 Email expéditeur:', fromEmail);
+    log('📧 Email expéditeur:', fromEmail);
     
     let sent = 0;
     let failed = 0;
@@ -122,7 +123,7 @@ async function handler(req, res) {
         
         // Vérifier si l'envoi a réussi
         if (!emailResult.success) {
-          console.error('❌ Elastic Email a rejeté:', lead.email, '-', emailResult.error);
+          error('❌ Elastic Email a rejeté:', lead.email, '-', emailResult.error);
           await execute(
             'UPDATE campaign_leads SET status = $1 WHERE id = $2',   
             ['failed', lead.id]
@@ -146,10 +147,10 @@ async function handler(req, res) {
         }
         
         sent++;
-        console.log(`✅ Email envoyé à ${lead.email} - MessageID: ${emailResult.messageId}`);
+        log(`✅ Email envoyé à ${lead.email} - MessageID: ${emailResult.messageId}`);
 
       } catch (error) {
-        console.error('❌ Erreur envoi email à', lead.email, ':', error.message);
+        error('❌ Erreur envoi email à', lead.email, ':', error.message);
         await execute(
           'UPDATE campaign_leads SET status = $1 WHERE id = $2',   
           ['failed', lead.id]
@@ -163,7 +164,7 @@ async function handler(req, res) {
       ['active', sent, campaign_id]
     );
     
-    console.log(`📊 Résultat: ${sent} envoyés, ${failed} échoués sur ${leads.length} total`);
+    log(`📊 Résultat: ${sent} envoyés, ${failed} échoués sur ${leads.length} total`);
 
     return res.json({
       success: true,
@@ -176,7 +177,7 @@ async function handler(req, res) {
     });
     
   } catch (error) {
-    console.error('❌ Erreur envoi emails:', error);
+    error('❌ Erreur envoi emails:', error);
     return res.status(500).json({ error: error.message });
   }
 }

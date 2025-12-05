@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -73,7 +74,7 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
         setTimeout(() => onExit(), 1000);
       }
     } catch (error) {
-      console.error('Erreur qualification:', error);
+      error('Erreur qualification:', error);
       toast.error('Erreur lors de la qualification');
     }
   };
@@ -120,7 +121,7 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
         window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
       }
     } catch (error) {
-      console.error('❌ Erreur génération email:', error);
+      error('❌ Erreur génération email:', error);
       toast.error('Erreur lors de la génération de l\'email');
     } finally {
       setGenerating(false);

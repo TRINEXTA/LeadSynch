@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { FileCheck, Download, Mail, Eye, Trash2, Search, CheckCircle, Clock, Send, XCircle, Loader2, Sparkles, RefreshCw, Shield, PenTool } from 'lucide-react';
 import api from '../api/axios';
@@ -52,7 +53,7 @@ export default function Contracts() {
       const response = await api.get(`/contracts?${params.toString()}`);
       setContracts(response.data.contracts || []);
     } catch (error) {
-      console.error('Error loading contracts:', error);
+      error('Error loading contracts:', error);
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ export default function Contracts() {
         window.URL.revokeObjectURL(url);
       }
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      error('Error downloading PDF:', error);
       toast.error('Erreur lors du téléchargement');
     } finally {
       setDownloading(null);
@@ -108,13 +109,13 @@ export default function Contracts() {
           assigned_to: contract.created_by
         });
       } catch (e) {
-        console.warn('Could not create task');
+        warn('Could not create task');
       }
 
       toast.success('Contrat validé avec succès !');
       loadContracts();
     } catch (error) {
-      console.error('Error:', error);
+      error('Error:', error);
       toast.error('Erreur lors de la validation');
     } finally {
       setValidating(null);
@@ -175,7 +176,7 @@ L'équipe Trinexta`;
       loadContracts();
 
     } catch (error) {
-      console.error('Error:', error);
+      error('Error:', error);
     } finally {
       setSendingEmail(null);
     }
@@ -194,7 +195,7 @@ L'équipe Trinexta`;
                 toast.success('Contrat supprimé');
                 loadContracts();
               } catch (error) {
-                console.error('Error:', error);
+                error('Error:', error);
                 toast.error(error.response?.data?.error || 'Erreur lors de la suppression');
               }
             }}

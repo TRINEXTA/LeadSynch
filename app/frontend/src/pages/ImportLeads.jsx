@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState } from "react";
 import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,7 +116,7 @@ export default function ImportLeads() {
 
       reader.readAsText(file);
     } catch (error) {
-      console.error('Erreur import:', error);
+      error('Erreur import:', error);
       toast.error('Erreur lors de l\'import : ' + (error.response?.data?.error || error.message));
     } finally {
       setImporting(false);

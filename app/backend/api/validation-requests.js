@@ -1,9 +1,10 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Validation Requests - Demandes de validation et d'aide
  * Permet aux commerciaux de demander validation ou aide aux managers
  */
 
-import { query, queryOne, queryAll, execute } from '../lib/db.js';
+import { resolve } from '../lib/container.js';
 import { verifyAuth } from '../middleware/auth.js';
 
 export default async function handler(req, res) {
@@ -76,7 +77,7 @@ export default async function handler(req, res) {
         vr.created_at DESC
       `;
 
-      const requests = await queryAll(sqlQuery, params);
+      const requests = await resolve('db').queryAll(sqlQuery, params);
 
       return res.json({
         success: true,
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && req.url !== '/' && req.url.includes('/')) {
       const requestId = req.url.replace('/', '').split('?')[0];
 
-      const request = await queryOne(
+      const request = await resolve('db').queryOne(
         `SELECT
           vr.*,
           u_requester.first_name as requester_first_name,
@@ -145,7 +146,7 @@ export default async function handler(req, res) {
       }
 
       // Trouver automatiquement le manager de l'utilisateur
-      const manager = await queryOne(
+      const manager = await resolve('db').queryOne(
         `SELECT manager_id
          FROM users
          WHERE id = $1 AND tenant_id = $2`,
@@ -155,7 +156,7 @@ export default async function handler(req, res) {
       const assigned_to = manager?.manager_id || null;
 
       // Créer la demande
-      const newRequest = await queryOne(
+      const newRequest = await resolve('db').queryOne(
         `INSERT INTO validation_requests (
           tenant_id, type, requester_id, lead_id, campaign_id,
           subject, message, priority, assigned_to, status
@@ -174,7 +175,7 @@ export default async function handler(req, res) {
         ]
       );
 
-      console.log(`✅ Demande ${type} créée:`, newRequest.id);
+      log(`✅ Demande ${type} créée:`, newRequest.id);
 
       const messages = {
         validation: 'validation',
@@ -201,7 +202,7 @@ export default async function handler(req, res) {
       } = req.body;
 
       // Vérifier que la demande existe et appartient au tenant
-      const existingRequest = await queryOne(
+      const existingRequest = await resolve('db').queryOne(
         `SELECT * FROM validation_requests WHERE id = $1 AND tenant_id = $2`,
         [requestId, tenantId]
       );
@@ -262,9 +263,9 @@ export default async function handler(req, res) {
         RETURNING *
       `;
 
-      const updatedRequest = await queryOne(updateQuery, params);
+      const updatedRequest = await resolve('db').queryOne(updateQuery, params);
 
-      console.log(`✅ Demande ${requestId} mise à jour:`, newStatus);
+      log(`✅ Demande ${requestId} mise à jour:`, newStatus);
 
       return res.json({
         success: true,
@@ -278,7 +279,7 @@ export default async function handler(req, res) {
       const requestId = req.url.replace('/', '').split('?')[0];
 
       // Vérifier que c'est bien le créateur ou un manager
-      const existingRequest = await queryOne(
+      const existingRequest = await resolve('db').queryOne(
         `SELECT * FROM validation_requests WHERE id = $1 AND tenant_id = $2`,
         [requestId, tenantId]
       );
@@ -294,12 +295,12 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: 'Permission refusée' });
       }
 
-      await execute(
+      await resolve('db').execute(
         `DELETE FROM validation_requests WHERE id = $1 AND tenant_id = $2`,
         [requestId, tenantId]
       );
 
-      console.log(`✅ Demande ${requestId} supprimée`);
+      log(`✅ Demande ${requestId} supprimée`);
 
       return res.json({
         success: true,
@@ -310,7 +311,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('❌ Erreur validation-requests:', error);
+    error('❌ Erreur validation-requests:', error);
     return res.status(500).json({ error: error.message });
   }
 }

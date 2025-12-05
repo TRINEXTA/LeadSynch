@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Phone, Clock } from 'lucide-react';
 import QualificationModal from '../QualificationModal';
@@ -55,7 +56,7 @@ export default function QuickCallModal({ lead, onClose, onSuccess }) {
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
-      console.error('❌ Erreur:', error);
+      error('❌ Erreur:', error);
       alert('Erreur lors de l\'enregistrement');
     }
   };

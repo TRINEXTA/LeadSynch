@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { readFileSync } from 'fs';
 import pg from 'pg';
 import dotenv from 'dotenv';
@@ -16,51 +17,51 @@ const client = new pg.Client({
 
 async function runMigration() {
   try {
-    console.log('🔄 Connexion à PostgreSQL...');
+    log('🔄 Connexion à PostgreSQL...');
     await client.connect();
-    console.log('✅ Connecté à la base de données');
+    log('✅ Connecté à la base de données');
 
-    console.log('📂 Lecture du script SQL...');
+    log('📂 Lecture du script SQL...');
     const sqlPath = join(__dirname, 'migrations', '00_COMPLETE_SETUP.sql');
     const sql = readFileSync(sqlPath, 'utf8');
-    console.log(`✅ Script chargé (${sql.length} caractères)`);
+    log(`✅ Script chargé (${sql.length} caractères)`);
 
-    console.log('⚙️  Exécution de la migration...');
+    log('⚙️  Exécution de la migration...');
     await client.query(sql);
 
-    console.log('');
-    console.log('========================================');
-    console.log('✅ MIGRATION EXÉCUTÉE AVEC SUCCÈS !');
-    console.log('========================================');
-    console.log('');
-    console.log('📋 Tables créées :');
-    console.log('  - lead_credits');
-    console.log('  - credit_purchases');
-    console.log('  - credit_usage');
-    console.log('  - services');
-    console.log('  - subscriptions');
-    console.log('  - subscription_invoices');
-    console.log('  - subscription_history');
-    console.log('  - invoices');
-    console.log('  - billing_info');
-    console.log('');
-    console.log('🔄 Redémarrez maintenant votre serveur backend :');
-    console.log('   npm start');
-    console.log('');
+    log('');
+    log('========================================');
+    log('✅ MIGRATION EXÉCUTÉE AVEC SUCCÈS !');
+    log('========================================');
+    log('');
+    log('📋 Tables créées :');
+    log('  - lead_credits');
+    log('  - credit_purchases');
+    log('  - credit_usage');
+    log('  - services');
+    log('  - subscriptions');
+    log('  - subscription_invoices');
+    log('  - subscription_history');
+    log('  - invoices');
+    log('  - billing_info');
+    log('');
+    log('🔄 Redémarrez maintenant votre serveur backend :');
+    log('   npm start');
+    log('');
 
   } catch (error) {
-    console.error('');
-    console.error('❌ ERREUR LORS DE LA MIGRATION');
-    console.error('========================================');
-    console.error('Message:', error.message);
+    error('');
+    error('❌ ERREUR LORS DE LA MIGRATION');
+    error('========================================');
+    error('Message:', error.message);
     if (error.stack) {
-      console.error('Stack:', error.stack);
+      error('Stack:', error.stack);
     }
-    console.error('========================================');
+    error('========================================');
     process.exit(1);
   } finally {
     await client.end();
-    console.log('👋 Connexion fermée');
+    log('👋 Connexion fermée');
   }
 }
 

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { queryOne, execute } from '../../lib/db.js';
 import { hashPassword, verifyPassword } from '../../lib/auth.js';
 import { authMiddleware } from '../../middleware/auth.js';
@@ -52,7 +53,7 @@ async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Change password error:', error);
+    error('Change password error:', error);
     return res.status(500).json({ 
       error: 'Erreur lors du changement de mot de passe' 
     });

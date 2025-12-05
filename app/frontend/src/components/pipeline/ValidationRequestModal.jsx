@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 import { useState } from 'react';
 import { X, AlertCircle, HelpCircle, CheckCircle, UserCog } from 'lucide-react';
 import api from '../../api/axios';
@@ -39,7 +40,7 @@ export default function ValidationRequestModal({ isOpen, onClose, lead, type = '
       setFormData({ subject: '', message: '', priority: 'normal' });
       onClose();
     } catch (err) {
-      console.error('Erreur création demande:', err);
+      error('Erreur création demande:', err);
       const errorMsg = err.response?.data?.error || 'Erreur lors de la création de la demande';
       setError(errorMsg);
       toast.error(`❌ ${errorMsg}`);

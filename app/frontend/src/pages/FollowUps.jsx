@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import {
   Calendar, Clock, Plus, Check, X, AlertCircle,
@@ -86,7 +87,7 @@ export default function FollowUps() {
         setFollowups(data.followups || []);
       }
     } catch (error) {
-      console.error('Erreur chargement rappels:', error);
+      error('Erreur chargement rappels:', error);
       toast.error('Erreur lors du chargement des rappels');
     } finally {
       setLoading(false);
@@ -105,7 +106,7 @@ export default function FollowUps() {
         setLeads(filteredLeads);
       }
     } catch (error) {
-      console.error('Erreur chargement leads:', error);
+      error('Erreur chargement leads:', error);
     }
   };
 
@@ -118,7 +119,7 @@ export default function FollowUps() {
         setTeamMembers(data.users);
       }
     } catch (error) {
-      console.error('Erreur chargement équipe:', error);
+      error('Erreur chargement équipe:', error);
     }
   };
 

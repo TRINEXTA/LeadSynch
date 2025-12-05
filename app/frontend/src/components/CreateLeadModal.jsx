@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState } from 'react';
 import { X, Save, Building2, User, Mail, Phone, MapPin, Globe, Hash, Users } from 'lucide-react';
 import api from '../api/axios';
@@ -41,7 +42,7 @@ export default function CreateLeadModal({ databaseId, onClose, onSuccess, presel
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
-      console.error('Erreur création lead:', error);
+      error('Erreur création lead:', error);
       alert('❌ Erreur lors de la création du lead');
     } finally {
       setLoading(false);

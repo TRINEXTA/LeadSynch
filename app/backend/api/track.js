@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { Router } from "express";
 import { execute, queryOne } from "../lib/db.js";
 
@@ -83,7 +84,7 @@ router.get("/open", async (req, res) => {
     res.writeHead(200, { "Content-Type": "image/gif" });
     res.end(pixel);
   } catch (error) {
-    console.error('Track open error:', error.message);
+    error('Track open error:', error.message);
     // Retourner le pixel même en cas d'erreur pour ne pas bloquer l'affichage email
     const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
     res.writeHead(200, { "Content-Type": "image/gif" });
@@ -110,7 +111,7 @@ router.get("/click", async (req, res) => {
 
     // SÉCURITÉ: Valider l'URL de redirection pour éviter Open Redirect
     if (decodedUrl && !isValidRedirectUrl(decodedUrl)) {
-      console.warn(`[SECURITY] Blocked redirect to unauthorized URL: ${decodedUrl}`);
+      warn(`[SECURITY] Blocked redirect to unauthorized URL: ${decodedUrl}`);
       return res.redirect("https://leadsynch.com");
     }
 
@@ -145,7 +146,7 @@ router.get("/click", async (req, res) => {
     // Redirection vers le lien réel (validé)
     res.redirect(decodedUrl || "https://leadsynch.com");
   } catch (error) {
-    console.error('Track click error:', error.message);
+    error('Track click error:', error.message);
     res.redirect("https://leadsynch.com");
   }
 });

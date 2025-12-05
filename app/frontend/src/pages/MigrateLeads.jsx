@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -36,7 +37,7 @@ export default function MigrateLeads() {
       const { data } = await api.get('/lead-databases');
       setDatabases(data.databases || []);
     } catch (error) {
-      console.error('Erreur chargement bases:', error);
+      error('Erreur chargement bases:', error);
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,7 @@ export default function MigrateLeads() {
       const { data } = await api.get(`/lead-databases/${dbId}`);
       setLeads(data.database.leads || []);
     } catch (error) {
-      console.error('Erreur chargement leads:', error);
+      error('Erreur chargement leads:', error);
       setLeads([]);
     } finally {
       setLoading(false);
@@ -107,7 +108,7 @@ export default function MigrateLeads() {
       await loadDatabases();
 
     } catch (error) {
-      console.error('Erreur migration:', error);
+      error('Erreur migration:', error);
       toast.error('❌ Erreur lors de la migration');
     } finally {
       setMigrating(false);

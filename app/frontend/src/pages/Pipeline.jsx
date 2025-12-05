@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { TrendingUp, Users, DollarSign, Clock, Filter, Search, Plus, Target } from 'lucide-react';
@@ -66,8 +67,8 @@ export default function Pipeline() {
       const campaignsResponse = await api.get('/campaigns/my-campaigns');
       const campaignsData = campaignsResponse.data.campaigns || [];
 
-      console.log('✅ Leads chargés:', leadsData.length);
-      console.log('✅ Campagnes chargées:', campaignsData.length);
+      log('✅ Leads chargés:', leadsData.length);
+      log('✅ Campagnes chargées:', campaignsData.length);
 
       setLeads(leadsData);
       setCampaigns(campaignsData);
@@ -75,7 +76,7 @@ export default function Pipeline() {
       calculateStats(leadsData);
       setLoading(false);
     } catch (error) {
-      console.error('❌ Erreur chargement données:', error);
+      error('❌ Erreur chargement données:', error);
       setLoading(false);
     }
   };
@@ -126,9 +127,9 @@ export default function Pipeline() {
 
     try {
       await api.patch(`/pipeline-leads/${draggableId}`, { stage: destination.droppableId });
-      console.log('✅ Stage mis à jour:', draggableId, '->', destination.droppableId);
+      log('✅ Stage mis à jour:', draggableId, '->', destination.droppableId);
     } catch (error) {
-      console.error('❌ Erreur update stage:', error);
+      error('❌ Erreur update stage:', error);
       loadData();
     }
   };
@@ -196,13 +197,13 @@ export default function Pipeline() {
     try {
       if (editingLead) {
         await api.patch(`/pipeline-leads/${editingLead.id}`, leadData);
-        console.log('✅ Lead mis à jour');
+        log('✅ Lead mis à jour');
       } else {
         await api.post('/pipeline-leads', {
           ...leadData,
           stage: creatingLeadStage
         });
-        console.log('✅ Lead créé');
+        log('✅ Lead créé');
       }
       
       setShowLeadModal(false);
@@ -210,7 +211,7 @@ export default function Pipeline() {
       setCreatingLeadStage(null);
       loadData();
     } catch (error) {
-      console.error('❌ Erreur sauvegarde lead:', error);
+      error('❌ Erreur sauvegarde lead:', error);
       throw error;
     }
   };

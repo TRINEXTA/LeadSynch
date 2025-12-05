@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Phone, Mail, MessageSquare, TrendingUp, Clock, User, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../api/axios';
@@ -38,7 +39,7 @@ export default function LeadHistoryPanel({ pipelineLeadId, leadId }) {
       const res = await api.get(`/pipeline-leads/${pipelineLeadId}/history`);
       setHistory(res.data.history || []);
     } catch (error) {
-      console.error('Erreur chargement historique:', error);
+      error('Erreur chargement historique:', error);
     } finally {
       setLoading(false);
     }

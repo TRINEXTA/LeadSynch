@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 /**
  * API Campaign Detailed Stats - Stats détaillées d'une campagne
  * Retourne breakdown complet: leads totaux, contactés, par statut, etc.
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Erreur stats détaillées campagne:', error);
+    error('❌ Erreur stats détaillées campagne:', error);
     res.status(500).json({ error: error.message });
   }
 }

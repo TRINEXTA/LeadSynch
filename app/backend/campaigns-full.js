@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 
@@ -98,7 +99,7 @@ async function handler(req, res) {
           leadIndex += leadsPerUser;
         }
 
-        console.log(`✅ ${leads.length} leads distribués à ${assigned_users.length} commerciaux`);
+        log(`✅ ${leads.length} leads distribués à ${assigned_users.length} commerciaux`);
       }
 
       return res.json({
@@ -227,7 +228,7 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Campaigns error:', error);
+    error('Campaigns error:', error);
     return res.status(500).json({ 
       error: 'Server error',
       details: error.message 

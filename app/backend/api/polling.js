@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pollingService } from '../lib/elasticEmailPolling.js';

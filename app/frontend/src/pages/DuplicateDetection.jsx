@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Copy, Search, Loader2, AlertTriangle, CheckCircle, Zap, Users, Merge } from 'lucide-react';
@@ -30,7 +31,7 @@ export default function DuplicateDetection() {
         toast.success(`🔍 ${response.data.duplicates.length} groupes de doublons détectés`);
       }
     } catch (error) {
-      console.error('Erreur détection:', error);
+      error('Erreur détection:', error);
       toast.error('Erreur lors de la détection des doublons');
     } finally {
       setLoading(false);
@@ -91,7 +92,7 @@ export default function DuplicateDetection() {
           successCount++;
 
         } catch (error) {
-          console.error(`Erreur fusion groupe ${groupIndex}:`, error);
+          error(`Erreur fusion groupe ${groupIndex}:`, error);
           errorCount++;
         }
       }
@@ -107,7 +108,7 @@ export default function DuplicateDetection() {
       setSelectedPairs([]);
 
     } catch (error) {
-      console.error('Erreur fusion:', error);
+      error('Erreur fusion:', error);
       toast.error('Erreur lors de la fusion des doublons');
     } finally {
       setMerging(false);

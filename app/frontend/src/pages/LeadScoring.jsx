@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,7 @@ export default function LeadScoring() {
     calculateStats(leadsWithScores);
     
   } catch (error) {
-    console.error('Erreur chargement:', error);
+    error('Erreur chargement:', error);
   } finally {
     setLoading(false);
   }

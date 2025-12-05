@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Edit, Save, Phone, Mail, MapPin, Building2, User, Calendar, FileText, Plus, Trash2, Star, ExternalLink } from 'lucide-react';
 import api from '../api/axios';
@@ -44,7 +45,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
       const res = await api.get(`/leads/${lead.id}/contacts`);
       setContacts(res.data.contacts || []);
     } catch (error) {
-      console.error('Erreur chargement contacts:', error);
+      error('Erreur chargement contacts:', error);
     }
   };
 
@@ -53,7 +54,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
       const res = await api.get(`/leads/${lead.id}/phones`);
       setPhones(res.data.phones || []);
     } catch (error) {
-      console.error('Erreur chargement téléphones:', error);
+      error('Erreur chargement téléphones:', error);
     }
   };
 
@@ -62,7 +63,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
       const res = await api.get(`/leads/${lead.id}/offices`);
       setOffices(res.data.offices || []);
     } catch (error) {
-      console.error('Erreur chargement bureaux:', error);
+      error('Erreur chargement bureaux:', error);
     }
   };
 
@@ -71,7 +72,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
       const res = await api.get(`/leads/${lead.id}/notes`);
       setNotes(res.data.notes || []);
     } catch (error) {
-      console.error('Erreur chargement notes:', error);
+      error('Erreur chargement notes:', error);
     }
   };
 
@@ -83,7 +84,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
       setIsEditing(false);
       if (onUpdate) onUpdate();
     } catch (error) {
-      console.error('Erreur mise à jour:', error);
+      error('Erreur mise à jour:', error);
       alert('❌ Erreur lors de la mise à jour');
     } finally {
       setLoading(false);

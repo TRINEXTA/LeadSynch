@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
@@ -33,7 +34,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const { database_id, csv_content, sector } = validatedData;
 
-    console.log(`📊 [IMPORT CSV] Début pour base ${database_id} - Tenant ${tenant_id}`);
+    log(`📊 [IMPORT CSV] Début pour base ${database_id} - Tenant ${tenant_id}`);
 
     // Vérifier que la database existe et appartient au tenant
     const dbCheck = await db.query(
@@ -60,7 +61,7 @@ router.post('/', authMiddleware, async (req, res) => {
         encoding: 'utf8'
       });
     } catch (parseError) {
-      console.error('❌ Erreur parsing CSV:', parseError);
+      error('❌ Erreur parsing CSV:', parseError);
       return res.status(400).json({
         success: false,
         error: 'Format CSV invalide',
@@ -68,7 +69,7 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`📋 ${records.length} lignes CSV détectées`);
+    log(`📋 ${records.length} lignes CSV détectées`);
 
     if (records.length === 0) {
       return res.status(400).json({
@@ -88,7 +89,7 @@ router.post('/', authMiddleware, async (req, res) => {
       
       try {
         if (i === 0) {
-          console.log('🔍 Colonnes détectées:', Object.keys(record).slice(0, 10));
+          log('🔍 Colonnes détectées:', Object.keys(record).slice(0, 10));
         }
 
         // ✅ Mapping et nettoyage des colonnes
@@ -189,7 +190,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         // Validation nom entreprise
         if (!company_name || company_name.length < 2) {
-          console.log(`⚠️ Ligne ${i + 1} ignorée (nom invalide):`, company_name);
+          log(`⚠️ Ligne ${i + 1} ignorée (nom invalide):`, company_name);
           skipped++;
           errors.push({
             line: i + 1,
@@ -319,11 +320,11 @@ router.post('/', authMiddleware, async (req, res) => {
 
         // Log progression
         if (i % 50 === 0 && i > 0) {
-          console.log(`📈 ${i}/${records.length} (${added} ajoutés, ${updated} mis à jour)`);
+          log(`📈 ${i}/${records.length} (${added} ajoutés, ${updated} mis à jour)`);
         }
 
       } catch (lineError) {
-        console.error(`❌ Ligne ${i + 1}:`, lineError.message);
+        error(`❌ Ligne ${i + 1}:`, lineError.message);
         skipped++;
         errors.push({
           line: i + 1,
@@ -347,11 +348,11 @@ router.post('/', authMiddleware, async (req, res) => {
         [JSON.stringify(sectorsDetected), database_id, tenant_id]
       );
     } catch (updateError) {
-      console.error('⚠️ Erreur mise à jour segmentation:', updateError);
+      error('⚠️ Erreur mise à jour segmentation:', updateError);
     }
 
-    console.log(`✅ Import: ${added} ajoutés, ${updated} mis à jour, ${skipped} ignorés`);
-    console.log(`📊 Secteurs:`, sectorsDetected);
+    log(`✅ Import: ${added} ajoutés, ${updated} mis à jour, ${skipped} ignorés`);
+    log(`📊 Secteurs:`, sectorsDetected);
 
     return res.json({
       success: true,
@@ -366,7 +367,7 @@ router.post('/', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [IMPORT CSV] Erreur fatale:', error);
+    error('❌ [IMPORT CSV] Erreur fatale:', error);
     return res.status(500).json({ 
       success: false,
       error: 'Erreur lors de l\'import',

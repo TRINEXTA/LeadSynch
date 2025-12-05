@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿/**
  * Module pour ajouter automatiquement le footer de désabonnement
  * et les informations légales (RGPD/CAN-SPAM) à tous les emails

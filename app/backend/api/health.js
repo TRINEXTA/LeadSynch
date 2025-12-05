@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { Router } from 'express';
 import { query, pool } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -62,7 +63,7 @@ router.get('/db', async (req, res) => {
       performance: latency < 100 ? 'excellent' : latency < 300 ? 'good' : 'slow'
     });
   } catch (error) {
-    console.error('❌ Health check DB:', error);
+    error('❌ Health check DB:', error);
     res.status(500).json({
       ok: false,
       status: 'unhealthy',
@@ -95,7 +96,7 @@ router.get('/email', async (req, res) => {
       warnings: allConfigured ? [] : ['ELASTIC_EMAIL_API_KEY not configured']
     });
   } catch (error) {
-    console.error('❌ Health check Email:', error);
+    error('❌ Health check Email:', error);
     res.status(500).json({
       ok: false,
       status: 'unhealthy',
@@ -144,7 +145,7 @@ router.get('/apis', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Health check APIs:', error);
+    error('❌ Health check APIs:', error);
     res.status(500).json({
       ok: false,
       status: 'unhealthy',
@@ -189,7 +190,7 @@ router.get('/campaigns', async (req, res) => {
       system: 'operational'
     });
   } catch (error) {
-    console.error('❌ Health check Campaigns:', error);
+    error('❌ Health check Campaigns:', error);
     res.status(500).json({
       ok: false,
       status: 'unhealthy',
@@ -234,7 +235,7 @@ router.get('/tracking', async (req, res) => {
       system: 'operational'
     });
   } catch (error) {
-    console.error('❌ Health check Tracking:', error);
+    error('❌ Health check Tracking:', error);
     res.status(500).json({
       ok: false,
       status: 'unhealthy',
@@ -283,7 +284,7 @@ router.get('/workers', async (req, res) => {
       system: 'operational'
     });
   } catch (error) {
-    console.error('❌ Health check Workers:', error);
+    error('❌ Health check Workers:', error);
     res.status(500).json({
       ok: false,
       status: 'unhealthy',

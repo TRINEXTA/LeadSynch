@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import pg from 'pg';
 import dotenv from 'dotenv';
 
@@ -15,17 +16,17 @@ async function checkSchema() {
       ORDER BY ordinal_position
     `);
     
-    console.log('\n=== STRUCTURE TABLE SUBSCRIPTIONS ===');
+    log('\n=== STRUCTURE TABLE SUBSCRIPTIONS ===');
     result.rows.forEach(row => {
-      console.log(`${row.column_name}: ${row.data_type}`);
+      log(`${row.column_name}: ${row.data_type}`);
     });
-    console.log('=====================================\n');
+    log('=====================================\n');
     
     await pool.end();
     process.exit(0);
     
   } catch (error) {
-    console.error('Erreur:', error.message);
+    error('Erreur:', error.message);
     await pool.end();
     process.exit(1);
   }

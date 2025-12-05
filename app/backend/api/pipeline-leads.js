@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import express from 'express';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
@@ -60,7 +61,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // Admin ou super admin : voir tous les leads
     if (isSuperAdmin || userRole === 'admin') {
       // Pas de filtre supplémentaire
-      console.log(`✅ Admin - accès à tous les leads du pipeline`);
+      log(`✅ Admin - accès à tous les leads du pipeline`);
     }
     // Manager : voir ses leads + ceux de ses équipes + campagnes assignées
     else if (userRole === 'manager') {
@@ -85,25 +86,25 @@ router.get('/', authenticateToken, async (req, res) => {
         )
       )`;
       params.push(userId);
-      console.log(`✅ Manager ${userId} - accès à ses leads + équipe + campagnes assignées`);
+      log(`✅ Manager ${userId} - accès à ses leads + équipe + campagnes assignées`);
     }
     // Commercial/User : uniquement ses propres leads
     else {
       query += ` AND (pl.assigned_user_id = $2 OR l.assigned_to = $2)`;
       params.push(userId);
-      console.log(`✅ User ${userId} - accès à ses leads uniquement`);
+      log(`✅ User ${userId} - accès à ses leads uniquement`);
     }
 
     query += ` ORDER BY pl.updated_at DESC`;
 
     const { rows } = await q(query, params);
 
-    console.log(`Pipeline leads: ${rows.length} pour user:${userId} role:${userRole}`);
+    log(`Pipeline leads: ${rows.length} pour user:${userId} role:${userRole}`);
 
     return res.json({ success: true, leads: rows });
 
   } catch (error) {
-    console.error('❌ Erreur GET pipeline-leads:', error);
+    error('❌ Erreur GET pipeline-leads:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -119,7 +120,7 @@ router.post('/:id/action', authenticateToken, async (req, res) => {
     const user_id = req.user.id;
     const tenant_id = req.user.tenant_id;
 
-    console.log(`📝 Enregistrement action ${action_type} pour lead ${id}`);
+    log(`📝 Enregistrement action ${action_type} pour lead ${id}`);
 
     // Vérifier que le lead appartient au tenant
     const { rows: leadCheck } = await q(
@@ -162,7 +163,7 @@ router.post('/:id/action', authenticateToken, async (req, res) => {
       [id]
     );
 
-    console.log(`✅ Action ${action_type} enregistrée pour lead ${id}`);
+    log(`✅ Action ${action_type} enregistrée pour lead ${id}`);
 
     res.json({ 
       success: true, 
@@ -170,7 +171,7 @@ router.post('/:id/action', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur enregistrement action:', error);
+    error('❌ Erreur enregistrement action:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de l\'enregistrement de l\'action'
@@ -186,7 +187,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
   try {
     const TARGET_SIZE = 50;
     
-    console.log(`🔄 [SMART-REFILL] Vérification pour user ${user_id} campagne ${campaign_id}`);
+    log(`🔄 [SMART-REFILL] Vérification pour user ${user_id} campagne ${campaign_id}`);
 
     // 1. Récupérer le compteur de qualifications
     const { rows: assignmentRows } = await q(
@@ -197,7 +198,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
     );
 
     if (!assignmentRows.length) {
-      console.log(`⚠️ Aucun assignment trouvé pour user ${user_id}`);
+      log(`⚠️ Aucun assignment trouvé pour user ${user_id}`);
       return { success: false, message: 'Assignment non trouvé' };
     }
 
@@ -215,11 +216,11 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
 
     const activeColdCallCount = parseInt(activeRows[0]?.count || 0);
     
-    console.log(`📊 User ${user_id}: ${qualifiedCount} qualifiés, ${activeColdCallCount} leads en Cold Call`);
+    log(`📊 User ${user_id}: ${qualifiedCount} qualifiés, ${activeColdCallCount} leads en Cold Call`);
 
     // 3. Si moins de 10 qualifications, ne rien faire
     if (qualifiedCount < 10) {
-      console.log(`⏳ Pas assez de qualifications (${qualifiedCount}/10)`);
+      log(`⏳ Pas assez de qualifications (${qualifiedCount}/10)`);
       return { success: true, message: 'Pas encore 10 qualifications', deployed: 0 };
     }
 
@@ -227,7 +228,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
     const needed = Math.min(TARGET_SIZE, Math.max(0, qualifiedCount - activeColdCallCount));
 
     if (needed === 0) {
-      console.log(`✅ Pipeline déjà plein (${activeColdCallCount} leads)`);
+      log(`✅ Pipeline déjà plein (${activeColdCallCount} leads)`);
       await q(
         `UPDATE campaign_assignments 
          SET qualified_since_last_refill = 0
@@ -237,7 +238,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
       return { success: true, message: 'Pipeline plein', deployed: 0 };
     }
 
-    console.log(`🎯 Besoin d'envoyer ${needed} nouveaux leads`);
+    log(`🎯 Besoin d'envoyer ${needed} nouveaux leads`);
 
     // 5. Récupérer la campagne
     const { rows: campRows } = await q(
@@ -268,7 +269,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
     );
 
     if (!candidates.length) {
-      console.log(`⚠️ Plus de leads disponibles pour user ${user_id}`);
+      log(`⚠️ Plus de leads disponibles pour user ${user_id}`);
       await q(
         `UPDATE campaign_assignments 
          SET qualified_since_last_refill = 0
@@ -291,7 +292,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
         );
         deployed++;
       } catch (err) {
-        console.error('Erreur insertion lead:', err);
+        error('Erreur insertion lead:', err);
       }
     }
 
@@ -304,7 +305,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
       [deployed, campaign_id, user_id]
     );
 
-    console.log(`✅ [SMART-REFILL] ${deployed} leads ajoutés au pipeline de user ${user_id}`);
+    log(`✅ [SMART-REFILL] ${deployed} leads ajoutés au pipeline de user ${user_id}`);
 
     return { 
       success: true, 
@@ -313,7 +314,7 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
     };
 
   } catch (error) {
-    console.error('❌ [SMART-REFILL] Erreur:', error);
+    error('❌ [SMART-REFILL] Erreur:', error);
     return { success: false, error: error.message };
   }
 }
@@ -361,7 +362,7 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
       return res.json({ success: true, message: 'Aucun commercial affecté', refilled: 0 });
     }
     
-    console.log(`👥 Commerciaux trouvés: ${assignedUsers.length}`, assignedUsers);
+    log(`👥 Commerciaux trouvés: ${assignedUsers.length}`, assignedUsers);
 
     // 3) Pour chaque commercial, vérifier et refill
     const refillResults = {};
@@ -409,7 +410,7 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
             );
             deployed++;
           } catch (err) {
-            console.error('Erreur insertion lead:', err);
+            error('Erreur insertion lead:', err);
           }
         }
 
@@ -428,14 +429,14 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(`🔄 Auto-refill campagne ${campaign_id}: ${totalRefilled} leads ajoutés`);
+    log(`🔄 Auto-refill campagne ${campaign_id}: ${totalRefilled} leads ajoutés`);
     return res.json({
       success: true,
       refilled: totalRefilled,
       per_user: refillResults
     });
   } catch (err) {
-    console.error('❌ auto-refill:', err);
+    error('❌ auto-refill:', err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -492,7 +493,7 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Aucun commercial affecté à cette campagne' });
     }
 
-    console.log(`📦 Déploiement de ${SIZE} leads pour ${assignedUsers.length} commerciaux`);
+    log(`📦 Déploiement de ${SIZE} leads pour ${assignedUsers.length} commerciaux`);
 
     let totalDeployed = 0;
     const perUser = {};
@@ -525,7 +526,7 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
           );
           deployed++;
         } catch (err) {
-          console.error('Erreur insertion lead:', err);
+          error('Erreur insertion lead:', err);
         }
       }
 
@@ -540,14 +541,14 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
       );
     }
 
-    console.log(`🧩 Déploiement campagne ${campaign_id}: ${totalDeployed} leads injectés (cold_call)`);
+    log(`🧩 Déploiement campagne ${campaign_id}: ${totalDeployed} leads injectés (cold_call)`);
     return res.json({
       success: true,
       deployed: totalDeployed,
       per_user: perUser
     });
   } catch (err) {
-    console.error('❌ deploy-batch:', err);
+    error('❌ deploy-batch:', err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -614,7 +615,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
 
     let shouldTriggerRefill = false;
     if (oldStage === 'cold_call' && newStage !== 'cold_call') {
-      console.log(`📊 Lead qualifié: ${oldStage} → ${newStage}`);
+      log(`📊 Lead qualifié: ${oldStage} → ${newStage}`);
 
       // Mettre à jour le compteur de qualifications (optionnel - ne pas bloquer si la table n'existe pas)
       try {
@@ -628,13 +629,13 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
         );
 
         const qualifiedCount = updateRows[0]?.qualified_since_last_refill || 0;
-        console.log(`🔢 Compteur qualification: ${qualifiedCount}/10`);
+        log(`🔢 Compteur qualification: ${qualifiedCount}/10`);
 
         if (qualifiedCount >= 10) {
           shouldTriggerRefill = true;
         }
       } catch (assignmentError) {
-        console.warn(`⚠️ Table campaign_assignments non disponible ou enregistrement manquant:`, assignmentError.message);
+        warn(`⚠️ Table campaign_assignments non disponible ou enregistrement manquant:`, assignmentError.message);
         // Continuer sans bloquer la qualification
       }
     }
@@ -715,25 +716,25 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
               followUpDate
             ]
           );
-          console.log(`📅 Follow-up créé pour lead ${realLeadId}`);
+          log(`📅 Follow-up créé pour lead ${realLeadId}`);
         }
       } catch (followUpError) {
-        console.warn('⚠️ Erreur création follow-up:', followUpError.message);
+        warn('⚠️ Erreur création follow-up:', followUpError.message);
       }
     }
 
     let refillResult = null;
     if (shouldTriggerRefill && campaignId && assignedUserId) {
       try {
-        console.log(`🚀 Déclenchement auto-refill pour user ${assignedUserId}`);
+        log(`🚀 Déclenchement auto-refill pour user ${assignedUserId}`);
         refillResult = await smartRefill(campaignId, assignedUserId, tenantId);
       } catch (refillError) {
-        console.warn(`⚠️ Erreur auto-refill (table campaign_assignments non disponible):`, refillError.message);
+        warn(`⚠️ Erreur auto-refill (table campaign_assignments non disponible):`, refillError.message);
         // Continuer sans auto-refill
       }
     }
 
-    console.log(`✅ Lead ${id} qualifié: ${qualification} → ${oldStage} → ${newStage}`);
+    log(`✅ Lead ${id} qualifié: ${qualification} → ${oldStage} → ${newStage}`);
 
     return res.json({ 
       success: true, 
@@ -744,7 +745,7 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur qualification:', error);
+    error('❌ Erreur qualification:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -782,7 +783,7 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'stage requis pour le pipeline' });
     }
 
-    console.log(`🆕 Création lead + pipeline: ${company_name} (stage: ${stage})`);
+    log(`🆕 Création lead + pipeline: ${company_name} (stage: ${stage})`);
 
     // 1. Créer le lead dans la table leads
     const { rows: leadRows } = await q(
@@ -824,7 +825,7 @@ router.post('/', authenticateToken, async (req, res) => {
       ]
     );
 
-    console.log(`✅ Lead créé: ${newLead.id}, Pipeline: ${pipelineRows[0].id}`);
+    log(`✅ Lead créé: ${newLead.id}, Pipeline: ${pipelineRows[0].id}`);
 
     return res.status(201).json({
       success: true,
@@ -833,7 +834,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur POST /pipeline-leads:', error);
+    error('❌ Erreur POST /pipeline-leads:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -933,7 +934,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           updateParams
         );
 
-        console.log(`✏️ Lead ${leadId} mis à jour`);
+        log(`✏️ Lead ${leadId} mis à jour`);
       }
     }
 
@@ -948,11 +949,11 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         [stage, id, tenantId]
       );
 
-      console.log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
+      log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
 
       // Auto-refill si nécessaire
       if (oldStage === 'cold_call' && stage !== 'cold_call' && campaignId && assignedUserId) {
-        console.log(`🔍 Lead sorti de Cold Call, vérification du pipeline...`);
+        log(`🔍 Lead sorti de Cold Call, vérification du pipeline...`);
 
         const { rows: countRows } = await q(
         `SELECT COUNT(*) as count
@@ -964,11 +965,11 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       );
 
       const coldCallCount = parseInt(countRows[0]?.count || 0);
-      console.log(`📊 Leads restants dans Cold Call: ${coldCallCount}/50`);
+      log(`📊 Leads restants dans Cold Call: ${coldCallCount}/50`);
 
       if (coldCallCount < 50) {
         const needed = 50 - coldCallCount;
-        console.log(`🚀 Auto-refill déclenché: besoin de ${needed} leads`);
+        log(`🚀 Auto-refill déclenché: besoin de ${needed} leads`);
         
         const { rows: campRows } = await q(
           `SELECT database_id FROM campaigns WHERE id = $1`,
@@ -1005,7 +1006,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
               );
               deployed++;
             } catch (err) {
-              console.error('Erreur insertion lead:', err);
+              error('Erreur insertion lead:', err);
             }
           }
 
@@ -1024,7 +1025,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
             message: `${deployed} nouveaux leads ajoutés automatiquement`
           };
 
-          console.log(`✅ [AUTO-REFILL] ${deployed} leads ajoutés au pipeline`);
+          log(`✅ [AUTO-REFILL] ${deployed} leads ajoutés au pipeline`);
         }
       }
     }
@@ -1037,7 +1038,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur PATCH pipeline-lead:', error);
+    error('❌ Erreur PATCH pipeline-lead:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -1078,7 +1079,7 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
     return res.json({ success: true, history: rows });
 
   } catch (error) {
-    console.error('❌ Erreur GET history:', error);
+    error('❌ Erreur GET history:', error);
     return res.status(500).json({ error: error.message });
   }
 });

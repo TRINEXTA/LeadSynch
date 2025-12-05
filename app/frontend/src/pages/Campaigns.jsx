@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -50,14 +51,14 @@ export default function Campaigns() {
     try {
       // ✅ CORRECTION 2/3 : Appeler /my-campaigns pour les commerciaux
       const endpoint = isCommercial ? '/campaigns/my-campaigns' : '/campaigns';
-      console.log(`📋 Chargement campagnes depuis: ${endpoint}`);
+      log(`📋 Chargement campagnes depuis: ${endpoint}`);
       
       const response = await api.get(endpoint);
-      console.log('📊 Campagnes chargées:', response.data.campaigns);
+      log('📊 Campagnes chargées:', response.data.campaigns);
       setCampaigns(response.data.campaigns || []);
       setLoading(false);
     } catch (error) {
-      console.error('❌ Erreur chargement campagnes:', error);
+      error('❌ Erreur chargement campagnes:', error);
       setLoading(false);
     }
   };
@@ -155,7 +156,7 @@ export default function Campaigns() {
       toast.success('Campagne dupliquée avec succès');
       navigate(`/CampaignsManager?edit=${response.data.campaign.id}`);
     } catch (error) {
-      console.error('Erreur duplication:', error);
+      error('Erreur duplication:', error);
       toast.error('Erreur lors de la duplication');
     }
   };

@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 ﻿import React from 'react'
 
 export function Input({ className = '', type = 'text', ...props }) {

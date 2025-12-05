@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { Router } from 'express';
 import { query, queryOne, execute } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error loading training:', error);
+    error('❌ Error loading training:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -72,7 +73,7 @@ router.post('/start', async (req, res) => {
       progress: newProgress
     });
   } catch (error) {
-    console.error('❌ Error starting training:', error);
+    error('❌ Error starting training:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -149,7 +150,7 @@ router.post('/complete-module', async (req, res) => {
       completed: isCompleted
     });
   } catch (error) {
-    console.error('❌ Error completing module:', error);
+    error('❌ Error completing module:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -182,7 +183,7 @@ router.post('/reset', async (req, res) => {
       message: 'Formation réinitialisée'
     });
   } catch (error) {
-    console.error('❌ Error resetting training:', error);
+    error('❌ Error resetting training:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -222,7 +223,7 @@ router.get('/stats', async (req, res) => {
       stats: stats.rows
     });
   } catch (error) {
-    console.error('❌ Error loading training stats:', error);
+    error('❌ Error loading training stats:', error);
     res.status(500).json({ error: error.message });
   }
 });

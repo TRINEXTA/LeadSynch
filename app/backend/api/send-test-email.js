@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { authMiddleware } from '../middleware/auth.js';
 import { queryOne } from '../lib/db.js';
 import { sendEmail } from '../services/elasticEmail.js';
@@ -21,7 +22,7 @@ async function handler(req, res) {
 
     return res.json({ success: true, message: 'Email de test envoyé' });
   } catch (error) {
-    console.error('Erreur test email:', error);
+    error('Erreur test email:', error);
     return res.status(500).json({ error: error.message });
   }
 }

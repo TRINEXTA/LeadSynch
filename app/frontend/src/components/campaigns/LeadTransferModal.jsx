@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import {
   X, Users, UserMinus, ArrowRight, Check, AlertCircle,
@@ -65,7 +66,7 @@ export default function LeadTransferModal({
       const response = await api.get(`/campaigns/${campaignId}/available-users`);
       setAvailableUsers(response.data.users || []);
     } catch (error) {
-      console.error('Erreur chargement utilisateurs:', error);
+      error('Erreur chargement utilisateurs:', error);
       toast.error('Erreur chargement des utilisateurs');
     } finally {
       setLoadingUsers(false);
@@ -81,7 +82,7 @@ export default function LeadTransferModal({
       const userLeads = leads.filter(l => l.assigned_to === userId);
       setSourceLeads(userLeads);
     } catch (error) {
-      console.error('Erreur chargement leads:', error);
+      error('Erreur chargement leads:', error);
       toast.error('Erreur chargement des leads');
     } finally {
       setLoadingLeads(false);
@@ -170,7 +171,7 @@ export default function LeadTransferModal({
       }
 
     } catch (error) {
-      console.error('Erreur transfert:', error);
+      error('Erreur transfert:', error);
       toast.error(error.response?.data?.message || 'Erreur lors du transfert');
     } finally {
       setProcessing(false);

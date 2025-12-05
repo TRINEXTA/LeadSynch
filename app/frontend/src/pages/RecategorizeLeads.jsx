@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sparkles, Database, TrendingUp, CheckCircle, Loader2, AlertCircle, Zap } from 'lucide-react';
@@ -39,7 +40,7 @@ export default function RecategorizeLeads() {
         wrongCategory: 0
       });
     } catch (error) {
-      console.error('Erreur chargement leads:', error);
+      error('Erreur chargement leads:', error);
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ export default function RecategorizeLeads() {
           await new Promise(resolve => setTimeout(resolve, 500));
 
         } catch (error) {
-          console.error(`Erreur lead ${leadId}:`, error);
+          error(`Erreur lead ${leadId}:`, error);
           errorCount++;
         }
       }
@@ -119,7 +120,7 @@ export default function RecategorizeLeads() {
       setSelectedLeads([]);
 
     } catch (error) {
-      console.error('Erreur recatégorisation:', error);
+      error('Erreur recatégorisation:', error);
       alert('Erreur lors de la recatégorisation');
     } finally {
       setProcessing(false);

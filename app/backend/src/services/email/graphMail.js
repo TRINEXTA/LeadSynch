@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { ClientSecretCredential } from "@azure/identity";
 
 const SCOPE = process.env.MS_GRAPH_SCOPE || "https://graph.microsoft.com/.default";

@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 // ================================================================
 // MIDDLEWARE : Super-Admin Authentication & Authorization
 // Description : Sécurité renforcée pour l'espace TRINEXTA
@@ -38,7 +39,7 @@ async function logSuperAdminAction(userId, method, endpoint, details = {}) {
       ]
     );
   } catch (error) {
-    console.error('❌ Erreur log super-admin:', error);
+    error('❌ Erreur log super-admin:', error);
     // Ne pas bloquer l'opération si le log échoue
   }
 }
@@ -52,7 +53,7 @@ export async function requireSuperAdmin(req, res, next) {
 
     // 1. Vérifier que l'utilisateur est authentifié
     if (!user) {
-      console.warn('🚨 [SUPER-ADMIN] Tentative accès sans authentification');
+      warn('🚨 [SUPER-ADMIN] Tentative accès sans authentification');
       return res.status(401).json({
         error: 'Non authentifié',
         code: 'UNAUTHENTICATED'
@@ -61,7 +62,7 @@ export async function requireSuperAdmin(req, res, next) {
 
     // 2. Vérifier que l'utilisateur a le flag super-admin
     if (!user.is_super_admin) {
-      console.warn(`🚨 [SUPER-ADMIN] Accès refusé: ${user.email} (is_super_admin = false)`);
+      warn(`🚨 [SUPER-ADMIN] Accès refusé: ${user.email} (is_super_admin = false)`);
       return res.status(403).json({
         error: 'Accès refusé - Privilèges super-admin requis',
         code: 'FORBIDDEN_NOT_SUPER_ADMIN'
@@ -70,7 +71,7 @@ export async function requireSuperAdmin(req, res, next) {
 
     // 3. Vérifier que l'email est dans la whitelist TRINEXTA
     if (!SUPER_ADMIN_EMAILS.includes(user.email)) {
-      console.error(`🚨 [SUPER-ADMIN] Email non autorisé: ${user.email}`);
+      error(`🚨 [SUPER-ADMIN] Email non autorisé: ${user.email}`);
 
       // ⚠️ ALERTE SÉCURITÉ : Email non whitelist mais is_super_admin=true
       // Cela ne devrait JAMAIS arriver sauf en cas de compromission
@@ -94,7 +95,7 @@ export async function requireSuperAdmin(req, res, next) {
     );
 
     if (!rows.length || !rows[0].is_active) {
-      console.warn(`🚨 [SUPER-ADMIN] Compte inactif: ${user.email}`);
+      warn(`🚨 [SUPER-ADMIN] Compte inactif: ${user.email}`);
       return res.status(403).json({
         error: 'Compte désactivé',
         code: 'FORBIDDEN_ACCOUNT_DISABLED'
@@ -102,7 +103,7 @@ export async function requireSuperAdmin(req, res, next) {
     }
 
     // ✅ ACCÈS AUTORISÉ
-    console.log(`✅ [SUPER-ADMIN] Accès autorisé: ${user.email} → ${req.method} ${req.originalUrl}`);
+    log(`✅ [SUPER-ADMIN] Accès autorisé: ${user.email} → ${req.method} ${req.originalUrl}`);
 
     // Logger l'action
     await logSuperAdminAction(
@@ -131,7 +132,7 @@ export async function requireSuperAdmin(req, res, next) {
     next();
 
   } catch (error) {
-    console.error('❌ [SUPER-ADMIN] Erreur middleware:', error);
+    error('❌ [SUPER-ADMIN] Erreur middleware:', error);
     return res.status(500).json({
       error: 'Erreur interne',
       code: 'INTERNAL_ERROR'
@@ -157,7 +158,7 @@ export function requirePermission(permission) {
       return next();
     }
 
-    console.warn(`🚨 [SUPER-ADMIN] Permission refusée: ${user.email} n'a pas '${permission}'`);
+    warn(`🚨 [SUPER-ADMIN] Permission refusée: ${user.email} n'a pas '${permission}'`);
 
     return res.status(403).json({
       error: `Permission refusée - '${permission}' requis`,
@@ -184,7 +185,7 @@ export async function grantSuperAdmin(userId, email) {
     [JSON.stringify(['*']), userId, email]
   );
 
-  console.log(`✅ Super-admin accordé à: ${email}`);
+  log(`✅ Super-admin accordé à: ${email}`);
 }
 
 // ========================================
@@ -200,7 +201,7 @@ export async function revokeSuperAdmin(userId) {
     [userId]
   );
 
-  console.log(`❌ Super-admin révoqué pour user_id: ${userId}`);
+  log(`❌ Super-admin révoqué pour user_id: ${userId}`);
 }
 
 export default { requireSuperAdmin, requirePermission, grantSuperAdmin, revokeSuperAdmin };

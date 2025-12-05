@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 import { query as q } from '../lib/db.js';
 import fs from 'fs';
 import path from 'path';
@@ -9,7 +10,7 @@ const __dirname = path.dirname(__filename);
 async function runMigrations() {
   const migrationsDir = path.join(__dirname, '..', 'migrations');
 
-  console.log('🔧 Exécution des migrations SQL...\n');
+  log('🔧 Exécution des migrations SQL...\n');
 
   const migrations = [
     'create_billing_tables.sql',
@@ -22,27 +23,27 @@ async function runMigrations() {
     const filePath = path.join(migrationsDir, migration);
 
     if (!fs.existsSync(filePath)) {
-      console.log(`⏭️  ${migration} - fichier non trouvé, ignoré`);
+      log(`⏭️  ${migration} - fichier non trouvé, ignoré`);
       continue;
     }
 
-    console.log(`📄 Exécution: ${migration}`);
+    log(`📄 Exécution: ${migration}`);
 
     try {
       const sql = fs.readFileSync(filePath, 'utf8');
       await q(sql);
-      console.log(`✅ ${migration} - OK\n`);
+      log(`✅ ${migration} - OK\n`);
     } catch (error) {
-      console.error(`❌ ${migration} - ERREUR:`, error.message);
+      error(`❌ ${migration} - ERREUR:`, error.message);
       // Continue avec les autres migrations
     }
   }
 
-  console.log('🎉 Migrations terminées!\n');
+  log('🎉 Migrations terminées!\n');
   process.exit(0);
 }
 
 runMigrations().catch(error => {
-  console.error('❌ Erreur fatale:', error);
+  error('❌ Erreur fatale:', error);
   process.exit(1);
 });

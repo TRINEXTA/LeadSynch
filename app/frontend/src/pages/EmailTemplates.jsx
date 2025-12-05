@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Mail, Sparkles, Code, Edit, Trash2, X, Wand2, Crown, Lock } from 'lucide-react';
@@ -73,7 +74,7 @@ export default function EmailTemplates() {
       setTemplates(response.data.templates || []);
       setLoading(false);
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       setLoading(false);
     }
   };
@@ -182,7 +183,7 @@ export default function EmailTemplates() {
       setEditingTemplate(null);
       loadTemplates();
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur lors de l\'enregistrement');
     }
   };
@@ -216,7 +217,7 @@ export default function EmailTemplates() {
       setEditingTemplate(null);
       loadTemplates();
     } catch (error) {
-      console.error('Erreur:', error);
+      error('Erreur:', error);
       toast.error('Erreur lors de l\'enregistrement');
       throw error;
     }

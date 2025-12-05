@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne, execute } from '../lib/db.js';
 import { hashPassword } from '../lib/auth.js';
@@ -20,7 +21,7 @@ async function handler(req, res) {
   try {
     // GET - List users
     if (method === 'GET') {
-      console.log('🔍 GET /api/users - User:', req.user.email, 'Role:', req.user.role, 'Tenant:', req.user.tenant_id);
+      log('🔍 GET /api/users - User:', req.user.email, 'Role:', req.user.role, 'Tenant:', req.user.tenant_id);
 
       const userRole = req.user.role;
       const userId = req.user.id;
@@ -41,7 +42,7 @@ async function handler(req, res) {
            ORDER BY u.created_at DESC`,
           [req.user.tenant_id]
         );
-        console.log('✅ Admin - tous les users:', users.length);
+        log('✅ Admin - tous les users:', users.length);
       }
       // Manager : voir uniquement les membres de ses équipes (où il est manager)
       else if (userRole === 'manager') {
@@ -67,7 +68,7 @@ async function handler(req, res) {
            ORDER BY u.created_at DESC`,
           [req.user.tenant_id, userId]
         );
-        console.log('✅ Manager - membres équipe uniquement:', users.length);
+        log('✅ Manager - membres équipe uniquement:', users.length);
       }
       // User ou commercial : voir uniquement eux-mêmes
       else {
@@ -80,7 +81,7 @@ async function handler(req, res) {
            WHERE u.id = $1`,
           [userId]
         );
-        console.log('✅ User - lui-même uniquement:', users.length);
+        log('✅ User - lui-même uniquement:', users.length);
       }
 
       return res.status(200).json({
@@ -141,9 +142,9 @@ async function handler(req, res) {
 
       try {
         await sendTemporaryPassword(data.email, data.first_name, tempPassword);
-        console.log(`✅ Email envoyé à ${data.email}`);
+        log(`✅ Email envoyé à ${data.email}`);
       } catch (emailError) {
-        console.error('⚠️ Erreur envoi email:', emailError.message);
+        error('⚠️ Erreur envoi email:', emailError.message);
       }
 
       return res.status(201).json({
@@ -178,7 +179,7 @@ async function handler(req, res) {
       // 🔒 Les managers ne peuvent PAS modifier les admins ou super admins
       if (req.user.role === 'manager') {
         if (targetUser.role === 'admin' || targetUser.is_super_admin === true) {
-          console.log(`🚫 Manager ${req.user.email} tentative modification admin/superadmin ${userId}`);
+          log(`🚫 Manager ${req.user.email} tentative modification admin/superadmin ${userId}`);
           return res.status(403).json({
             error: 'Accès refusé',
             message: 'Vous ne pouvez pas modifier un compte administrateur'
@@ -194,7 +195,7 @@ async function handler(req, res) {
         );
 
         if (!isInTeam && userId !== req.user.id) {
-          console.log(`🚫 Manager ${req.user.email} tentative modification user hors équipe ${userId}`);
+          log(`🚫 Manager ${req.user.email} tentative modification user hors équipe ${userId}`);
           return res.status(403).json({
             error: 'Accès refusé',
             message: 'Cet utilisateur ne fait pas partie de votre équipe'
@@ -234,7 +235,7 @@ async function handler(req, res) {
         [first_name, last_name, role, phone || null, userId, req.user.tenant_id]
       );
 
-      console.log('✅ User modifié:', updatedUser.id);
+      log('✅ User modifié:', updatedUser.id);
 
       return res.status(200).json({
         success: true,
@@ -273,7 +274,7 @@ async function handler(req, res) {
       // 🔒 Les managers ne peuvent PAS bloquer/modifier les admins ou super admins
       if (req.user.role === 'manager') {
         if (targetUser.role === 'admin' || targetUser.is_super_admin === true) {
-          console.log(`🚫 Manager ${req.user.email} tentative ${action} sur admin/superadmin ${userId}`);
+          log(`🚫 Manager ${req.user.email} tentative ${action} sur admin/superadmin ${userId}`);
           return res.status(403).json({
             error: 'Accès refusé',
             message: 'Vous ne pouvez pas effectuer cette action sur un compte administrateur'
@@ -296,7 +297,7 @@ async function handler(req, res) {
           return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        console.log('🔴 User bloqué:', updatedUser.id);
+        log('🔴 User bloqué:', updatedUser.id);
         return res.status(200).json({
           success: true,
           user: updatedUser,
@@ -317,7 +318,7 @@ async function handler(req, res) {
           return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        console.log('🟢 User débloqué:', updatedUser.id);
+        log('🟢 User débloqué:', updatedUser.id);
         return res.status(200).json({
           success: true,
           user: updatedUser,
@@ -338,7 +339,7 @@ async function handler(req, res) {
           return res.status(404).json({ error: 'Utilisateur non trouvé' });
         }
 
-        console.log('🔐 Changement de mot de passe forcé pour:', updatedUser.id);
+        log('🔐 Changement de mot de passe forcé pour:', updatedUser.id);
         return res.status(200).json({
           success: true,
           user: updatedUser,
@@ -389,7 +390,7 @@ async function handler(req, res) {
 
       const totalLeads = parseInt(leadsCount.count);
 
-      console.log(`🔄 Suppression utilisateur ${userToDelete.email}: ${totalLeads} leads à dispatcher`);
+      log(`🔄 Suppression utilisateur ${userToDelete.email}: ${totalLeads} leads à dispatcher`);
 
       // DISPATCHER LES LEADS
       if (totalLeads > 0) {
@@ -414,7 +415,7 @@ async function handler(req, res) {
             [reassign_to, userId, req.user.tenant_id]
           );
 
-          console.log(`✅ ${totalLeads} leads transférés vers ${targetUser.id}`);
+          log(`✅ ${totalLeads} leads transférés vers ${targetUser.id}`);
         } else {
           // Dispatcher vers les managers/admins du tenant
           const managers = await queryAll(
@@ -436,7 +437,7 @@ async function handler(req, res) {
               [managers[0].id, userId, req.user.tenant_id]
             );
 
-            console.log(`✅ ${totalLeads} leads transférés vers manager ${managers[0].id}`);
+            log(`✅ ${totalLeads} leads transférés vers manager ${managers[0].id}`);
           } else {
             // Aucun manager → désassigner les leads
             await execute(
@@ -446,7 +447,7 @@ async function handler(req, res) {
               [userId, req.user.tenant_id]
             );
 
-            console.log(`⚠️ ${totalLeads} leads désassignés (aucun manager disponible)`);
+            log(`⚠️ ${totalLeads} leads désassignés (aucun manager disponible)`);
           }
         }
       }
@@ -479,8 +480,8 @@ async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
   } catch (error) {
-    console.error('❌ Users API error:', error);
-    console.error('Stack:', error.stack);
+    error('❌ Users API error:', error);
+    error('Stack:', error.stack);
 
     if (error.name === 'ZodError') {
       return res.status(400).json({

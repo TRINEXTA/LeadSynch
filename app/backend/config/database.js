@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿// Export wrapper for db connection
 import { pool } from '../lib/db.js';
 
@@ -6,7 +7,7 @@ const db = {
     try {
       return await pool.query(text, params);
     } catch (error) {
-      console.error('Database query error:', error);
+      error('Database query error:', error);
       throw error;
     }
   }

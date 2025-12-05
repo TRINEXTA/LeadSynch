@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import { generateEmailTemplate, improveEmailTemplate } from '../lib/aiTemplateGenerator.js';
 
 // Générer un template avec IA
@@ -11,7 +12,7 @@ export const generateTemplate = async (req, res) => {
       });
     }
 
-    console.log('🤖 Demande de génération IA:', params);
+    log('🤖 Demande de génération IA:', params);
 
     const result = await generateEmailTemplate(params);
 
@@ -20,7 +21,7 @@ export const generateTemplate = async (req, res) => {
       template: result
     });
   } catch (error) {
-    console.error('❌ Erreur génération:', error);
+    error('❌ Erreur génération:', error);
     res.status(500).json({ 
       message: 'Erreur lors de la génération',
       error: error.message 
@@ -46,7 +47,7 @@ export const improveTemplate = async (req, res) => {
       improved: result
     });
   } catch (error) {
-    console.error('❌ Erreur amélioration:', error);
+    error('❌ Erreur amélioration:', error);
     res.status(500).json({ 
       message: 'Erreur lors de l\'amélioration',
       error: error.message 

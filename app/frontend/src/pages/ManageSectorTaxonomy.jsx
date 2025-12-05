@@ -1,3 +1,4 @@
+import { log, error, warn } from "./../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { Tag, Edit2, Trash2, GitMerge, Plus, Search, TrendingUp, AlertCircle } from 'lucide-react';
 import api from '../api/axios';
@@ -23,7 +24,7 @@ export default function TaxonomieSecteurs() {
       const response = await api.get('/sectors');
       setSectors(response.data.sectors || []);
     } catch (error) {
-      console.error('Erreur sectors:', error);
+      error('Erreur sectors:', error);
       toast.error('Erreur lors du chargement des secteurs');
     } finally {
       setLoading(false);

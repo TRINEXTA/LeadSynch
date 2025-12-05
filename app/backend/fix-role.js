@@ -1,3 +1,4 @@
+import { log, error, warn } from "../lib/logger.js";
 ﻿import pg from 'pg';
 import dotenv from 'dotenv';
 
@@ -8,7 +9,7 @@ const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 async function fixRole() {
   try {
-    console.log('Correction role en admin...');
+    log('Correction role en admin...');
     
     const user_id = '7a5198ca-557d-49ea-93aa-040b46683cfe';
     
@@ -19,7 +20,7 @@ async function fixRole() {
       WHERE id = $1
     `, [user_id]);
     
-    console.log('Role corrige: admin (avec quotas illimites)');
+    log('Role corrige: admin (avec quotas illimites)');
     
     // Vérifier
     const result = await pool.query(`
@@ -35,19 +36,19 @@ async function fixRole() {
       WHERE u.id = $1
     `, [user_id]);
     
-    console.log('\n========== ADMIN ILLIMITE ==========');
-    console.log('Email:', result.rows[0].email);
-    console.log('Role:', result.rows[0].role);
-    console.log('Plan:', result.rows[0].plan);
-    console.log('Google Leads:', result.rows[0].google_leads_quota);
-    console.log('Emails:', result.rows[0].emails_quota);
-    console.log('====================================\n');
+    log('\n========== ADMIN ILLIMITE ==========');
+    log('Email:', result.rows[0].email);
+    log('Role:', result.rows[0].role);
+    log('Plan:', result.rows[0].plan);
+    log('Google Leads:', result.rows[0].google_leads_quota);
+    log('Emails:', result.rows[0].emails_quota);
+    log('====================================\n');
     
     await pool.end();
     process.exit(0);
     
   } catch (error) {
-    console.error('Erreur:', error.message);
+    error('Erreur:', error.message);
     await pool.end();
     process.exit(1);
   }
