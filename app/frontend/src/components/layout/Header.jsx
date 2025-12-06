@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 ﻿import { Bell, Search } from 'lucide-react'
 
 export default function Header() {

@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Mail, Phone, FileText, User } from 'lucide-react';
 import api from '../../api/axios';

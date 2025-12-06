@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 ﻿import { useState } from 'react'
 import Sidebar from './Sidebar'
 import Header from './Header'

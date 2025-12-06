@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 import React, { useState } from 'react';
 import { X, FileText, Save, Plus, Trash2, Download, Mail, Loader2, Sparkles } from 'lucide-react';
 import api from '../../api/axios';

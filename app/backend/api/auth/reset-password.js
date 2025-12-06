@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 ﻿import { queryOne, execute } from '../../lib/db.js';
 import { hashPassword } from '../../lib/auth.js';
 import crypto from 'crypto';

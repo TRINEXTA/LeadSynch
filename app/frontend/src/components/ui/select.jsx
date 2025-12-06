@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 ﻿import React from 'react'
 
 export function Select({ children, className = '', ...props }) {
