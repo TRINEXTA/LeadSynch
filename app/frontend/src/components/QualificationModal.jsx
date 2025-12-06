@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X, Phone, Clock, MessageSquare, Calendar, CheckCircle, Sparkles, Mail, Loader } from 'lucide-react';
 import api from '../api/axios';
 import EmailPreviewModal from './EmailPreviewModal';
+import toast from 'react-hot-toast';
 
 const QUALIFICATIONS = [
   { id: 'nrp', label: 'NRP - Ne répond pas', stage: 'nrp', color: 'gray' },
@@ -27,7 +28,7 @@ export default function QualificationModal({ lead, callDuration, notes: initialN
 
   const handleSubmit = async () => {
     if (!selectedQualification) {
-      alert('Veuillez sélectionner une qualification');
+      toast.error('Veuillez sélectionner une qualification');
       return;
     }
 
@@ -50,7 +51,7 @@ export default function QualificationModal({ lead, callDuration, notes: initialN
 
   const handleGenerateEmail = async () => {
     if (!notes || notes.trim().length < 10) {
-      alert('Veuillez ajouter des notes de l\'appel (minimum 10 caractères) pour générer un email pertinent.');
+      toast.error('Veuillez ajouter des notes de l\'appel (minimum 10 caractères) pour générer un email pertinent.');
       return;
     }
 
@@ -83,9 +84,9 @@ export default function QualificationModal({ lead, callDuration, notes: initialN
         setShowEmailPreview(true);
         log('✅ Email généré par IA:', response.data.email);
       }
-    } catch (error) {
-      error('❌ Erreur génération email:', error);
-      alert('Erreur lors de la génération de l\'email. Réessayez.');
+    } catch (err) {
+      error('❌ Erreur génération email:', err);
+      toast.error('Erreur lors de la génération de l\'email. Réessayez.');
     } finally {
       setGeneratingEmail(false);
     }
@@ -119,9 +120,9 @@ export default function QualificationModal({ lead, callDuration, notes: initialN
         setGenerationsUsed(prev => prev + 1);
         log(`✅ Email régénéré avec ton: ${tone}`);
       }
-    } catch (error) {
-      error('❌ Erreur régénération email:', error);
-      alert('Erreur lors de la régénération. Réessayez.');
+    } catch (err) {
+      error('❌ Erreur régénération email:', err);
+      toast.error('Erreur lors de la régénération. Réessayez.');
     }
   };
 

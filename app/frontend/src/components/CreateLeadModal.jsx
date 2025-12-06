@@ -2,6 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { X, Save, Building2, User, Mail, Phone, MapPin, Globe, Hash, Users } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function CreateLeadModal({ databaseId, onClose, onSuccess, preselectedSector }) {
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,7 @@ export default function CreateLeadModal({ databaseId, onClose, onSuccess, presel
     e.preventDefault();
     
     if (!formData.company_name) {
-      alert('Le nom de l\'entreprise est obligatoire');
+      toast.error('Le nom de l\'entreprise est obligatoire');
       return;
     }
 
@@ -38,12 +39,12 @@ export default function CreateLeadModal({ databaseId, onClose, onSuccess, presel
         status: 'nouveau'
       });
 
-      alert('✅ Lead créé avec succès !');
+      toast.success('Lead créé avec succès !');
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
-      error('Erreur création lead:', error);
-      alert('❌ Erreur lors de la création du lead');
+    } catch (err) {
+      error('Erreur création lead:', err);
+      toast.error('Erreur lors de la création du lead');
     } finally {
       setLoading(false);
     }

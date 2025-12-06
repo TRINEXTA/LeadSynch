@@ -6,6 +6,7 @@ import {
   Users, Clock, CheckCircle, X, Loader2, Filter, Search
 } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 const CATEGORIES = [
   { value: 'consulting', label: 'Consulting', color: 'bg-blue-100 text-blue-800' },
@@ -51,8 +52,8 @@ export default function Services() {
       setServices(servicesRes.data.services);
       setSubscriptions(subscriptionsRes.data.subscriptions);
       setStats(statsRes.data);
-    } catch (error) {
-      error('Erreur chargement données:', error);
+    } catch (err) {
+      error('Erreur chargement données:', err);
     } finally {
       setLoading(false);
     }
@@ -69,9 +70,9 @@ export default function Services() {
       setShowServiceModal(false);
       setEditingService(null);
       await loadData();
-    } catch (error) {
-      error('Erreur sauvegarde service:', error);
-      throw error;
+    } catch (err) {
+      error('Erreur sauvegarde service:', err);
+      throw err;
     }
   };
 
@@ -83,9 +84,9 @@ export default function Services() {
     try {
       await api.delete(`/services/${serviceId}`);
       await loadData();
-    } catch (error) {
-      error('Erreur suppression service:', error);
-      alert(error.response?.data?.message || 'Erreur lors de la suppression');
+    } catch (err) {
+      error('Erreur suppression service:', err);
+      toast.error(err.response?.data?.message || 'Erreur lors de la suppression');
     }
   };
 
@@ -469,8 +470,8 @@ function ServiceModal({ service, onSave, onClose }) {
 
     try {
       await onSave(formData);
-    } catch (error) {
-      alert('Erreur lors de la sauvegarde');
+    } catch (err) {
+      toast.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }

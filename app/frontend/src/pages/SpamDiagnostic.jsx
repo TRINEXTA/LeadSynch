@@ -1,7 +1,8 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Shield, AlertTriangle, CheckCircle, TrendingUp, Mail, Zap, AlertCircle } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function SpamDiagnostic() {
   const [analyzing, setAnalyzing] = useState(false);
@@ -15,7 +16,7 @@ export default function SpamDiagnostic() {
 
   const handleAnalyze = async () => {
     if (!formData.subject || !formData.content) {
-      alert('❌ Sujet et contenu requis !');
+      toast.error('Sujet et contenu requis !');
       return;
     }
 
@@ -23,9 +24,9 @@ export default function SpamDiagnostic() {
     try {
       const response = await api.post('/analyze-spam', formData);
       setAnalysis(response.data);
-    } catch (error) {
-      error('Erreur:', error);
-      alert('❌ Erreur lors de l\'analyse');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de l\'analyse');
     } finally {
       setAnalyzing(false);
     }

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Download, Mail, Eye, Trash2, Filter, Search, Plus, CheckCircle, Clock, Send, XCircle, ArrowRight, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
   draft: { label: 'Brouillon', color: 'gray', icon: Clock },
@@ -49,8 +50,8 @@ export default function Proposals() {
 
       const response = await api.get(`/proposals?${params.toString()}`);
       setProposals(response.data.proposals || []);
-    } catch (error) {
-      error('Error loading proposals:', error);
+    } catch (err) {
+      error('Error loading proposals:', err);
     } finally {
       setLoading(false);
     }
@@ -79,9 +80,9 @@ export default function Proposals() {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }
-    } catch (error) {
-      error('Error downloading PDF:', error);
-      alert('Erreur lors du téléchargement');
+    } catch (err) {
+      error('Error downloading PDF:', err);
+      toast.error('Erreur lors du téléchargement');
     } finally {
       setDownloading(null);
     }
@@ -138,8 +139,8 @@ L'équipe Trinexta`;
       await api.put(`/proposals/${proposal.id}`, { status: 'sent' });
       loadProposals();
 
-    } catch (error) {
-      error('Error:', error);
+    } catch (err) {
+      error('Error:', err);
     } finally {
       setSendingEmail(null);
     }
@@ -150,8 +151,8 @@ L'équipe Trinexta`;
     try {
       // Navigate to pipeline with contract creation from this proposal
       window.location.href = `/pipeline?action=create_contract&proposal_id=${proposal.id}&lead_id=${proposal.lead_id}`;
-    } catch (error) {
-      error('Error:', error);
+    } catch (err) {
+      error('Error:', err);
     } finally {
       setConverting(null);
     }
@@ -163,9 +164,9 @@ L'équipe Trinexta`;
     try {
       await api.delete(`/proposals/${proposalId}`);
       loadProposals();
-    } catch (error) {
-      error('Error:', error);
-      alert('Erreur lors de la suppression');
+    } catch (err) {
+      error('Error:', err);
+      toast.error('Erreur lors de la suppression');
     }
   };
 

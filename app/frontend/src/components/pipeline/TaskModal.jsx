@@ -48,8 +48,8 @@ export default function TaskModal({ isOpen, onClose, lead, onSuccess, mode = 'cr
     try {
       const response = await api.get('/users');
       setUsers(response.data.users || []);
-    } catch (error) {
-      error('Erreur chargement utilisateurs:', error);
+    } catch (err) {
+      error('Erreur chargement utilisateurs:', err);
     }
   };
 

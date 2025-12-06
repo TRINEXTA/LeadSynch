@@ -2,6 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Eye, Code, Image as ImageIcon, Save, Sparkles, Type, Mail, ChevronDown } from 'lucide-react';
 import DOMPurify from 'dompurify';
+import toast from 'react-hot-toast';
 
 const TEMPLATE_BLOCKS = {
   header: `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center;">
@@ -112,7 +113,7 @@ export default function EmailTemplateEditor({ template, onSave, onClose }) {
 
   const handleSave = async () => {
     if (!name || !subject || !htmlBody) {
-      alert('Veuillez remplir tous les champs obligatoires');
+      toast.error('Veuillez remplir tous les champs obligatoires');
       return;
     }
 

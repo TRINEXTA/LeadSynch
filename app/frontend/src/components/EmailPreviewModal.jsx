@@ -1,6 +1,7 @@
 import { log, error, warn } from "../lib/logger.js";
 import React, { useState } from 'react';
 import { X, Mail, Copy, Sparkles, RefreshCw, Send, CheckCircle, MessageSquare } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const TONE_OPTIONS = [
   { id: 'formal', label: '🎩 Formel', description: 'Professionnel et distant' },
@@ -23,7 +24,7 @@ export default function EmailPreviewModal({
 
   const handleRegenerateTone = async () => {
     if (generationsUsed >= maxGenerations) {
-      alert(`Vous avez atteint la limite de ${maxGenerations} générations par appel.`);
+      toast(`Vous avez atteint la limite de ${maxGenerations} générations par appel.`, { icon: '⚠️' });
       return;
     }
 
@@ -53,7 +54,7 @@ export default function EmailPreviewModal({
 
     // Message de confirmation
     setTimeout(() => {
-      alert('📧 Email ouvert dans votre application mail ! Vous pouvez maintenant l\'envoyer.');
+      toast.success('Email ouvert dans votre application mail ! Vous pouvez maintenant l\'envoyer.');
     }, 500);
   };
 
