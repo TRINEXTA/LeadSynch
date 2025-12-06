@@ -2,6 +2,7 @@ import { log, error, warn } from "../../lib/logger.js";
 import React, { useState } from 'react';
 import { X, FileText, Save, Plus, Trash2, Download, Mail, Loader2, Sparkles } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 const TRINEXTA_SERVICES = [
   { id: 'essentielle', name: 'Offre Essentielle', price: 129, url: 'https://trinexta.com/offre-essentielle/' },
@@ -55,7 +56,7 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
 
   const handleSave = async (action = 'draft') => {
     if (!selectedService && customLines.length === 0) {
-      alert('Veuillez sélectionner au moins un service');
+      toast.error('Veuillez sélectionner au moins un service');
       return;
     }
 
@@ -102,9 +103,9 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
         await handleSendEmail(response.data.proposal.id);
       }
 
-    } catch (error) {
-      error('Erreur:', error);
-      alert('Erreur lors de la création du devis');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de la création du devis');
     } finally {
       setSaving(false);
     }
@@ -137,11 +138,11 @@ export default function QuickProposalModal({ lead, onClose, onSuccess }) {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
 
-        alert('PDF téléchargé avec succès !');
+        toast.success('PDF téléchargé avec succès !');
       }
-    } catch (error) {
-      error('Erreur téléchargement PDF:', error);
-      alert('Erreur lors du téléchargement du PDF');
+    } catch (err) {
+      error('Erreur téléchargement PDF:', err);
+      toast.error('Erreur lors du téléchargement du PDF');
     } finally {
       setDownloading(false);
     }
@@ -209,9 +210,9 @@ L'équipe Trinexta`;
 
       if (onSuccess) onSuccess();
 
-    } catch (error) {
-      error('Erreur envoi email:', error);
-      alert('Erreur lors de la préparation de l\'email');
+    } catch (err) {
+      error('Erreur envoi email:', err);
+      toast.error('Erreur lors de la préparation de l\'email');
     } finally {
       setSendingEmail(false);
     }

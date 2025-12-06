@@ -2,6 +2,7 @@ import { log, error, warn } from "../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, User, Flag, Clock, MessageSquare, Save } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 const TASK_TYPES = [
   { value: 'call', label: '📞 Appel', icon: '📞' },
@@ -56,7 +57,7 @@ export default function TaskModal({ isOpen, onClose, lead, onSuccess, mode = 'cr
     e.preventDefault();
 
     if (!task.title || !task.scheduled_date || !task.assigned_to) {
-      alert('❌ Veuillez remplir tous les champs obligatoires');
+      toast.error('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
@@ -72,12 +73,12 @@ export default function TaskModal({ isOpen, onClose, lead, onSuccess, mode = 'cr
         scheduled_date: task.scheduled_date
       });
 
-      alert('✅ Tâche créée avec succès !');
+      toast.success('Tâche créée avec succès !');
       onSuccess && onSuccess();
       onClose();
-    } catch (error) {
-      error('Erreur création tâche:', error);
-      alert('❌ Erreur lors de la création de la tâche');
+    } catch (err) {
+      error('Erreur création tâche:', err);
+      toast.error('Erreur lors de la création de la tâche');
     } finally {
       setLoading(false);
     }
