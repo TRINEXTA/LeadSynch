@@ -64,31 +64,26 @@ async function handler(req, res) {
   const url = req.originalUrl || req.url || '';
 
   try {
-    // ============================================================
-    // ENDPOINT: POST /generate-leads-v2 (Streaming SSE)
-    // ============================================================
-    if (req.method === 'POST' && (url.includes('/generate-leads-v2') || url === '/')) {
-      return await handleGenerateLeads(req, res, tenant_id, user_id);
-    }
+    // IMPORTANT: Vérifier les endpoints spécifiques AVANT le endpoint général
 
     // ============================================================
-    // ENDPOINT: POST /preview-search (Prévisualisation sans consommer de crédits)
+    // ENDPOINT: POST /generate-leads-v2/preview
     // ============================================================
-    if (req.method === 'POST' && url.includes('/preview-search')) {
+    if (req.method === 'POST' && url.includes('/preview')) {
       return await handlePreviewSearch(req, res, tenant_id);
     }
 
     // ============================================================
-    // ENDPOINT: POST /save-leads-to-database (Sauvegarder les leads dans une DB)
+    // ENDPOINT: POST /generate-leads-v2/save
     // ============================================================
-    if (req.method === 'POST' && url.includes('/save-leads-to-database')) {
+    if (req.method === 'POST' && url.includes('/save')) {
       return await handleSaveLeads(req, res, tenant_id, user_id);
     }
 
     // ============================================================
-    // ENDPOINT: Pause/Resume/Stop
+    // ENDPOINT: POST /generate-leads-v2/pause
     // ============================================================
-    if (req.method === 'POST' && url.includes('/pause-search')) {
+    if (req.method === 'POST' && url.includes('/pause')) {
       const { searchId } = req.body;
       const search = activeSearches.get(searchId);
       if (search) {
@@ -98,7 +93,10 @@ async function handler(req, res) {
       return res.status(404).json({ error: 'Search not found' });
     }
 
-    if (req.method === 'POST' && url.includes('/resume-search')) {
+    // ============================================================
+    // ENDPOINT: POST /generate-leads-v2/resume
+    // ============================================================
+    if (req.method === 'POST' && url.includes('/resume')) {
       const { searchId } = req.body;
       const search = activeSearches.get(searchId);
       if (search) {
@@ -108,7 +106,10 @@ async function handler(req, res) {
       return res.status(404).json({ error: 'Search not found' });
     }
 
-    if (req.method === 'POST' && url.includes('/stop-search')) {
+    // ============================================================
+    // ENDPOINT: POST /generate-leads-v2/stop
+    // ============================================================
+    if (req.method === 'POST' && url.includes('/stop')) {
       const { searchId } = req.body;
       const search = activeSearches.get(searchId);
       if (search) {
@@ -120,7 +121,7 @@ async function handler(req, res) {
     }
 
     // ============================================================
-    // ENDPOINT: GET /databases (Liste des DBs du tenant)
+    // ENDPOINT: GET /generate-leads-v2/databases
     // ============================================================
     if (req.method === 'GET' && url.includes('/databases')) {
       const databases = await queryAll(
@@ -128,6 +129,13 @@ async function handler(req, res) {
         [tenant_id]
       );
       return res.json({ success: true, databases });
+    }
+
+    // ============================================================
+    // ENDPOINT: POST /generate-leads-v2 (Streaming SSE) - DOIT ÊTRE EN DERNIER
+    // ============================================================
+    if (req.method === 'POST') {
+      return await handleGenerateLeads(req, res, tenant_id, user_id);
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
