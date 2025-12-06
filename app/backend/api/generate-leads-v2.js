@@ -232,13 +232,15 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     }
 
     if (allLeads.length >= quantity) {
+      // NE PAS envoyer les leads ici - ils sont déjà envoyés dans internal_results
+      // Envoyer seulement le signal de fin pour éviter les gros messages SSE
       sendProgress({
         type: 'complete',
         percent: 100,
         total: allLeads.length,
         message: `Recherche terminée ! ${allLeads.length} leads trouvés dans votre base.`,
-        stats,
-        leads: allLeads.slice(0, quantity)
+        stats
+        // leads: PAS ICI - déjà envoyés
       });
       res.end();
       return;
@@ -272,8 +274,8 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         percent: 100,
         total: allLeads.length,
         message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
-        stats,
-        leads: allLeads.slice(0, quantity)
+        stats
+        // leads: déjà envoyés dans les events précédents
       });
       res.end();
       return;
@@ -312,8 +314,8 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         percent: 100,
         total: allLeads.length,
         message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
-        stats,
-        leads: allLeads.slice(0, quantity)
+        stats
+        // leads: déjà envoyés dans sirene_results
       });
       res.end();
       return;
@@ -351,13 +353,21 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
 
     stats.total = enrichedLeads.length;
 
+    // Envoyer les leads enrichis un par un pour éviter les gros messages
+    for (const lead of enrichedLeads) {
+      sendProgress({
+        type: 'enriched_lead',
+        lead
+      });
+    }
+
     sendProgress({
       type: 'complete',
       percent: 100,
       total: enrichedLeads.length,
       message: getCompleteMessage(stats),
-      stats,
-      leads: enrichedLeads
+      stats
+      // leads: envoyés individuellement via enriched_lead
     });
 
     res.end();
