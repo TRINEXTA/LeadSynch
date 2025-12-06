@@ -124,6 +124,7 @@ export function setupRoutes(app) {
 
   // Lead availability (analyse avant génération)
   app.get('/api/lead-availability/regions', leadAvailabilityRoute);
+  app.get('/api/lead-availability/all-departments', leadAvailabilityRoute);
   app.get('/api/lead-availability/departments/:regionCode', leadAvailabilityRoute);
   app.post('/api/lead-availability/analyze', leadAvailabilityRoute);
   app.post('/api/lead-availability/suggest', leadAvailabilityRoute);

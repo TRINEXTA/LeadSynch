@@ -28,6 +28,14 @@ async function handler(req, res) {
     }
 
     // ============================================================
+    // GET /lead-availability/all-departments - TOUS les départements
+    // ============================================================
+    if (req.method === 'GET' && url.includes('/all-departments')) {
+      const departments = await geoService.getAllDepartments();
+      return res.json({ success: true, departments });
+    }
+
+    // ============================================================
     // GET /lead-availability/departments/:regionCode
     // ============================================================
     if (req.method === 'GET' && url.includes('/departments/')) {
