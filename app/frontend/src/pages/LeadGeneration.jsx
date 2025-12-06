@@ -11,12 +11,17 @@ import {
 import toast from "react-hot-toast";
 import api from "../api/axios";
 
-// URL de l'API backend
-const API_BASE = import.meta.env.VITE_API_URL || (
-  window.location.hostname === 'localhost'
-    ? 'http://localhost:3000'
-    : 'https://leadsynch-api.onrender.com'
-);
+// URL de l'API backend (sans /api car déjà inclus dans VITE_API_URL)
+const getApiBase = () => {
+  const url = import.meta.env.VITE_API_URL || (
+    window.location.hostname === 'localhost'
+      ? 'http://localhost:3000'
+      : 'https://leadsynch-api.onrender.com'
+  );
+  // Retirer /api à la fin si présent pour éviter /api/api
+  return url.replace(/\/api\/?$/, '');
+};
+const API_BASE = getApiBase();
 
 // Couleurs par source de données
 const SOURCE_COLORS = {
