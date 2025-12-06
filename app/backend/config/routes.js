@@ -19,6 +19,7 @@ import templatesRoute from '../api/templates.js';
 import generateLeadsRoute from '../api/generate-leads.js';
 import generateLeadsStreamRoute from '../api/generate-leads-stream.js';
 import generateLeadsV2Route from '../api/generate-leads-v2.js';
+import notificationsRoute from '../api/notifications.js';
 import followUpsRoute from '../api/follow-ups.js';
 import quotasRoute from '../api/quotas.js';
 import importCsvRoute from '../api/import-csv.js';
@@ -119,6 +120,12 @@ export function setupRoutes(app) {
   app.post('/api/generate-leads-v2/pause', generateLeadsV2Route);
   app.post('/api/generate-leads-v2/resume', generateLeadsV2Route);
   app.post('/api/generate-leads-v2/stop', generateLeadsV2Route);
+
+  // Notifications
+  app.get('/api/notifications', notificationsRoute);
+  app.get('/api/notifications/count', notificationsRoute);
+  app.post('/api/notifications/:id/read', notificationsRoute);
+  app.post('/api/notifications/read-all', notificationsRoute);
 
   app.use('/api/quotas', quotasRoute);
   app.use('/api/follow-ups', followUpsRoute);

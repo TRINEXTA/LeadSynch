@@ -26,10 +26,13 @@ const CONFIG = {
   SIRENE_API_URL: 'https://recherche-entreprises.api.gouv.fr/search',
 
   // Timeout pour les requêtes HTTP
-  HTTP_TIMEOUT: 8000,
+  HTTP_TIMEOUT: 5000,
 
   // Délai entre les requêtes (anti-spam)
-  REQUEST_DELAY: 300,
+  REQUEST_DELAY: 100,
+
+  // Taille des batches pour traitement parallèle
+  BATCH_SIZE: 10,
 
   // Données considérées obsolètes après X jours
   DATA_EXPIRY_DAYS: 90,
@@ -438,24 +441,58 @@ class LeadEnrichmentService {
   }
 
   /**
-   * Enrichir les leads avec données supplémentaires
+   * Enrichir les leads avec données supplémentaires (traitement parallèle par batch)
    */
-  async enrichLeads(leads) {
+  async enrichLeads(leads, onProgress = null) {
     const enrichedLeads = [];
+    const totalLeads = leads.length;
+    const batchSize = CONFIG.BATCH_SIZE;
 
-    for (const lead of leads) {
-      try {
-        const enriched = await this.enrichSingleLead(lead);
-        enrichedLeads.push(enriched);
+    log(`🔬 Enrichissement de ${totalLeads} leads (batch de ${batchSize})`);
 
-        // Petit délai pour éviter le spam
+    // Traiter par batches
+    for (let i = 0; i < totalLeads; i += batchSize) {
+      const batch = leads.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(totalLeads / batchSize);
+
+      log(`📦 Batch ${batchNumber}/${totalBatches} (${batch.length} leads)`);
+
+      // Traiter le batch en parallèle
+      const batchResults = await Promise.allSettled(
+        batch.map(lead => this.enrichSingleLead(lead))
+      );
+
+      // Collecter les résultats
+      for (let j = 0; j < batchResults.length; j++) {
+        const result = batchResults[j];
+        if (result.status === 'fulfilled') {
+          enrichedLeads.push(result.value);
+        } else {
+          error(`Erreur enrichissement ${batch[j]?.company_name}:`, result.reason?.message);
+          enrichedLeads.push({ ...batch[j], enriched: false, quality_score: 0 });
+        }
+      }
+
+      // Callback de progression
+      if (onProgress) {
+        const progress = Math.round(((i + batch.length) / totalLeads) * 100);
+        onProgress({
+          processed: i + batch.length,
+          total: totalLeads,
+          percent: progress,
+          batch: batchNumber,
+          totalBatches
+        });
+      }
+
+      // Petit délai entre les batches
+      if (i + batchSize < totalLeads) {
         await this.delay(CONFIG.REQUEST_DELAY);
-
-      } catch (err) {
-        error(`Erreur enrichissement ${lead.company_name}:`, err.message);
-        enrichedLeads.push({ ...lead, enriched: false });
       }
     }
+
+    log(`✅ Enrichissement terminé: ${enrichedLeads.filter(l => l.enriched).length}/${totalLeads} enrichis`);
 
     return enrichedLeads;
   }
