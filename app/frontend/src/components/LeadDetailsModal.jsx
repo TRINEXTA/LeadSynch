@@ -2,6 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Edit, Save, Phone, Mail, MapPin, Building2, User, Calendar, FileText, Plus, Trash2, Star, ExternalLink } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
   const [activeTab, setActiveTab] = useState('info');
@@ -80,12 +81,12 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
     setLoading(true);
     try {
       await api.put(`/leads/${lead.id}`, formData);
-      alert('✅ Lead mis à jour avec succès !');
+      toast.success('Lead mis à jour avec succès !');
       setIsEditing(false);
       if (onUpdate) onUpdate();
-    } catch (error) {
-      error('Erreur mise à jour:', error);
-      alert('❌ Erreur lors de la mise à jour');
+    } catch (err) {
+      error('Erreur mise à jour:', err);
+      toast.error('Erreur lors de la mise à jour');
     } finally {
       setLoading(false);
     }
@@ -96,8 +97,9 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
     try {
       await api.delete(`/leads/${lead.id}/contacts/${contactId}`);
       loadContacts();
-    } catch (error) {
-      alert('Erreur suppression contact');
+      toast.success('Contact supprimé');
+    } catch (err) {
+      toast.error('Erreur suppression contact');
     }
   };
 
@@ -106,8 +108,9 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
     try {
       await api.delete(`/leads/${lead.id}/phones/${phoneId}`);
       loadPhones();
-    } catch (error) {
-      alert('Erreur suppression téléphone');
+      toast.success('Téléphone supprimé');
+    } catch (err) {
+      toast.error('Erreur suppression téléphone');
     }
   };
 
@@ -116,8 +119,9 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
     try {
       await api.delete(`/leads/${lead.id}/offices/${officeId}`);
       loadOffices();
-    } catch (error) {
-      alert('Erreur suppression bureau');
+      toast.success('Bureau supprimé');
+    } catch (err) {
+      toast.error('Erreur suppression bureau');
     }
   };
 
@@ -126,8 +130,9 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
     try {
       await api.delete(`/leads/${lead.id}/notes/${noteId}`);
       loadNotes();
-    } catch (error) {
-      alert('Erreur suppression note');
+      toast.success('Note supprimée');
+    } catch (err) {
+      toast.error('Erreur suppression note');
     }
   };
 

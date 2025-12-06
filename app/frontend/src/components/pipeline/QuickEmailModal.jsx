@@ -2,6 +2,7 @@ import { log, error, warn } from "../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Send, Sparkles, Loader, Mail, Save } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function QuickEmailModal({ lead, onClose, onSuccess }) {
   const [subject, setSubject] = useState('');
@@ -40,9 +41,9 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
         setSubject(response.data.email.subject);
         setBody(response.data.email.body);
       }
-    } catch (error) {
-      error('❌ Erreur génération:', error);
-      alert('Erreur lors de la génération IA');
+    } catch (err) {
+      error('❌ Erreur génération:', err);
+      toast.error('Erreur lors de la génération IA');
     } finally {
       setGenerating(false);
     }
@@ -50,7 +51,7 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
 
   const handleSave = async () => {
     if (!subject.trim() || !body.trim()) {
-      alert('Sujet et corps requis');
+      toast.error('Sujet et corps requis');
       return;
     }
 
@@ -62,12 +63,12 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
         notes: `📧 Email sauvegardé\n\nObjet: ${subject}\n\n${body}`
       });
 
-      alert('✅ Email sauvegardé !');
+      toast.success('Email sauvegardé !');
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
-      error('❌ Erreur sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde');
+    } catch (err) {
+      error('❌ Erreur sauvegarde:', err);
+      toast.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -75,7 +76,7 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
 
   const handleSendViaMailApp = async () => {
     if (!subject.trim() || !body.trim()) {
-      alert('Sujet et corps requis');
+      toast.error('Sujet et corps requis');
       return;
     }
 
@@ -92,13 +93,13 @@ export default function QuickEmailModal({ lead, onClose, onSuccess }) {
       window.location.href = mailtoLink;
 
       setTimeout(() => {
-        alert('✅ Email enregistré ! Envoyez-le depuis votre boite mail.');
+        toast.success('Email enregistré ! Envoyez-le depuis votre boite mail.');
         if (onSuccess) onSuccess();
         onClose();
       }, 500);
-    } catch (error) {
-      error('❌ Erreur:', error);
-      alert('Erreur lors de l\'enregistrement');
+    } catch (err) {
+      error('❌ Erreur:', err);
+      toast.error('Erreur lors de l\'enregistrement');
     } finally {
       setSending(false);
     }
