@@ -6,6 +6,7 @@ import {
   Crown, Rocket, Building, Loader2, ExternalLink
 } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 const PLANS = {
   FREE: {
@@ -114,8 +115,8 @@ export default function Billing() {
       const { data } = await api.get('/billing/subscription');
       setCurrentPlan(data.subscription.plan);
       setSubscription(data.subscription);
-    } catch (error) {
-      error('Erreur chargement abonnement:', error);
+    } catch (err) {
+      error('Erreur chargement abonnement:', err);
     } finally {
       setLoading(false);
     }
@@ -126,9 +127,9 @@ export default function Billing() {
       const { data } = await api.post('/billing/create-checkout-session', { plan });
       // Rediriger vers Stripe Checkout
       window.location.href = data.url;
-    } catch (error) {
-      error('Erreur création session:', error);
-      alert('Erreur lors de la création de la session de paiement');
+    } catch (err) {
+      error('Erreur création session:', err);
+      toast.error('Erreur lors de la création de la session de paiement');
     }
   };
 

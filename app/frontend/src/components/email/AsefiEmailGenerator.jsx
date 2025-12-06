@@ -1,7 +1,8 @@
 import { log, error, warn } from "../../lib/logger.js";
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Send, Sparkles, Mail, Users, TrendingUp, Link as LinkIcon } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function AsefiEmailGenerator({ onGenerated, onCancel }) {
   const [campaignType, setCampaignType] = useState('email-campaign');
@@ -44,7 +45,7 @@ export default function AsefiEmailGenerator({ onGenerated, onCancel }) {
 
   const generateWithAsefi = async () => {
     if (!objective.trim()) {
-      alert('Veuillez définir votre objectif');
+      toast.error('Veuillez définir votre objectif');
       return;
     }
 
@@ -78,9 +79,9 @@ export default function AsefiEmailGenerator({ onGenerated, onCancel }) {
         throw new Error(response.data.error);
       }
       
-    } catch (error) {
-      error('Erreur Asefi:', error);
-      alert('Erreur lors de la génération: ' + (error.response?.data?.error || error.message));
+    } catch (err) {
+      error('Erreur Asefi:', err);
+      toast.error('Erreur lors de la génération: ' + (err.response?.data?.error || err.message));
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,8 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, X, Trash2, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function ImageGallery({ onInsert }) {
   const [images, setImages] = useState([]);
@@ -18,8 +19,8 @@ export default function ImageGallery({ onInsert }) {
       const response = await api.get('/images');
       setImages(response.data.images || []);
       setLoading(false);
-    } catch (error) {
-      error('Erreur:', error);
+    } catch (err) {
+      error('Erreur:', err);
       setLoading(false);
     }
   };
@@ -30,7 +31,7 @@ export default function ImageGallery({ onInsert }) {
 
     // Vérifier la taille (5MB max)
     if (file.size > 5 * 1024 * 1024) {
-      alert('❌ Fichier trop volumineux (5MB max)');
+      toast.error('Fichier trop volumineux (5MB max)');
       return;
     }
 
@@ -44,10 +45,10 @@ export default function ImageGallery({ onInsert }) {
       });
       
       setImages([response.data.image, ...images]);
-      alert('✅ Image uploadée !');
-    } catch (error) {
-      error('Erreur:', error);
-      alert('❌ Erreur lors de l\'upload');
+      toast.success('Image uploadée !');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de l\'upload');
     } finally {
       setUploading(false);
     }
@@ -59,10 +60,10 @@ export default function ImageGallery({ onInsert }) {
     try {
       await api.delete(`/images/${id}`);
       setImages(images.filter(img => img.id !== id));
-      alert('✅ Image supprimée !');
-    } catch (error) {
-      error('Erreur:', error);
-      alert('❌ Erreur lors de la suppression');
+      toast.success('Image supprimée !');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de la suppression');
     }
   };
 
@@ -81,7 +82,7 @@ export default function ImageGallery({ onInsert }) {
       onInsert(html);
     } else {
       navigator.clipboard.writeText(html);
-      alert('✅ Code HTML copié dans le presse-papier !');
+      toast.success('Code HTML copié dans le presse-papier !');
     }
   };
 

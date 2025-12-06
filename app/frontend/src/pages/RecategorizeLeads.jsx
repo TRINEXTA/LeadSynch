@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sparkles, Database, TrendingUp, CheckCircle, Loader2, AlertCircle, Zap } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function RecategorizeLeads() {
   const [leads, setLeads] = useState([]);
@@ -39,8 +40,8 @@ export default function RecategorizeLeads() {
         uncategorized: needsRecategorization.length,
         wrongCategory: 0
       });
-    } catch (error) {
-      error('Erreur chargement leads:', error);
+    } catch (err) {
+      error('Erreur chargement leads:', err);
     } finally {
       setLoading(false);
     }
@@ -64,7 +65,7 @@ export default function RecategorizeLeads() {
 
   const handleRecategorizeWithAI = async () => {
     if (selectedLeads.length === 0) {
-      alert('Veuillez sélectionner au moins un lead');
+      toast.error('Veuillez sélectionner au moins un lead');
       return;
     }
 
@@ -107,21 +108,21 @@ export default function RecategorizeLeads() {
           // Petit délai pour éviter de surcharger l'API
           await new Promise(resolve => setTimeout(resolve, 500));
 
-        } catch (error) {
-          error(`Erreur lead ${leadId}:`, error);
+        } catch (err) {
+          error(`Erreur lead ${leadId}:`, err);
           errorCount++;
         }
       }
 
-      alert(`✅ Recatégorisation terminée !\n\n${successCount} leads mis à jour\n${errorCount} erreurs`);
+      toast.success(`Recatégorisation terminée ! ${successCount} leads mis à jour, ${errorCount} erreurs`);
 
       // Recharger la liste
       await loadLeads();
       setSelectedLeads([]);
 
-    } catch (error) {
-      error('Erreur recatégorisation:', error);
-      alert('Erreur lors de la recatégorisation');
+    } catch (err) {
+      error('Erreur recatégorisation:', err);
+      toast.error('Erreur lors de la recatégorisation');
     } finally {
       setProcessing(false);
       setProgress({ current: 0, total: 0 });

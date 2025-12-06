@@ -2,6 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Mic, MicOff, Loader, Minimize2, Maximize2, FileText } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function ChatbotAsefi({ isOpen, onClose }) {
   const [messages, setMessages] = useState([
@@ -55,7 +56,7 @@ export default function ChatbotAsefi({ isOpen, onClose }) {
 
   const toggleMicrophone = () => {
     if (!recognitionRef.current) {
-      alert('La reconnaissance vocale n\'est pas supportée par votre navigateur');
+      toast.error('La reconnaissance vocale n\'est pas supportée par votre navigateur');
       return;
     }
 
@@ -129,8 +130,8 @@ export default function ChatbotAsefi({ isOpen, onClose }) {
         }, 1000);
       }
 
-    } catch (error) {
-      error('Erreur Asefi:', error);
+    } catch (err) {
+      error('Erreur Asefi:', err);
       const errorMessage = {
         id: Date.now() + 1,
         type: 'bot',

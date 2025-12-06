@@ -2,6 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, Building, User, Mail, Phone, MapPin, Globe, DollarSign, Tag } from 'lucide-react';
 import LeadHistoryPanel from "./LeadHistoryPanel";
+import toast from 'react-hot-toast';
 
 export default function LeadModal({ lead, stage, onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -97,9 +98,9 @@ export default function LeadModal({ lead, stage, onClose, onSave }) {
       // TODO: Implémenter la suppression
       log('Suppression du lead:', lead.id);
       onClose();
-    } catch (error) {
-      error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
+    } catch (err) {
+      error('Erreur suppression:', err);
+      toast.error('Erreur lors de la suppression');
     }
   };
 

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Phone, Clock } from 'lucide-react';
 import QualificationModal from '../QualificationModal';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function QuickCallModal({ lead, onClose, onSuccess }) {
   const [callStarted, setCallStarted] = useState(false);
@@ -52,12 +53,12 @@ export default function QuickCallModal({ lead, onClose, onSuccess }) {
         notes: `📞 Appel téléphonique (${formatDuration(callDuration)})\n\nQualification: ${qualificationData.qualification}\n\n${notes || 'Aucune note'}`
       });
 
-      alert('✅ Appel enregistré !');
+      toast.success('Appel enregistré !');
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
-      error('❌ Erreur:', error);
-      alert('Erreur lors de l\'enregistrement');
+    } catch (err) {
+      error('❌ Erreur:', err);
+      toast.error('Erreur lors de l\'enregistrement');
     }
   };
 

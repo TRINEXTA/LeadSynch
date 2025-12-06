@@ -5,6 +5,7 @@ import {
   CreditCard, ShoppingCart, TrendingUp, Clock, Loader2, Zap, AlertCircle
 } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 const PRICE_PER_PROSPECT = 0.10; // Prix fixe par prospect
 
@@ -34,8 +35,8 @@ export default function LeadCredits() {
       setCredits(creditsRes.data.credits);
       setPurchases(purchasesRes.data.purchases);
       setUsage(usageRes.data);
-    } catch (error) {
-      error('Erreur chargement crédits:', error);
+    } catch (err) {
+      error('Erreur chargement crédits:', err);
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function LeadCredits() {
 
     const count = parseInt(prospectCount);
     if (!count || count <= 0) {
-      alert('⚠️ Veuillez entrer un nombre de prospects valide');
+      toast.error('Veuillez entrer un nombre de prospects valide');
       return;
     }
 
@@ -64,14 +65,14 @@ export default function LeadCredits() {
         payment_method: 'demo'
       });
 
-      alert(`✅ Achat complété avec succès !\n\n${data.credits_added} prospects ajoutés\nSolde actuel : ${data.credits_remaining} prospects`);
+      toast.success(`Achat complété ! ${data.credits_added} prospects ajoutés. Solde actuel : ${data.credits_remaining} prospects`);
 
       setProspectCount('');
       await fetchData();
-    } catch (error) {
-      error('Erreur achat:', error);
-      const errorMsg = error.response?.data?.message || 'Erreur lors de l\'achat des prospects';
-      alert(`❌ Erreur : ${errorMsg}`);
+    } catch (err) {
+      error('Erreur achat:', err);
+      const errorMsg = err.response?.data?.message || 'Erreur lors de l\'achat des prospects';
+      toast.error(`Erreur : ${errorMsg}`);
     } finally {
       setPurchasing(false);
     }

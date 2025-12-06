@@ -1,8 +1,9 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { TrendingUp, Users, DollarSign, Clock, Mail, Phone, MapPin, Star, X, Filter } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const STAGES = [
   { id: 'leads_click', name: 'Leads Click', color: 'bg-cyan-500', textColor: 'text-cyan-700', bgLight: 'bg-cyan-50' },
@@ -40,8 +41,8 @@ export default function EmailPipeline() {
       log('Leads chargés:', leadsData.length);
       setLeads(leadsData);
       setLoading(false);
-    } catch (error) {
-      error('Erreur:', error);
+    } catch (err) {
+      error('Erreur:', err);
       setLoading(false);
     }
   };
@@ -50,8 +51,8 @@ export default function EmailPipeline() {
     try {
       const response = await api.get('/campaigns');
       setCampaigns(response.data.campaigns || []);
-    } catch (error) {
-      error('Erreur campaigns:', error);
+    } catch (err) {
+      error('Erreur campaigns:', err);
     }
   };
 
@@ -84,8 +85,8 @@ export default function EmailPipeline() {
 
     try {
       await api.patch(`/leads/${draggableId}`, { status: destination.droppableId });
-    } catch (error) {
-      error('Erreur:', error);
+    } catch (err) {
+      error('Erreur:', err);
       loadLeads();
     }
   };
@@ -97,15 +98,15 @@ export default function EmailPipeline() {
         score: selectedLead.score,
         notes: selectedLead.notes
       });
-      
-      const updatedLeads = leads.map(l => 
+
+      const updatedLeads = leads.map(l =>
         l.id === selectedLead.id ? selectedLead : l
       );
       setLeads(updatedLeads);
       setSelectedLead(null);
-    } catch (error) {
-      error('Erreur:', error);
-      alert('Erreur lors de la mise à jour');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
