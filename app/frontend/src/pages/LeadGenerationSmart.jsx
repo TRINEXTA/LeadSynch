@@ -684,26 +684,27 @@ export default function LeadGenerationSmart() {
                     </div>
                   )}
 
-                  {/* Bouton Générer */}
-                  {analysis.available > 0 && (
-                    <button
-                      onClick={() => handleGenerate(Math.min(analysis.available, analysis.requested))}
-                      disabled={isGenerating}
-                      className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50"
-                    >
-                      {isGenerating ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Génération... {leads.length} leads
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-5 h-5" />
-                          Générer {Math.min(analysis.available, analysis.requested)} leads
-                        </>
-                      )}
-                    </button>
-                  )}
+                  {/* Bouton Générer - toujours visible après analyse */}
+                  <button
+                    onClick={() => handleGenerate(analysis.requested)}
+                    disabled={isGenerating}
+                    className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Génération... {leads.length} leads
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5" />
+                        {analysis.available > 0
+                          ? `Générer ${analysis.requested} leads (${analysis.available} en base)`
+                          : `Rechercher ${analysis.requested} leads`
+                        }
+                      </>
+                    )}
+                  </button>
                 </CardContent>
               </Card>
             )}
