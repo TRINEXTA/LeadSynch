@@ -10,10 +10,29 @@ const createUserSchema = z.object({
   email: z.string().email('Email invalide'),
   first_name: z.string().min(1, 'Prénom requis'),
   last_name: z.string().min(1, 'Nom requis'),
-  role: z.enum(['admin', 'manager', 'user', 'commercial']).default('user'), // ✅ AJOUT commercial
+  role: z.enum(['admin', 'manager', 'user', 'commercial']).default('user'),
   phone: z.string().optional(),
-  team_id: z.string().optional().nullable()
+  team_id: z.string().optional().nullable(),
+  permissions: z.record(z.boolean()).optional() // Permissions pour les managers
 });
+
+// Permissions par défaut pour un manager (toutes désactivées)
+const DEFAULT_MANAGER_PERMISSIONS = {
+  view_all_leads: false,
+  import_leads: false,
+  generate_leads: false,
+  create_campaigns: false,
+  view_all_campaigns: false,
+  email_templates_marketing: false,
+  mailing_config: false,
+  spam_diagnostic: false,
+  test_mailing: false,
+  recategorize_ai: false,
+  detect_duplicates: false,
+  business_config: false,
+  manage_all_users: false,
+  view_databases: false
+};
 
 async function handler(req, res) {
   const { method } = req;
@@ -117,10 +136,23 @@ async function handler(req, res) {
 
       const password_hash = await hashPassword(tempPassword);
 
+      // Déterminer les permissions selon le rôle
+      let permissions = {};
+      if (data.role === 'manager') {
+        // Pour un manager, utiliser les permissions fournies ou les défauts
+        permissions = data.permissions || DEFAULT_MANAGER_PERMISSIONS;
+      } else if (data.role === 'admin') {
+        // Les admins ont toutes les permissions
+        permissions = Object.keys(DEFAULT_MANAGER_PERMISSIONS).reduce((acc, key) => {
+          acc[key] = true;
+          return acc;
+        }, {});
+      }
+
       const newUser = await queryOne(
-        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, phone, requires_password_change)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-         RETURNING id, email, first_name, last_name, role, phone, created_at`,
+        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, phone, permissions, requires_password_change)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+         RETURNING id, email, first_name, last_name, role, phone, permissions, created_at`,
         [
           req.user.tenant_id,
           data.email,
@@ -128,7 +160,8 @@ async function handler(req, res) {
           data.first_name,
           data.last_name,
           data.role,
-          data.phone || null
+          data.phone || null,
+          JSON.stringify(permissions)
         ]
       );
 
@@ -203,7 +236,7 @@ async function handler(req, res) {
         }
       }
 
-      const { first_name, last_name, role, phone, team_id } = req.body;
+      const { first_name, last_name, role, phone, team_id, permissions } = req.body;
 
       if (!first_name || !last_name || !role) {
         return res.status(400).json({
@@ -219,6 +252,14 @@ async function handler(req, res) {
         });
       }
 
+      // 🔒 Seuls les admins peuvent modifier les permissions
+      if (permissions && req.user.role !== 'admin' && !req.user.is_super_admin) {
+        return res.status(403).json({
+          error: 'Accès refusé',
+          message: 'Seuls les administrateurs peuvent modifier les permissions'
+        });
+      }
+
       // Vérifier que le rôle est valide
       const validRoles = ['admin', 'manager', 'user', 'commercial'];
       if (!validRoles.includes(role)) {
@@ -227,13 +268,26 @@ async function handler(req, res) {
         });
       }
 
-      const updatedUser = await queryOne(
-        `UPDATE users
-         SET first_name = $1, last_name = $2, role = $3, phone = $4, updated_at = NOW()
-         WHERE id = $5 AND tenant_id = $6
-         RETURNING id, email, first_name, last_name, role, phone, is_active, created_at`,
-        [first_name, last_name, role, phone || null, userId, req.user.tenant_id]
-      );
+      // Construire la requête de mise à jour
+      let updateQuery, updateParams;
+
+      if (permissions && role === 'manager') {
+        // Mise à jour avec permissions
+        updateQuery = `UPDATE users
+           SET first_name = $1, last_name = $2, role = $3, phone = $4, permissions = $5, updated_at = NOW()
+           WHERE id = $6 AND tenant_id = $7
+           RETURNING id, email, first_name, last_name, role, phone, permissions, is_active, created_at`;
+        updateParams = [first_name, last_name, role, phone || null, JSON.stringify(permissions), userId, req.user.tenant_id];
+      } else {
+        // Mise à jour sans permissions
+        updateQuery = `UPDATE users
+           SET first_name = $1, last_name = $2, role = $3, phone = $4, updated_at = NOW()
+           WHERE id = $5 AND tenant_id = $6
+           RETURNING id, email, first_name, last_name, role, phone, permissions, is_active, created_at`;
+        updateParams = [first_name, last_name, role, phone || null, userId, req.user.tenant_id];
+      }
+
+      const updatedUser = await queryOne(updateQuery, updateParams);
 
       log('✅ User modifié:', updatedUser.id);
 
