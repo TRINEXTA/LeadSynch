@@ -65,11 +65,13 @@ async function handler(req, res) {
 
   try {
     // IMPORTANT: Vérifier les endpoints spécifiques AVANT le endpoint général
+    log(`[generate-leads-v2] ${req.method} ${url}`);
 
     // ============================================================
     // ENDPOINT: POST /generate-leads-v2/preview
     // ============================================================
     if (req.method === 'POST' && url.includes('/preview')) {
+      log('[generate-leads-v2] -> handlePreviewSearch');
       return await handlePreviewSearch(req, res, tenant_id);
     }
 
@@ -77,6 +79,7 @@ async function handler(req, res) {
     // ENDPOINT: POST /generate-leads-v2/save
     // ============================================================
     if (req.method === 'POST' && url.includes('/save')) {
+      log('[generate-leads-v2] -> handleSaveLeads');
       return await handleSaveLeads(req, res, tenant_id, user_id);
     }
 
