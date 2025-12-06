@@ -904,6 +904,9 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
           continue;
         }
 
+        const newLeadId = uuidv4();
+
+        // 1. Insérer le lead avec database_id
         await execute(`
           INSERT INTO leads (
             id, tenant_id, database_id, company_name, contact_name, email, phone,
@@ -914,13 +917,20 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()
           )
         `, [
-          uuidv4(), tenant_id, targetDatabaseId,
+          newLeadId, tenant_id, targetDatabaseId,
           lead.company_name, lead.contact_name, lead.email, lead.phone,
           lead.address, lead.city, lead.postal_code, lead.website,
           lead.sector, lead.industry,
           lead.siren, lead.siret, lead.naf_code, lead.employee_count, lead.quality_score || 0,
           lead.data_source || 'generated', 'generation', user_id
         ]);
+
+        // 2. Créer aussi la relation (pour compatibilité avec import-csv)
+        await execute(`
+          INSERT INTO lead_database_relations (lead_id, database_id, added_at)
+          VALUES ($1, $2, NOW())
+          ON CONFLICT (lead_id, database_id) DO NOTHING
+        `, [newLeadId, targetDatabaseId]);
 
         inserted++;
       } catch (err) {
