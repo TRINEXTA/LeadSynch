@@ -52,6 +52,7 @@ export default function LeadGenerationSmart() {
   const [regions, setRegions] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [showItemSelector, setShowItemSelector] = useState(false);
+  const [deptSearch, setDeptSearch] = useState(""); // Recherche département
 
   // Recherche de ville
   const [citySearch, setCitySearch] = useState("");
@@ -135,6 +136,34 @@ export default function LeadGenerationSmart() {
       setDepartments(data.departments || []);
     } catch (err) {
       console.error('Erreur:', err);
+    }
+  };
+
+  // Charger TOUS les départements de France
+  const loadAllDepartments = async () => {
+    try {
+      const { data } = await api.get('/lead-availability/all-departments');
+      setDepartments(data.departments || []);
+    } catch (err) {
+      console.error('Erreur:', err);
+      // Fallback sur liste statique si API échoue
+      setDepartments([
+        { code: '75', nom: 'Paris' },
+        { code: '92', nom: 'Hauts-de-Seine' },
+        { code: '93', nom: 'Seine-Saint-Denis' },
+        { code: '94', nom: 'Val-de-Marne' },
+        { code: '91', nom: 'Essonne' },
+        { code: '77', nom: 'Seine-et-Marne' },
+        { code: '78', nom: 'Yvelines' },
+        { code: '95', nom: 'Val-d\'Oise' },
+        { code: '13', nom: 'Bouches-du-Rhône' },
+        { code: '69', nom: 'Rhône' },
+        { code: '33', nom: 'Gironde' },
+        { code: '31', nom: 'Haute-Garonne' },
+        { code: '59', nom: 'Nord' },
+        { code: '44', nom: 'Loire-Atlantique' },
+        { code: '06', nom: 'Alpes-Maritimes' }
+      ]);
     }
   };
 
@@ -542,7 +571,15 @@ export default function LeadGenerationSmart() {
                   ].map(({ type, label, icon: Icon }) => (
                     <button
                       key={type}
-                      onClick={() => { setGeoType(type); setSelectedItems([]); setAnalysis(null); }}
+                      onClick={() => {
+                        setGeoType(type);
+                        setSelectedItems([]);
+                        setAnalysis(null);
+                        setDeptSearch('');
+                        if (type === 'department') {
+                          loadAllDepartments();
+                        }
+                      }}
                       className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
                         geoType === type
                           ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg'
@@ -574,59 +611,70 @@ export default function LeadGenerationSmart() {
                   </div>
                 )}
 
-                {/* Sélection département - multi-select */}
+                {/* Sélection département - multi-select avec tous les départements */}
                 {geoType === 'department' && (
                   <div className="space-y-3">
-                    <select
-                      value={selectedRegion}
-                      onChange={(e) => handleRegionChange(e.target.value)}
-                      className="w-full h-12 border-2 border-gray-200 rounded-xl px-4 focus:border-emerald-500 focus:outline-none"
-                    >
-                      <option value="">Choisir une région...</option>
-                      {regions.map(r => (
-                        <option key={r.code} value={r.code}>{r.nom}</option>
-                      ))}
-                    </select>
+                    {/* Barre de recherche */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Rechercher un département (ex: 75, Paris, Rhône...)"
+                        value={deptSearch}
+                        onChange={(e) => setDeptSearch(e.target.value)}
+                        className="w-full h-12 border-2 border-gray-200 rounded-xl pl-10 pr-4 focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
 
-                    {departments.length > 0 && (
-                      <>
-                        {/* Tags des sélections */}
-                        {selectedItems.length > 0 && (
-                          <div className="flex flex-wrap gap-2 p-3 bg-emerald-50 rounded-xl">
-                            {selectedItems.map(item => (
-                              <span
-                                key={item.code}
-                                className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white text-sm rounded-full"
-                              >
-                                {item.nom}
-                                <button onClick={() => removeItem(item.code)}>
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                    {/* Tags des sélections */}
+                    {selectedItems.length > 0 && (
+                      <div className="flex flex-wrap gap-2 p-3 bg-emerald-50 rounded-xl">
+                        {selectedItems.map(item => (
+                          <span
+                            key={item.code}
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white text-sm rounded-full"
+                          >
+                            {item.code} - {item.nom}
+                            <button onClick={() => removeItem(item.code)}>
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
-                        {/* Liste des départements */}
-                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
-                          {departments.map(d => {
-                            const isSelected = selectedItems.find(i => i.code === d.code);
-                            return (
-                              <button
-                                key={d.code}
-                                onClick={() => toggleItem(d)}
-                                className={`p-2 rounded-lg text-sm text-left transition-all ${
-                                  isSelected
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-                                }`}
-                              >
-                                <span className="font-medium">{d.code}</span> - {d.nom}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
+                    {/* Liste des départements filtrés */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto p-1">
+                      {departments
+                        .filter(d => {
+                          if (!deptSearch) return true;
+                          const search = deptSearch.toLowerCase();
+                          return d.code.toLowerCase().includes(search) ||
+                                 d.nom.toLowerCase().includes(search);
+                        })
+                        .map(d => {
+                          const isSelected = selectedItems.find(i => i.code === d.code);
+                          return (
+                            <button
+                              key={d.code}
+                              onClick={() => toggleItem(d)}
+                              className={`p-2 rounded-lg text-sm text-left transition-all ${
+                                isSelected
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              <span className="font-bold">{d.code}</span> {d.nom}
+                            </button>
+                          );
+                        })}
+                    </div>
+
+                    {departments.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                        Chargement des départements...
+                      </div>
                     )}
                   </div>
                 )}
