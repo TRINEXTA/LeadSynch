@@ -292,14 +292,14 @@ export async function getUserNotifications(userId, unreadOnly = false, limit = 5
   try {
     let query = `
       SELECT id, type, title, message, data, action_url, action_label,
-             read, read_at, job_id, created_at
+             is_read, read_at, job_id, created_at
       FROM notifications
       WHERE user_id = $1
     `;
     const params = [userId];
 
     if (unreadOnly) {
-      query += ' AND read = FALSE';
+      query += ' AND is_read = FALSE';
     }
 
     query += ' ORDER BY created_at DESC LIMIT $2';
@@ -318,7 +318,7 @@ export async function getUserNotifications(userId, unreadOnly = false, limit = 5
 export async function countUnreadNotifications(userId) {
   try {
     const result = await queryOne(
-      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND read = FALSE',
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = FALSE',
       [userId]
     );
     return parseInt(result?.count || 0);
@@ -334,7 +334,7 @@ export async function markNotificationRead(notificationId, userId) {
   try {
     await execute(`
       UPDATE notifications
-      SET read = TRUE, read_at = NOW()
+      SET is_read = TRUE, read_at = NOW()
       WHERE id = $1 AND user_id = $2
     `, [notificationId, userId]);
     return true;
@@ -351,8 +351,8 @@ export async function markAllNotificationsRead(userId) {
   try {
     await execute(`
       UPDATE notifications
-      SET read = TRUE, read_at = NOW()
-      WHERE user_id = $1 AND read = FALSE
+      SET is_read = TRUE, read_at = NOW()
+      WHERE user_id = $1 AND is_read = FALSE
     `, [userId]);
     return true;
   } catch (err) {
