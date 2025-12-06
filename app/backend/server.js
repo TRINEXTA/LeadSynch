@@ -146,11 +146,12 @@ import changePasswordRoute from './api/auth/change-password.js';
 import resetPassword from './api/auth/reset-password.js';
 import authLogout from './api/auth/logout.js';
 
-app.all('/api/auth/login', authLimiter, authLogin); // Rate limit strict sur login
-app.all('/api/auth/me', authMe);
-app.all('/api/auth/change-password', changePasswordRoute);
-app.all('/api/auth/reset-password', authLimiter, resetPassword); // Rate limit sur reset password
-if (authLogout) app.all('/api/auth/logout', authLogout);
+// Routes d'authentification avec méthodes HTTP spécifiques
+app.post('/api/auth/login', authLimiter, authLogin); // Rate limit strict sur login
+app.get('/api/auth/me', authMe);
+app.post('/api/auth/change-password', changePasswordRoute);
+app.post('/api/auth/reset-password', authLimiter, resetPassword); // Rate limit sur reset password
+if (authLogout) app.post('/api/auth/logout', authLogout);
 
 // ========== ?? ROUTES PRINCIPALES (ORDRE IMPORTANT) ==========
 import leadsRoute from './api/leads.js';
@@ -239,10 +240,11 @@ app.use('/api/lead-sector-assignment', leadSectorAssignmentRoute);
 app.use('/api/stats', statsRoute);
 app.use('/api/templates', templatesRoute);
 app.use('/api/generate-leads', generateLeadsRoute);
-app.all('/api/generate-leads-stream', generateLeadsStreamRoute);
-app.all('/api/pause-search', generateLeadsStreamRoute);
-app.all('/api/resume-search', generateLeadsStreamRoute);
-app.all('/api/stop-search', generateLeadsStreamRoute);
+// Routes de génération de leads (streaming) - POST only
+app.post('/api/generate-leads-stream', generateLeadsStreamRoute);
+app.post('/api/pause-search', generateLeadsStreamRoute);
+app.post('/api/resume-search', generateLeadsStreamRoute);
+app.post('/api/stop-search', generateLeadsStreamRoute);
 app.use('/api/quotas', quotasRoute);
 app.use('/api/follow-ups', followUpsRoute);
 
@@ -266,7 +268,7 @@ app.use('/api/upload-attachment', uploadAttachmentRoute);
 app.use('/api/track', trackRoutes);
 app.use('/api/lead-databases', leadDatabasesRoute);
 app.use('/api/pipeline-leads', pipelineLeadsRoute);
-app.all('/api/inject-pipeline', injectPipelineRoute);
+app.post('/api/inject-pipeline', injectPipelineRoute);
 app.use('/api/api-gouv', apiGouvLeadsRoute);
 app.use('/api/geographic-sectors', geographicSectorsRoute);
 
