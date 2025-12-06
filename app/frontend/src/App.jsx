@@ -55,6 +55,7 @@ const BusinessSettings = lazy(() => import('./pages/BusinessSettings'));
 
 // Génération de leads
 const LeadGeneration = lazy(() => import('./pages/LeadGeneration'));
+const LeadGenerationSmart = lazy(() => import('./pages/LeadGenerationSmart'));
 const CreateLeadSearch = lazy(() => import('./pages/CreateLeadSearch'));
 const GoogleApiSetup = lazy(() => import('./pages/GoogleApiSetup'));
 
@@ -195,7 +196,8 @@ function App() {
               <Route path="/EmailPipeline" element={<Navigate to="/pipeline" replace />} />
               <Route path="/Pipeline" element={<Navigate to="/pipeline" replace />} />
 
-              <Route path="/LeadGeneration" element={<LeadGeneration />} />
+              <Route path="/LeadGeneration" element={<LeadGenerationSmart />} />
+              <Route path="/lead-generation-legacy" element={<LeadGeneration />} />
               <Route path="/CreateLeadSearch" element={<CreateLeadSearch />} />
               <Route path="/GoogleApiSetup" element={<GoogleApiSetup />} />
 

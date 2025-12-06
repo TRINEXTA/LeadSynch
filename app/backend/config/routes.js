@@ -19,6 +19,7 @@ import templatesRoute from '../api/templates.js';
 import generateLeadsRoute from '../api/generate-leads.js';
 import generateLeadsStreamRoute from '../api/generate-leads-stream.js';
 import generateLeadsV2Route from '../api/generate-leads-v2.js';
+import leadAvailabilityRoute from '../api/lead-availability.js';
 import notificationsRoute from '../api/notifications.js';
 import followUpsRoute from '../api/follow-ups.js';
 import quotasRoute from '../api/quotas.js';
@@ -120,6 +121,12 @@ export function setupRoutes(app) {
   app.post('/api/generate-leads-v2/pause', generateLeadsV2Route);
   app.post('/api/generate-leads-v2/resume', generateLeadsV2Route);
   app.post('/api/generate-leads-v2/stop', generateLeadsV2Route);
+
+  // Lead availability (analyse avant génération)
+  app.get('/api/lead-availability/regions', leadAvailabilityRoute);
+  app.get('/api/lead-availability/departments/:regionCode', leadAvailabilityRoute);
+  app.post('/api/lead-availability/analyze', leadAvailabilityRoute);
+  app.post('/api/lead-availability/suggest', leadAvailabilityRoute);
 
   // Notifications
   app.get('/api/notifications', notificationsRoute);
