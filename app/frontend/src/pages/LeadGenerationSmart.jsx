@@ -258,11 +258,24 @@ export default function LeadGenerationSmart() {
     const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') ||
       (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://leadsynch-api.onrender.com');
 
-    // Construire la liste des villes à rechercher
-    let searchCity = analysis?.geoName || '';
+    // Construire les paramètres géographiques
+    let geoParams = {};
+
     if (geoType === 'region') {
-      searchCity = regions.find(r => r.code === selectedRegion)?.nom || '';
+      geoParams = {
+        geoType: 'region',
+        geoCode: selectedRegion
+      };
+    } else if (geoType === 'department') {
+      // Multi-sélection de départements
+      const deptCodes = selectedItems.map(item => item.code).join(',');
+      geoParams = {
+        geoType: 'department',
+        geoCode: deptCodes
+      };
     }
+
+    console.log('🚀 Génération avec params:', { sector, ...geoParams, quantity: finalQuantity });
 
     try {
       const response = await fetch(`${API_BASE}/api/generate-leads-v2`, {
@@ -273,7 +286,7 @@ export default function LeadGenerationSmart() {
         },
         body: JSON.stringify({
           sector,
-          city: searchCity,
+          ...geoParams,
           quantity: finalQuantity,
           searchId: Date.now().toString()
         })
