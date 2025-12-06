@@ -955,7 +955,20 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
         }
 
         if (existing) {
+          // Le lead existe déjà - l'ajouter à la nouvelle base via relation
+          await execute(`
+            INSERT INTO lead_database_relations (lead_id, database_id, added_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (lead_id, database_id) DO NOTHING
+          `, [existing.id, targetDatabaseId]);
+
+          // Mettre à jour aussi le database_id du lead si pas déjà défini
+          await execute(`
+            UPDATE leads SET database_id = COALESCE(database_id, $1) WHERE id = $2
+          `, [targetDatabaseId, existing.id]);
+
           duplicates++;
+          inserted++; // Compter comme inséré car ajouté à la base
           continue;
         }
 
