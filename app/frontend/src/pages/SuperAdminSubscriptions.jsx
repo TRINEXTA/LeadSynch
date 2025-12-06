@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 export default function SuperAdminSubscriptions() {
   const navigate = useNavigate();
@@ -46,9 +47,9 @@ export default function SuperAdminSubscriptions() {
 
       const response = await api.get(`/super-admin/subscriptions?${params.toString()}`);
       setSubscriptions(response.data.subscriptions || []);
-    } catch (error) {
-      error('Erreur chargement abonnements:', error);
-      alert('Erreur lors du chargement des abonnements');
+    } catch (err) {
+      error('Erreur chargement abonnements:', err);
+      toast.error('Erreur lors du chargement des abonnements');
     } finally {
       setLoading(false);
     }
@@ -68,12 +69,12 @@ export default function SuperAdminSubscriptions() {
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/renew`);
-      alert('Abonnement renouvelé avec succès');
+      toast.success('Abonnement renouvelé avec succès');
       loadSubscriptions();
       loadStats();
-    } catch (error) {
-      error('Erreur renouvellement:', error);
-      alert('Erreur lors du renouvellement');
+    } catch (err) {
+      error('Erreur renouvellement:', err);
+      toast.error('Erreur lors du renouvellement');
     }
   };
 
@@ -82,12 +83,12 @@ export default function SuperAdminSubscriptions() {
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/suspend`);
-      alert('Abonnement suspendu');
+      toast.success('Abonnement suspendu');
       loadSubscriptions();
       loadStats();
-    } catch (error) {
-      error('Erreur suspension:', error);
-      alert('Erreur lors de la suspension');
+    } catch (err) {
+      error('Erreur suspension:', err);
+      toast.error('Erreur lors de la suspension');
     }
   };
 
@@ -96,12 +97,12 @@ export default function SuperAdminSubscriptions() {
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/activate`);
-      alert('Abonnement réactivé');
+      toast.success('Abonnement réactivé');
       loadSubscriptions();
       loadStats();
-    } catch (error) {
-      error('Erreur réactivation:', error);
-      alert('Erreur lors de la réactivation');
+    } catch (err) {
+      error('Erreur réactivation:', err);
+      toast.error('Erreur lors de la réactivation');
     }
   };
 

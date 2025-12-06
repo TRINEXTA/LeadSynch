@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, FileCheck, Save, Send, AlertCircle, Download, Mail, Loader2, Sparkles, ClipboardCheck, Shield } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import toast from 'react-hot-toast';
 
 // Fallback hardcoded offers (used if no custom products configured)
 const TRINEXTA_OFFERS = [
@@ -170,7 +171,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
 
   const handleSave = async (action = 'draft') => {
     if (!selectedOffer) {
-      alert('Veuillez sélectionner une offre');
+      toast.error('Veuillez sélectionner une offre');
       return;
     }
 
@@ -178,7 +179,7 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
     const price = calculatePrice();
 
     if (price === 'Sur proposition') {
-      alert('Cette offre nécessite une proposition personnalisée. Veuillez créer une proposition d\'abord.');
+      toast.error('Cette offre nécessite une proposition personnalisée. Veuillez créer une proposition d\'abord.');
       return;
     }
 
@@ -214,9 +215,9 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
         await handleSendForSignature(response.data.contract.id);
       }
 
-    } catch (error) {
-      error('Erreur:', error);
-      alert('Erreur lors de la création du contrat');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de la création du contrat');
     } finally {
       setSaving(false);
     }
@@ -247,11 +248,11 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
 
-        alert('PDF téléchargé avec succès !');
+        toast.success('PDF téléchargé avec succès !');
       }
-    } catch (error) {
-      error('Erreur téléchargement PDF:', error);
-      alert('Erreur lors du téléchargement du PDF');
+    } catch (err) {
+      error('Erreur téléchargement PDF:', err);
+      toast.error('Erreur lors du téléchargement du PDF');
     } finally {
       setDownloading(false);
     }
@@ -273,14 +274,14 @@ export default function QuickContractModal({ lead, onClose, onSuccess, fromPropo
         pipeline_lead_id: lead.id
       });
 
-      alert('Demande de validation envoyée au manager. Vous serez notifié une fois le contrat validé.');
+      toast.success('Demande de validation envoyée au manager. Vous serez notifié une fois le contrat validé.');
 
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
-      error('Erreur:', error);
+    } catch (err) {
+      error('Erreur:', err);
       // If task creation fails, still show success for contract
-      alert('Contrat créé. La validation sera demandée manuellement.');
+      toast('Contrat créé. La validation sera demandée manuellement.', { icon: 'ℹ️' });
       if (onSuccess) onSuccess();
       onClose();
     }
@@ -347,9 +348,9 @@ L'équipe Trinexta`;
 
       if (onSuccess) onSuccess();
 
-    } catch (error) {
-      error('Erreur:', error);
-      alert('Erreur lors de la préparation de l\'email');
+    } catch (err) {
+      error('Erreur:', err);
+      toast.error('Erreur lors de la préparation de l\'email');
     } finally {
       setSendingEmail(false);
     }

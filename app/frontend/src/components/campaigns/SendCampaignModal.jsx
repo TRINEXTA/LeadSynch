@@ -2,6 +2,7 @@ import { log, error, warn } from "../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Send, AlertTriangle, CheckCircle, Loader2, Mail, Database, Tag, Users } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function SendCampaignModal({ campaign, onClose, onSent }) {
   const [templates, setTemplates] = useState([]);
@@ -105,24 +106,24 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
 
   const handleSend = async () => {
     if (!selectedTemplate) {
-      alert('?? Veuillez s�lectionner un template');
+      toast.error('Veuillez sélectionner un template');
       return;
     }
 
     if (!selectedDatabase) {
-      alert('?? Veuillez s�lectionner une base de donn�es');
+      toast.error('Veuillez sélectionner une base de données');
       return;
     }
 
     if (leadsCount === 0) {
-      alert('?? Aucun lead trouv� dans cette s�lection');
+      toast.error('Aucun lead trouvé dans cette sélection');
       return;
     }
 
     const quotaInfo = getQuotaInfo();
 
     if (!testMode && quotaInfo.remaining <= 0 && quotaInfo.limit !== -1) {
-      alert('?? Quota d\'emails atteint ! Veuillez upgrader votre plan.');
+      toast.error('Quota d\'emails atteint ! Veuillez upgrader votre plan.');
       return;
     }
 
@@ -154,9 +155,9 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
         if (onSent) onSent(response.data);
       }, 2000);
 
-    } catch (error) {
-      error('Erreur envoi:', error);
-      alert('? Erreur : ' + (error.response?.data?.error || error.message));
+    } catch (err) {
+      error('Erreur envoi:', err);
+      toast.error('Erreur : ' + (err.response?.data?.error || err.message));
       setSending(false);
       setProgress(0);
     }
