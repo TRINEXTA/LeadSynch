@@ -903,6 +903,13 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
   log(`📥 [SAVE] Demande de sauvegarde: ${leads?.length || 0} leads`);
   log(`📥 [SAVE] Options: database_id=${database_id}, create_new=${create_new_database}, name=${new_database_name}`);
 
+  // Debug: afficher le premier lead pour voir la structure
+  if (leads?.length > 0) {
+    log(`📥 [SAVE] Premier lead:`, JSON.stringify(leads[0], null, 2));
+  } else {
+    log(`⚠️ [SAVE] ATTENTION: leads array est vide ou undefined!`);
+  }
+
   if (!leads || !Array.isArray(leads) || leads.length === 0) {
     return res.status(400).json({ error: 'Leads requis' });
   }
