@@ -1,7 +1,7 @@
 import { log, error, warn } from "../lib/logger.js";
 ﻿import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import db from '../../config/db.js';
+import { resolve } from '../../lib/container.js';
 
 async function handler(req, res) {
   log('========== LOGIN REQUEST ==========');
@@ -24,7 +24,7 @@ async function handler(req, res) {
     }
 
     // Chercher l'utilisateur avec first_name, last_name et is_super_admin
-    const { rows } = await db.query(
+    const { rows } = await resolve('db').query(
       `SELECT u.*, t.name as tenant_name
        FROM users u
        LEFT JOIN tenants t ON u.tenant_id = t.id
@@ -59,7 +59,7 @@ async function handler(req, res) {
     }
 
     // ✅ CORRECTION : Mettre à jour last_login
-    await db.query(
+    await resolve('db').query(
       'UPDATE users SET last_login = NOW() WHERE id = $1',
       [user.id]
     );

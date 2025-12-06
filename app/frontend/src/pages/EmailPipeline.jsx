@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+import { log, error, warn } from "./../lib/logger.js";
+=======
 import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 ﻿import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { TrendingUp, Users, DollarSign, Clock, Mail, Phone, MapPin, Star, X, Filter } from 'lucide-react';

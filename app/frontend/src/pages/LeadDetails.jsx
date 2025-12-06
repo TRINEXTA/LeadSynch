@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+import { log, error, warn } from "./../lib/logger.js";
+=======
 import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building, Mail, Phone, MapPin, Globe, Calendar, User, Tag, DollarSign, BarChart3, History, FileText, MessageSquare } from 'lucide-react';

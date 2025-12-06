@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+import { log, error, warn } from "./../lib/logger.js";
+=======
 import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 ﻿import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Mail, Sparkles, Code, Edit, Trash2, X, Wand2, Crown, Lock } from 'lucide-react';

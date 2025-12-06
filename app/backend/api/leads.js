@@ -1,7 +1,7 @@
 import { log, error, warn } from "../lib/logger.js";
 ﻿import { Router } from "express";
 import { z } from "zod";
-import { query, queryOne, execute } from "../lib/db.js";
+import { resolve } from "../lib/container.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { ValidationError, NotFoundError, DatabaseError } from "../lib/errors.js";
 
@@ -61,7 +61,11 @@ router.get("/count", async (req, res, next) => {
     }
 
     const sql = `SELECT COUNT(*) as count FROM leads WHERE ${where}`;
+<<<<<<< HEAD
+    const { rows } = await resolve('db').query(sql, params);
+=======
     const { rows } = await query(sql, params);
+>>>>>>> origin/main
     
     return res.json({ 
       success: true, 
@@ -148,7 +152,7 @@ router.get("/", async (req, res, next) => {
     `;
 
     params.push(limit, offset);
-    const { rows } = await query(sql, params);
+    const { rows } = await resolve('db').query(sql, params);
 
     return res.json({
       success: true,
@@ -194,7 +198,7 @@ router.get("/today", async (req, res, next) => {
 
     const sql = `SELECT id, company_name, contact_name, email, phone, status, assigned_to, created_at, updated_at FROM leads WHERE ${where} ORDER BY created_at DESC LIMIT ${limitParam}`;
 
-    const { rows } = await query(sql, params);
+    const { rows } = await resolve('db').query(sql, params);
     return res.json({ success: true, count: rows.length, leads: rows });
     
   } catch (err) {
@@ -212,7 +216,7 @@ router.get("/:id", async (req, res, next) => {
 
     const sql = 'SELECT l.*, ld.name as database_name, u.first_name || \' \' || u.last_name as assigned_to_name FROM leads l LEFT JOIN lead_databases ld ON l.database_id = ld.id LEFT JOIN users u ON l.assigned_to = u.id WHERE l.id = $1 AND l.tenant_id = $2';
 
-    const lead = await queryOne(sql, [leadId, tenantId]);
+    const lead = await resolve('db').queryOne(sql, [leadId, tenantId]);
 
     if (!lead) {
       throw new NotFoundError('Lead non trouvé');
@@ -260,7 +264,7 @@ router.post("/", async (req, res, next) => {
 
     const sql = 'INSERT INTO leads (tenant_id, company_name, contact_name, email, phone, city, website, industry, deal_value, notes, score, database_id, assigned_to, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW()) RETURNING *';
 
-    const lead = await queryOne(sql, [
+    const lead = await resolve('db').queryOne(sql, [
       tenantId,
       company_name.trim(),
       contact_name?.trim() || null,
@@ -337,7 +341,7 @@ router.put("/:id", async (req, res, next) => {
 
     const sql = 'UPDATE leads SET company_name = COALESCE($1, company_name), contact_name = COALESCE($2, contact_name), email = COALESCE($3, email), phone = COALESCE($4, phone), city = COALESCE($5, city), website = COALESCE($6, website), industry = COALESCE($7, industry), deal_value = COALESCE($8, deal_value), notes = COALESCE($9, notes), score = COALESCE($10, score), status = COALESCE($11, status), assigned_to = COALESCE($12, assigned_to), updated_at = NOW() WHERE id = $13 AND tenant_id = $14 RETURNING *';
 
-    const lead = await queryOne(sql, [
+    const lead = await resolve('db').queryOne(sql, [
       company_name?.trim(),
       contact_name?.trim(),
       email?.trim().toLowerCase(),
@@ -387,11 +391,11 @@ router.delete("/:id", async (req, res, next) => {
       throw new NotFoundError('Lead non trouvé');
     }
 
-    await execute('DELETE FROM call_history WHERE pipeline_lead_id IN (SELECT id FROM pipeline_leads WHERE lead_id = $1)', [leadId]);
-    await execute('DELETE FROM pipeline_leads WHERE lead_id = $1', [leadId]);
-    await execute('DELETE FROM campaign_leads WHERE lead_id = $1', [leadId]);
-    await execute('DELETE FROM email_tracking WHERE lead_id = $1', [leadId]);
-    await execute('DELETE FROM leads WHERE id = $1 AND tenant_id = $2', [leadId, tenantId]);
+    await resolve('db').execute('DELETE FROM call_history WHERE pipeline_lead_id IN (SELECT id FROM pipeline_leads WHERE lead_id = $1)', [leadId]);
+    await resolve('db').execute('DELETE FROM pipeline_leads WHERE lead_id = $1', [leadId]);
+    await resolve('db').execute('DELETE FROM campaign_leads WHERE lead_id = $1', [leadId]);
+    await resolve('db').execute('DELETE FROM email_tracking WHERE lead_id = $1', [leadId]);
+    await resolve('db').execute('DELETE FROM leads WHERE id = $1 AND tenant_id = $2', [leadId, tenantId]);
 
     log('🗑️ Lead supprimé:', existingLead.company_name, '- ID:', leadId);
 

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+import { log, error, warn } from "./../lib/logger.js";
+=======
 import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, FileText, Mail, Shield, Clock, Building, User, Euro, Calendar, Lock, Send } from 'lucide-react';

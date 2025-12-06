@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+import { log, error, warn } from "./../lib/logger.js";
+=======
 import { log, error, warn } from "../lib/logger.js";
+>>>>>>> origin/main
 import React, { useState, useEffect } from 'react';
 import { X, Edit, Save, Phone, Mail, MapPin, Building2, User, Calendar, FileText, Plus, Trash2, Star, ExternalLink } from 'lucide-react';
 import api from '../api/axios';
