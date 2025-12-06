@@ -18,6 +18,7 @@ import statsRoute from '../api/stats.js';
 import templatesRoute from '../api/templates.js';
 import generateLeadsRoute from '../api/generate-leads.js';
 import generateLeadsStreamRoute from '../api/generate-leads-stream.js';
+import generateLeadsV2Route from '../api/generate-leads-v2.js';
 import followUpsRoute from '../api/follow-ups.js';
 import quotasRoute from '../api/quotas.js';
 import importCsvRoute from '../api/import-csv.js';
@@ -104,11 +105,20 @@ export function setupRoutes(app) {
   app.use('/api/templates', templatesRoute);
   app.use('/api/generate-leads', generateLeadsRoute);
 
-  // Lead generation streaming
+  // Lead generation streaming (legacy)
   app.post('/api/generate-leads-stream', generateLeadsStreamRoute);
   app.post('/api/pause-search', generateLeadsStreamRoute);
   app.post('/api/resume-search', generateLeadsStreamRoute);
   app.post('/api/stop-search', generateLeadsStreamRoute);
+
+  // Lead generation V2 (optimized - internal search first + Sirene API)
+  app.post('/api/generate-leads-v2', generateLeadsV2Route);
+  app.post('/api/generate-leads-v2/preview', generateLeadsV2Route);
+  app.post('/api/generate-leads-v2/save', generateLeadsV2Route);
+  app.get('/api/generate-leads-v2/databases', generateLeadsV2Route);
+  app.post('/api/generate-leads-v2/pause', generateLeadsV2Route);
+  app.post('/api/generate-leads-v2/resume', generateLeadsV2Route);
+  app.post('/api/generate-leads-v2/stop', generateLeadsV2Route);
 
   app.use('/api/quotas', quotasRoute);
   app.use('/api/follow-ups', followUpsRoute);
