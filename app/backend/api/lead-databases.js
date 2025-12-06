@@ -13,12 +13,21 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
 
-    // Utiliser leads.database_id pour un comptage fiable
-    // Vérifier le tenant via la base (pas via leads.tenant_id qui peut être null pour d'anciens imports)
+    // Compter les leads depuis DEUX sources:
+    // 1. leads.database_id (nouvelle méthode - generate-leads-v2)
+    // 2. lead_database_relations (ancienne méthode - import-csv)
     const { rows } = await q(
       `SELECT
         ld.*,
-        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id) as lead_count
+        (
+          SELECT COUNT(DISTINCT lead_id) FROM (
+            -- Leads liés via database_id
+            SELECT id as lead_id FROM leads WHERE database_id = ld.id
+            UNION
+            -- Leads liés via lead_database_relations
+            SELECT lead_id FROM lead_database_relations WHERE database_id = ld.id
+          ) combined
+        ) as lead_count
        FROM lead_databases ld
        WHERE ld.tenant_id = $1
        ORDER BY ld.created_at DESC`,
@@ -26,9 +35,9 @@ router.get('/', authenticateToken, async (req, res) => {
     );
 
     return res.json({ success: true, databases: rows });
-  } catch (error) {
-    error('❌ Erreur GET lead-databases:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET lead-databases:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -38,12 +47,17 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
 
-    // 1. Récupérer les infos de la base avec comptage via database_id
-    // Vérifier le tenant via la base (pas via leads.tenant_id)
+    // 1. Récupérer les infos de la base
     const { rows: dbRows } = await q(
       `SELECT
         ld.*,
-        (SELECT COUNT(*) FROM leads l WHERE l.database_id = ld.id) as lead_count
+        (
+          SELECT COUNT(DISTINCT lead_id) FROM (
+            SELECT id as lead_id FROM leads WHERE database_id = ld.id
+            UNION
+            SELECT lead_id FROM lead_database_relations WHERE database_id = ld.id
+          ) combined
+        ) as lead_count
        FROM lead_databases ld
        WHERE ld.id = $1 AND ld.tenant_id = $2`,
       [id, tenantId]
@@ -53,17 +67,22 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Base non trouvée' });
     }
 
-    // 2. Récupérer les leads de cette base via database_id
-    // Le tenant est vérifié via la base, pas directement sur les leads
+    // 2. Récupérer les leads depuis DEUX sources (sans doublons)
     const { rows: leadRows } = await q(
-      `SELECT *
-       FROM leads
-       WHERE database_id = $1
-       ORDER BY created_at DESC`,
+      `SELECT DISTINCT ON (l.id) l.*
+       FROM leads l
+       WHERE l.id IN (
+         -- Leads liés via database_id
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         -- Leads liés via lead_database_relations
+         SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+       )
+       ORDER BY l.id, l.created_at DESC`,
       [id]
     );
 
-    log(`✅ Base ${id}: ${leadRows.length} leads trouvés`);
+    log(`✅ Base ${id}: ${leadRows.length} leads trouvés (sources combinées)`);
 
     // 3. Retourner la base avec ses leads
     const database = {
@@ -72,9 +91,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
     };
 
     return res.json({ success: true, database });
-  } catch (error) {
-    error('❌ Erreur GET lead-database:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET lead-database:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -114,13 +133,17 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
       });
     }
 
-    // Sinon, essayer de compter depuis la table leads
+    // Sinon, compter depuis les leads (deux sources combinées)
     const { rows } = await q(
       `SELECT
         sector,
         COUNT(*) as lead_count
        FROM leads
-       WHERE database_id = $1
+       WHERE id IN (
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+       )
          AND sector IS NOT NULL
          AND sector != ''
        GROUP BY sector
@@ -128,7 +151,7 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
       [id]
     );
 
-    log(`✅ ${rows.length} secteurs trouvés via leads table`);
+    log(`✅ ${rows.length} secteurs trouvés via leads table (sources combinées)`);
 
     return res.json({
       success: true,
