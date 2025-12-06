@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   action_label VARCHAR(100),
 
   -- Statut
-  read BOOLEAN DEFAULT FALSE,
+  is_read BOOLEAN DEFAULT FALSE,
   read_at TIMESTAMP WITH TIME ZONE,
 
   -- Référence au job si applicable
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_tenant ON notifications(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read) WHERE read = FALSE;
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
 
 -- ========== COMMENTS ==========
