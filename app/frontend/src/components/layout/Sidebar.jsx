@@ -35,10 +35,10 @@ import {
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
-import { useState } from 'react'
+import { useState, useCallback, useMemo, memo } from 'react'
 import { PERMISSIONS, hasPermission } from '../../lib/permissions'
 
-export default function Sidebar() {
+function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
@@ -51,20 +51,20 @@ export default function Sidebar() {
     admin: false
   })
 
-  const toggleSection = (section) => {
+  const toggleSection = useCallback((section) => {
     setExpandedSections(prev => ({
       ...prev,
       [section]: !prev[section]
     }))
-  }
+  }, [])
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
   const isCommercial = user?.role === 'commercial'
   const isSuperAdmin = user?.is_super_admin === true
 
-  // Fonction pour vérifier l'accès (rôle + permission)
-  const checkAccess = (item) => {
+  // Fonction pour vérifier l'accès (rôle + permission) - mémoïsée
+  const checkAccess = useCallback((item) => {
     // Si pas de roles définis, tout le monde peut voir
     if (!item.roles) return true
 
@@ -80,7 +80,7 @@ export default function Sidebar() {
     }
 
     return true
-  }
+  }, [user, isAdmin, isSuperAdmin, isManager])
 
   const navigation = {
     main: [
@@ -184,15 +184,15 @@ export default function Sidebar() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout()
     navigate('/login')
-  }
+  }, [logout, navigate])
 
-  const hasAccess = (roles) => {
+  const hasAccess = useCallback((roles) => {
     if (!roles) return true
     return roles.includes(user?.role)
-  }
+  }, [user?.role])
 
   const renderNavItem = (item) => {
     // Vérifier l'accès complet (rôle + permission)
@@ -291,3 +291,6 @@ export default function Sidebar() {
     </div>
   )
 }
+
+// Mémoïse le Sidebar pour éviter les re-renders inutiles
+export default memo(Sidebar)
