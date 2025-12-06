@@ -77,6 +77,7 @@ export default function LeadGeneration() {
 
   const searchIdRef = useRef(null);
   const timerRef = useRef(null);
+  const leadsRef = useRef([]);
 
   // Timer pour le temps écoulé
   useEffect(() => {
@@ -200,30 +201,42 @@ export default function LeadGeneration() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = ''; // Buffer pour gérer les messages coupés
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        // Ajouter au buffer et traiter
+        buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              handleSSEEvent(data);
-            } catch {
-              // Ignorer les erreurs de parsing JSON
+        // Traiter les messages complets (terminés par \n\n)
+        const messages = buffer.split('\n\n');
+        buffer = messages.pop() || ''; // Garder le message incomplet dans le buffer
+
+        for (const message of messages) {
+          const lines = message.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                handleSSEEvent(data);
+              } catch (e) {
+                // Ignorer les erreurs de parsing JSON (message trop long coupé)
+                console.warn('SSE parse error:', e.message);
+              }
             }
           }
         }
       }
+
     } catch (err) {
-      setIsGenerating(false);
       const errorMsg = err.message || "Erreur de connexion";
       setMessage(errorMsg);
       toast.error(errorMsg, { duration: 5000 });
+    } finally {
+      // Toujours arrêter le spinner quand le stream se termine
+      setIsGenerating(false);
     }
   };
 
@@ -268,15 +281,26 @@ export default function LeadGeneration() {
         setMessage(`Génération: ${data.generated} leads`);
         break;
 
+      case 'enriched_lead':
+        // Remplacer le lead existant par sa version enrichie
+        setLeads(prev => {
+          const idx = prev.findIndex(l => l.company_name === data.lead.company_name);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = data.lead;
+            return updated;
+          }
+          return [...prev, data.lead];
+        });
+        break;
+
       case 'complete':
         setProgress(100);
         setIsGenerating(false);
         setSearchComplete(true);
         setCompleteMessage(data.message);
-        setStats(data.stats || stats);
-        if (data.leads) {
-          setLeads(data.leads);
-        }
+        if (data.stats) setStats(data.stats);
+        // Les leads sont déjà dans le state via les events précédents
 
         if (data.total === 0) {
           toast("Aucun résultat trouvé", { icon: "⚠️", duration: 5000 });
