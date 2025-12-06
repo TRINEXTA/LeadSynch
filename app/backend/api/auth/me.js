@@ -34,7 +34,7 @@ async function getHandler(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   
-  // ✅ CORRECTION : Retourner first_name, last_name et is_super_admin
+  // ✅ Retourner toutes les infos user incluant les permissions
   return res.json({
     id: req.user.id,
     email: req.user.email,
@@ -42,7 +42,8 @@ async function getHandler(req, res) {
     last_name: req.user.last_name,
     role: req.user.role,
     tenant_id: req.user.tenant_id,
-    is_super_admin: req.user.is_super_admin || false
+    is_super_admin: req.user.is_super_admin || false,
+    permissions: req.user.permissions || {}
   });
 }
 
