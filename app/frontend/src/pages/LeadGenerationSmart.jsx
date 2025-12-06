@@ -88,12 +88,14 @@ export default function LeadGenerationSmart() {
   const checkSuperAdmin = async () => {
     try {
       const { data } = await api.get('/auth/me');
-      setIsSuperAdmin(data.user?.is_super_admin === true);
-      if (data.user?.is_super_admin) {
+      console.log('Auth/me response:', data); // Debug
+      const isSuperAdminUser = data.is_super_admin === true;
+      setIsSuperAdmin(isSuperAdminUser);
+      if (isSuperAdminUser) {
         setCredits({ available: 999999, used: 0 });
       }
     } catch (err) {
-      console.error('Erreur:', err);
+      console.error('Erreur checkSuperAdmin:', err);
     }
   };
 
