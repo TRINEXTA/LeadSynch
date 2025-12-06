@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "./lib/logger.js";
 // ================================================================
 // Script : Exécution des migrations SQL sur Neon
 // Usage : node run-migrations.js

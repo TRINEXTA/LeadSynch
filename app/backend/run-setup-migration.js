@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "./lib/logger.js";
 import { readFileSync } from 'fs';
 import pg from 'pg';
 import dotenv from 'dotenv';
