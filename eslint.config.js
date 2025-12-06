@@ -12,8 +12,15 @@ export default [
       }
     },
     rules: {
-      "no-unused-vars": "warn",
-      "no-console": "warn"
+      // Ignorer les variables préfixées par _ et les imports log/error/warn du logger
+      "no-unused-vars": ["warn", {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^(log|error|warn|_)"
+      }],
+      // Désactivé car on utilise un logger centralisé
+      "no-console": "off",
+      // Permettre les blocs catch vides
+      "no-empty": ["error", { "allowEmptyCatch": true }]
     }
   },
   pluginJs.configs.recommended
