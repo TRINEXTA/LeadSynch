@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { X, Send, AlertTriangle, CheckCircle, Loader2, Mail, Database, Tag, Users } from 'lucide-react';
 import api from '../../api/axios';
@@ -105,17 +105,17 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
 
   const handleSend = async () => {
     if (!selectedTemplate) {
-      alert('?? Veuillez sélectionner un template');
+      alert('?? Veuillez sï¿½lectionner un template');
       return;
     }
 
     if (!selectedDatabase) {
-      alert('?? Veuillez sélectionner une base de données');
+      alert('?? Veuillez sï¿½lectionner une base de donnï¿½es');
       return;
     }
 
     if (leadsCount === 0) {
-      alert('?? Aucun lead trouvé dans cette sélection');
+      alert('?? Aucun lead trouvï¿½ dans cette sï¿½lection');
       return;
     }
 
@@ -128,8 +128,8 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
 
     const leadsToSend = testMode ? Math.min(5, leadsCount) : leadsCount;
     const confirmMessage = testMode
-      ? `?? Envoyer un TEST à ${leadsToSend} leads ?\n\nBase: ${databases.find(d => d.id == selectedDatabase)?.name}\n${selectedSector ? `Secteur: ${selectedSector}\n` : ''}Template: ${templates.find(t => t.id == selectedTemplate)?.name}`
-      : `?? ENVOYER LA CAMPAGNE à ${leadsCount} leads ?\n\nBase: ${databases.find(d => d.id == selectedDatabase)?.name}\n${selectedSector ? `Secteur: ${selectedSector}\n` : ''}Template: ${templates.find(t => t.id == selectedTemplate)?.name}\n\nQuota restant: ${quotaInfo.remaining === -1 ? '8' : quotaInfo.remaining} emails`;
+      ? `?? Envoyer un TEST ï¿½ ${leadsToSend} leads ?\n\nBase: ${databases.find(d => d.id == selectedDatabase)?.name}\n${selectedSector ? `Secteur: ${selectedSector}\n` : ''}Template: ${templates.find(t => t.id == selectedTemplate)?.name}`
+      : `?? ENVOYER LA CAMPAGNE ï¿½ ${leadsCount} leads ?\n\nBase: ${databases.find(d => d.id == selectedDatabase)?.name}\n${selectedSector ? `Secteur: ${selectedSector}\n` : ''}Template: ${templates.find(t => t.id == selectedTemplate)?.name}\n\nQuota restant: ${quotaInfo.remaining === -1 ? '8' : quotaInfo.remaining} emails`;
 
     if (!confirm(confirmMessage)) return;
 
@@ -176,7 +176,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
             </div>
 
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              {testMode ? '? Test envoyé !' : '?? Campagne envoyée !'}
+              {testMode ? '? Test envoyï¿½ !' : '?? Campagne envoyï¿½e !'}
             </h2>
 
             <p className="text-gray-600 mb-6">{result.message}</p>
@@ -191,13 +191,13 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
               <div className="bg-green-50 p-4 rounded-lg">
                 <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-green-600">{result.results.sent}</p>
-                <p className="text-sm text-gray-600">Envoyés</p>
+                <p className="text-sm text-gray-600">Envoyï¿½s</p>
               </div>
 
               <div className="bg-red-50 p-4 rounded-lg">
                 <AlertTriangle className="w-6 h-6 text-red-600 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-red-600">{result.results.failed}</p>
-                <p className="text-sm text-gray-600">Échoués</p>
+                <p className="text-sm text-gray-600">ï¿½chouï¿½s</p>
               </div>
             </div>
 
@@ -265,7 +265,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Database className="w-4 h-4 inline mr-1" />
-              Base de Données *
+              Base de Donnï¿½es *
             </label>
             <select
               value={selectedDatabase}
@@ -277,7 +277,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
               className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
               disabled={sending}
             >
-              <option value="">Sélectionner une base...</option>
+              <option value="">Sï¿½lectionner une base...</option>
               {databases.map((db) => (
                 <option key={db.id} value={db.id}>
                   {db.name} ({db.leads_count || 0} leads)
@@ -315,7 +315,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-green-600" />
               <span className="font-semibold text-green-700">
-                {loadingLeads ? 'Chargement...' : `${leadsCount} leads trouvés`}
+                {loadingLeads ? 'Chargement...' : `${leadsCount} leads trouvï¿½s`}
               </span>
               {selectedSector && (
                 <span className="text-sm text-green-600">dans le secteur "{selectedSector}"</span>
@@ -335,7 +335,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
             disabled={sending}
           >
-            <option value="">Sélectionner...</option>
+            <option value="">Sï¿½lectionner...</option>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>{t.name} - {t.subject}</option>
             ))}

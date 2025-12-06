@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "../../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import {
   X, Users, UserMinus, ArrowRight, Check, AlertCircle,
