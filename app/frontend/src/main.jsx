@@ -1,5 +1,5 @@
-import { log, error, warn } from "../lib/logger.js";
-﻿import React from 'react'
+import { log } from "../lib/logger.js";
+import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
