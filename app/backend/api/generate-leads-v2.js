@@ -404,6 +404,18 @@ async function searchInternalDatabase(tenant_id, sector, city, limit) {
  */
 async function searchGlobalCache(sector, city, limit, excludeLeads = []) {
   try {
+    // Vérifier si la table existe pour éviter les erreurs
+    const tableCheck = await queryOne(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'global_leads'
+      ) as table_exists
+    `);
+
+    if (!tableCheck?.table_exists) {
+      log('⚠️ Table global_leads non trouvée, skip cache');
+      return [];
+    }
+
     const excludeNames = excludeLeads.map(l => l.company_name?.toLowerCase()).filter(Boolean);
 
     let query = `
@@ -432,8 +444,8 @@ async function searchGlobalCache(sector, city, limit, excludeLeads = []) {
     const leads = await queryAll(query, params);
     return leads;
   } catch (err) {
-    error('Erreur recherche cache:', err);
-    return [];
+    warn('Cache global non disponible:', err.message);
+    return []; // Continuer sans bloquer
   }
 }
 
@@ -636,10 +648,25 @@ function parseEmployeeCount(tranche) {
 }
 
 /**
- * Sauvegarder dans le cache global
+ * Sauvegarder dans le cache global (non bloquant)
  */
 async function saveToGlobalCache(lead, tenant_id) {
+  // Skip si pas de company_name
+  if (!lead?.company_name) return;
+
   try {
+    // Vérifier si la table existe
+    const tableCheck = await queryOne(`
+      SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'global_leads') as exists
+    `);
+
+    if (!tableCheck?.exists) {
+      return; // Table n'existe pas, skip silencieusement
+    }
+
+    // Générer un google_place_id unique si absent (pour éviter les conflits NULL)
+    const placeId = lead.google_place_id || `sirene_${lead.siret || lead.siren || Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     await execute(`
       INSERT INTO global_leads (
         company_name, phone, website, email, all_emails,
@@ -661,15 +688,13 @@ async function saveToGlobalCache(lead, tenant_id) {
     `, [
       lead.company_name, lead.phone, lead.website, lead.email, lead.all_emails,
       lead.address, lead.city, lead.postal_code, lead.latitude, lead.longitude,
-      lead.industry, lead.google_place_id, lead.google_types, lead.rating, lead.review_count,
+      lead.industry || lead.sector, placeId, lead.google_types, lead.rating, lead.review_count,
       lead.siren, lead.siret, lead.naf_code, lead.employee_count,
-      lead.data_source || 'unknown', tenant_id
+      lead.data_source || 'sirene_insee', tenant_id
     ]);
   } catch (err) {
-    // Ignorer les erreurs de contrainte unique
-    if (!err.message?.includes('duplicate') && !err.message?.includes('unique')) {
-      error('Erreur sauvegarde cache:', err.message);
-    }
+    // Ignorer TOUTES les erreurs - ne pas bloquer la génération
+    // Le cache global est optionnel
   }
 }
 
