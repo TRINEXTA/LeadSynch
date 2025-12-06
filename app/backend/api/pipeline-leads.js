@@ -940,6 +940,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
     // 2. Mettre à jour le stage si fourni
     let refillResult = null;
+    let updatedLead = null;
     if (stage && stage !== oldStage) {
       const { rows } = await q(
         `UPDATE pipeline_leads
@@ -948,6 +949,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
          RETURNING *`,
         [stage, id, tenantId]
       );
+      updatedLead = rows[0];
 
       log(`📦 Lead déplacé: ${oldStage} → ${stage}`);
 
@@ -1031,9 +1033,18 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     }
     }
 
-    return res.json({ 
-      success: true, 
-      lead: rows[0],
+    // Si pas de mise à jour du stage, récupérer le lead actuel
+    if (!updatedLead) {
+      const { rows: currentRows } = await q(
+        `SELECT * FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId]
+      );
+      updatedLead = currentRows[0];
+    }
+
+    return res.json({
+      success: true,
+      lead: updatedLead,
       refill: refillResult
     });
 
