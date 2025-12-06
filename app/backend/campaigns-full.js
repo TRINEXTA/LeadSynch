@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "./lib/logger.js";
 ﻿import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, execute } from '../lib/db.js';
 
