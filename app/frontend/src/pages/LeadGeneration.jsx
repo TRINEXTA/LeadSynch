@@ -252,25 +252,43 @@ export default function LeadGeneration() {
         setMessage(data.message);
         break;
 
+      case 'internal_lead':
+        // Lead interne reçu individuellement
+        setLeads(prev => [...prev, data.lead]);
+        setMessage(`Base interne: ${data.index}/${data.total} leads`);
+        break;
+
       case 'internal_results':
         setProgress(data.percent);
         setStats(prev => ({ ...prev, fromInternalDb: data.found }));
-        setLeads(data.leads || []);
+        // Les leads sont déjà ajoutés via internal_lead
         setMessage(`${data.found} leads trouvés dans votre base`);
         toast.success(`${data.found} leads déjà dans votre base !`, { icon: '💾' });
+        break;
+
+      case 'cache_lead':
+        // Lead cache reçu individuellement
+        setLeads(prev => [...prev, data.lead]);
+        setMessage(`Cache: ${data.index}/${data.total} leads`);
         break;
 
       case 'cache_results':
         setProgress(data.percent);
         setStats(prev => ({ ...prev, fromGlobalCache: data.found }));
-        setLeads(prev => [...prev, ...(data.leads || [])]);
+        // Les leads sont déjà ajoutés via cache_lead
         setMessage(`${data.found} leads trouvés dans le cache global`);
+        break;
+
+      case 'sirene_lead':
+        // Lead Sirene reçu individuellement
+        setLeads(prev => [...prev, data.lead]);
+        setMessage(`Sirene: ${data.index}/${data.total} entreprises`);
         break;
 
       case 'sirene_results':
         setProgress(data.percent);
         setStats(prev => ({ ...prev, fromSirene: data.found }));
-        setLeads(prev => [...prev, ...(data.leads || [])]);
+        // Les leads sont déjà ajoutés via sirene_lead
         setMessage(`${data.found} entreprises trouvées via Sirene INSEE`);
         toast.success(`${data.found} entreprises officielles trouvées`, { icon: '🏛️' });
         break;

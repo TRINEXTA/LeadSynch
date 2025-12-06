@@ -222,12 +222,22 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       stats.fromInternalDb = internalLeads.length;
       allLeads.push(...internalLeads);
 
+      // Envoyer les leads un par un pour éviter les gros messages SSE
+      for (let i = 0; i < internalLeads.length; i++) {
+        sendProgress({
+          type: 'internal_lead',
+          lead: internalLeads[i],
+          index: i + 1,
+          total: internalLeads.length
+        });
+      }
+
       sendProgress({
         type: 'internal_results',
         percent: 15,
         found: internalLeads.length,
-        message: `${internalLeads.length} leads trouvés dans votre base`,
-        leads: internalLeads
+        message: `${internalLeads.length} leads trouvés dans votre base`
+        // leads: envoyés un par un via internal_lead
       });
     }
 
@@ -259,12 +269,22 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       stats.fromGlobalCache = globalLeads.length;
       allLeads.push(...globalLeads);
 
+      // Envoyer les leads un par un pour éviter les gros messages SSE
+      for (let i = 0; i < globalLeads.length; i++) {
+        sendProgress({
+          type: 'cache_lead',
+          lead: globalLeads[i],
+          index: i + 1,
+          total: globalLeads.length
+        });
+      }
+
       sendProgress({
         type: 'cache_results',
         percent: 30,
         found: globalLeads.length,
-        message: `${globalLeads.length} leads trouvés dans le cache`,
-        leads: globalLeads
+        message: `${globalLeads.length} leads trouvés dans le cache`
+        // leads: envoyés un par un via cache_lead
       });
     }
 
@@ -294,12 +314,22 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       stats.fromSirene = sireneLeads.length;
       allLeads.push(...sireneLeads);
 
+      // Envoyer les leads Sirene un par un pour éviter les gros messages SSE
+      for (let i = 0; i < sireneLeads.length; i++) {
+        sendProgress({
+          type: 'sirene_lead',
+          lead: sireneLeads[i],
+          index: i + 1,
+          total: sireneLeads.length
+        });
+      }
+
       sendProgress({
         type: 'sirene_results',
         percent: 50,
         found: sireneLeads.length,
-        message: `${sireneLeads.length} entreprises trouvées via Sirene`,
-        leads: sireneLeads
+        message: `${sireneLeads.length} entreprises trouvées via Sirene`
+        // leads: envoyés un par un via sirene_lead
       });
     }
 
