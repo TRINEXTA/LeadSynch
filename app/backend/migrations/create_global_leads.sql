@@ -14,14 +14,33 @@ CREATE TABLE IF NOT EXISTS global_leads (
   email VARCHAR(255),
   all_emails TEXT, -- Liste de tous les emails trouvés, séparés par virgules
 
+  -- Contact
+  contact_name VARCHAR(255),
+  contact_role VARCHAR(100),
+
   -- Localisation
   address TEXT,
   city VARCHAR(255),
+  postal_code VARCHAR(20),
   latitude DECIMAL(10, 7),
   longitude DECIMAL(10, 7),
 
   -- Catégorisation
   industry VARCHAR(100), -- Secteur d'activité (juridique, informatique, etc.)
+
+  -- Données Sirene/INSEE
+  siren VARCHAR(9),
+  siret VARCHAR(14),
+  naf_code VARCHAR(10),
+  naf_label VARCHAR(255),
+  employee_count INTEGER,
+  employee_range VARCHAR(50),
+  legal_form VARCHAR(100),
+  creation_date DATE,
+  company_status VARCHAR(20) DEFAULT 'active',
+
+  -- Qualité
+  quality_score INTEGER DEFAULT 0,
 
   -- Google Maps données
   google_place_id VARCHAR(255) UNIQUE, -- ID unique Google pour éviter les doublons
@@ -38,6 +57,21 @@ CREATE TABLE IF NOT EXISTS global_leads (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- ========== COLONNES MANQUANTES (pour tables existantes) ==========
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS contact_role VARCHAR(100);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS siren VARCHAR(9);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS siret VARCHAR(14);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS naf_code VARCHAR(10);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS naf_label VARCHAR(255);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS employee_count INTEGER;
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS employee_range VARCHAR(50);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS legal_form VARCHAR(100);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS creation_date DATE;
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS company_status VARCHAR(20);
+ALTER TABLE global_leads ADD COLUMN IF NOT EXISTS quality_score INTEGER;
 
 -- ========== INDEXES ==========
 CREATE INDEX IF NOT EXISTS idx_global_leads_industry ON global_leads(industry);
