@@ -12,7 +12,11 @@ const sslConfig = process.env.NODE_ENV === 'production'
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
-  ssl: sslConfig
+  ssl: sslConfig,
+  // Performance optimizations
+  max: 20,                     // Maximum number of connections in pool
+  idleTimeoutMillis: 30000,    // Close idle connections after 30s
+  connectionTimeoutMillis: 5000 // Timeout if connection takes > 5s
 });
 
 export async function query(query, params = []) {

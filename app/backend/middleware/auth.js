@@ -28,9 +28,9 @@ export function authMiddleware(handlerOrReq, res, next) {
         
         log('✅ Token valide pour:', decoded.email || decoded.id);
         
-        // Charger les infos complètes de l'utilisateur depuis la DB
+        // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)
         const { rows } = await db.query(
-          `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin
+          `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions
            FROM users
            WHERE id = $1`,
           [decoded.id]
@@ -73,9 +73,9 @@ export function authMiddleware(handlerOrReq, res, next) {
       
       log('✅ Token valide pour:', decoded.email || decoded.id);
       
-      // Charger les infos complètes de l'utilisateur depuis la DB
+      // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)
       const { rows } = await db.query(
-        `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin
+        `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions
          FROM users
          WHERE id = $1`,
         [decoded.id]
@@ -119,9 +119,9 @@ export async function verifyAuth(req) {
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Charger les infos complètes de l'utilisateur depuis la DB
+    // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)
     const { rows } = await db.query(
-      `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin
+      `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions
        FROM users
        WHERE id = $1`,
       [decoded.id]

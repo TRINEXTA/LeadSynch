@@ -1,9 +1,10 @@
 import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key } from 'lucide-react';
+import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key, Settings, Check } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { PERMISSIONS, PERMISSION_LABELS, PERMISSION_CATEGORIES, DEFAULT_MANAGER_PERMISSIONS } from '../lib/permissions';
 
 const ROLES = [
   { value: 'admin', label: 'Administrateur', color: 'bg-red-100 text-red-700', icon: Shield },
@@ -21,18 +22,20 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  
+
   const [formData, setFormData] = useState({
     email: '',
     first_name: '',
     last_name: '',
     role: 'commercial',
     phone: '',
-    team_id: ''
+    team_id: '',
+    permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
   });
 
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
+  const isSuperAdmin = currentUser?.is_super_admin === true;
 
   useEffect(() => {
     loadUsers();
@@ -72,19 +75,27 @@ export default function Users() {
     }
 
     try {
+      // Préparer les données avec permissions si manager
+      const dataToSend = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        role: formData.role,
+        phone: formData.phone,
+        team_id: formData.team_id || null
+      };
+
+      // Ajouter les permissions pour les managers
+      if (formData.role === 'manager') {
+        dataToSend.permissions = formData.permissions || DEFAULT_MANAGER_PERMISSIONS;
+      }
+
       if (editingUser) {
-        // ✅ CORRECTION : Mise à jour utilisateur
-        await api.put(`/users/${editingUser.id}`, {
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          role: formData.role,
-          phone: formData.phone,
-          team_id: formData.team_id || null
-        });
+        // Mise à jour utilisateur
+        await api.put(`/users/${editingUser.id}`, dataToSend);
         toast.success('Utilisateur modifié avec succès !');
       } else {
-        // Création
-        await api.post('/users', formData);
+        // Création - ajouter l'email
+        await api.post('/users', { ...dataToSend, email: formData.email });
         toast.success('Utilisateur créé avec succès ! Un email avec le mot de passe temporaire a été envoyé.');
       }
 
@@ -96,7 +107,8 @@ export default function Users() {
         last_name: '',
         role: 'commercial',
         phone: '',
-        team_id: ''
+        team_id: '',
+        permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
       });
       loadUsers();
     } catch (error) {
@@ -153,7 +165,9 @@ export default function Users() {
       last_name: user.last_name,
       role: user.role,
       phone: user.phone || '',
-      team_id: user.team_id || ''
+      team_id: user.team_id || '',
+      // Charger les permissions existantes ou les permissions par défaut
+      permissions: user.permissions || { ...DEFAULT_MANAGER_PERMISSIONS }
     });
     setShowModal(true);
   };
@@ -228,7 +242,8 @@ export default function Users() {
                   last_name: '',
                   role: 'commercial',
                   phone: '',
-                  team_id: ''
+                  team_id: '',
+                  permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
                 });
                 setShowModal(true);
               }}
@@ -517,7 +532,15 @@ export default function Users() {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Rôle *</label>
                 <select
                   value={formData.role}
-                  onChange={(e) => setFormData({...formData, role: e.target.value})}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setFormData({
+                      ...formData,
+                      role: newRole,
+                      // Reset permissions quand on change de rôle
+                      permissions: newRole === 'manager' ? { ...DEFAULT_MANAGER_PERMISSIONS } : {}
+                    });
+                  }}
                   required
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none bg-white"
                 >
@@ -558,6 +581,82 @@ export default function Users() {
                   ))}
                 </select>
               </div>
+
+              {/* Section Permissions - Visible seulement pour les managers */}
+              {formData.role === 'manager' && (isAdmin || isSuperAdmin) && (
+                <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Settings className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-bold text-purple-900">Permissions du Manager</h3>
+                  </div>
+                  <p className="text-sm text-purple-700 mb-4">
+                    Par défaut, les managers ont des accès restreints. Activez les permissions supplémentaires ci-dessous.
+                  </p>
+
+                  <div className="space-y-4">
+                    {Object.entries(PERMISSION_CATEGORIES).map(([catKey, category]) => (
+                      <div key={catKey} className="bg-white rounded-lg p-3 border border-purple-100">
+                        <h4 className="font-semibold text-gray-800 mb-2 text-sm">{category.title}</h4>
+                        <div className="space-y-2">
+                          {category.permissions.map(perm => (
+                            <label key={perm} className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors">
+                              <div className="relative">
+                                <input
+                                  type="checkbox"
+                                  checked={formData.permissions?.[perm] === true}
+                                  onChange={(e) => {
+                                    setFormData({
+                                      ...formData,
+                                      permissions: {
+                                        ...formData.permissions,
+                                        [perm]: e.target.checked
+                                      }
+                                    });
+                                  }}
+                                  className="sr-only"
+                                />
+                                <div className={`w-10 h-6 rounded-full transition-colors ${
+                                  formData.permissions?.[perm] ? 'bg-purple-600' : 'bg-gray-300'
+                                }`}>
+                                  <div className={`w-4 h-4 rounded-full bg-white shadow transform transition-transform mt-1 ${
+                                    formData.permissions?.[perm] ? 'translate-x-5' : 'translate-x-1'
+                                  }`} />
+                                </div>
+                              </div>
+                              <span className="text-sm text-gray-700">{PERMISSION_LABELS[perm]}</span>
+                              {formData.permissions?.[perm] && (
+                                <Check className="w-4 h-4 text-green-600 ml-auto" />
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Boutons actions rapides */}
+                  <div className="flex gap-2 mt-4 pt-3 border-t border-purple-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allEnabled = {};
+                        Object.values(PERMISSIONS).forEach(p => allEnabled[p] = true);
+                        setFormData({ ...formData, permissions: allEnabled });
+                      }}
+                      className="flex-1 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 font-medium"
+                    >
+                      Tout activer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, permissions: { ...DEFAULT_MANAGER_PERMISSIONS } })}
+                      className="flex-1 px-3 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 font-medium"
+                    >
+                      Tout désactiver
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Info mot de passe */}
               {!editingUser && (

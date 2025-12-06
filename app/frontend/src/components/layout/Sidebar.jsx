@@ -35,9 +35,10 @@ import {
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
-import { useState } from 'react'
+import { useState, useCallback, useMemo, memo } from 'react'
+import { PERMISSIONS, hasPermission } from '../../lib/permissions'
 
-export default function Sidebar() {
+function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
@@ -50,17 +51,36 @@ export default function Sidebar() {
     admin: false
   })
 
-  const toggleSection = (section) => {
+  const toggleSection = useCallback((section) => {
     setExpandedSections(prev => ({
       ...prev,
       [section]: !prev[section]
     }))
-  }
+  }, [])
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
   const isCommercial = user?.role === 'commercial'
   const isSuperAdmin = user?.is_super_admin === true
+
+  // Fonction pour vérifier l'accès (rôle + permission) - mémoïsée
+  const checkAccess = useCallback((item) => {
+    // Si pas de roles définis, tout le monde peut voir
+    if (!item.roles) return true
+
+    // Vérifier le rôle de base
+    if (!item.roles.includes(user?.role)) return false
+
+    // Pour les admins et super-admins, toujours autoriser
+    if (isAdmin || isSuperAdmin) return true
+
+    // Pour les managers, vérifier les permissions si spécifiées
+    if (isManager && item.permission) {
+      return hasPermission(user, item.permission)
+    }
+
+    return true
+  }, [user, isAdmin, isSuperAdmin, isManager])
 
   const navigation = {
     main: [
@@ -75,10 +95,10 @@ export default function Sidebar() {
       icon: Database,
       items: [
         { name: 'Mes Prospects', href: '/MyLeads', icon: UserCircle, roles: ['commercial', 'manager'] },
-        { name: 'Tous les Leads', href: '/leads', icon: Database, roles: ['admin', 'manager'] },
-        { name: 'Bases de Données', href: '/LeadDatabases', icon: FolderOpen, roles: ['admin', 'manager'] },
-        { name: 'Importer des Leads', href: '/ImportLeads', icon: FileSpreadsheet, roles: ['admin', 'manager'] },
-        { name: 'Scoring & Qualification', href: '/LeadScoring', icon: TrendingUp, roles: ['admin', 'manager'] }
+        { name: 'Tous les Leads', href: '/leads', icon: Database, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_ALL_LEADS },
+        { name: 'Bases de Données', href: '/LeadDatabases', icon: FolderOpen, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_DATABASES },
+        { name: 'Importer des Leads', href: '/ImportLeads', icon: FileSpreadsheet, roles: ['admin', 'manager'], permission: PERMISSIONS.IMPORT_LEADS },
+        { name: 'Scoring & Qualification', href: '/LeadScoring', icon: TrendingUp, roles: ['admin'] }
       ]
     },
 
@@ -92,8 +112,8 @@ export default function Sidebar() {
         { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mes Propositions', href: '/proposals', icon: FileText, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Contrats', href: '/contracts', icon: FileCheck, roles: ['commercial', 'admin', 'manager'] },
-        { name: 'Gestion Campagnes', href: '/CampaignsManager', icon: Target, roles: ['admin', 'manager'] },
-        { name: 'Campagnes', href: '/Campaigns', icon: Mail, roles: ['admin', 'manager'] },
+        { name: 'Gestion Campagnes', href: '/CampaignsManager', icon: Target, roles: ['admin', 'manager'], permission: PERMISSIONS.CREATE_CAMPAIGNS },
+        { name: 'Campagnes', href: '/Campaigns', icon: Mail, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_ALL_CAMPAIGNS },
         { name: 'Statistiques', href: '/Statistics', icon: BarChart3, roles: ['admin'] }
       ]
     },
@@ -102,11 +122,12 @@ export default function Sidebar() {
       title: 'Email Marketing',
       icon: Mail,
       roles: ['admin', 'manager'],
+      managerNeedsPermission: true, // Section entière nécessite permission pour managers
       items: [
-        { name: 'Templates Email', href: '/EmailTemplates', icon: Mail },
-        { name: 'Config Mailing', href: '/MailingSettings', icon: Settings },
-        { name: 'Test Envoi', href: '/TestMailing', icon: TestTube },
-        { name: 'Diagnostic Spam', href: '/SpamDiagnostic', icon: Shield }
+        { name: 'Templates Email', href: '/EmailTemplates', icon: Mail, permission: PERMISSIONS.EMAIL_TEMPLATES_MARKETING },
+        { name: 'Config Mailing', href: '/MailingSettings', icon: Settings, permission: PERMISSIONS.MAILING_CONFIG },
+        { name: 'Test Envoi', href: '/TestMailing', icon: TestTube, permission: PERMISSIONS.TEST_MAILING },
+        { name: 'Diagnostic Spam', href: '/SpamDiagnostic', icon: Shield, permission: PERMISSIONS.SPAM_DIAGNOSTIC }
       ]
     },
 
@@ -114,17 +135,18 @@ export default function Sidebar() {
       title: 'Génération IA',
       icon: Sparkles,
       roles: ['admin', 'manager'],
+      managerNeedsPermission: true,
       items: [
-        { name: 'Génération de Leads', href: '/LeadGeneration', icon: Search },
-        { name: 'Recatégoriser (IA)', href: '/RecategorizeLeads', icon: Sparkles },
-        { name: 'Détection de Doublons', href: '/duplicates', icon: Copy }
+        { name: 'Génération de Leads', href: '/LeadGeneration', icon: Search, permission: PERMISSIONS.GENERATE_LEADS },
+        { name: 'Recatégoriser (IA)', href: '/RecategorizeLeads', icon: Sparkles, permission: PERMISSIONS.RECATEGORIZE_AI },
+        { name: 'Détection de Doublons', href: '/duplicates', icon: Copy, permission: PERMISSIONS.DETECT_DUPLICATES }
       ]
     },
 
     billing: {
       title: 'Facturation & Crédits',
       icon: CreditCard,
-      roles: ['admin'], // ❌ Managers n'ont PAS accès à la facturation
+      roles: ['admin'],
       items: [
         { name: 'Crédits Leads', href: '/lead-credits', icon: Zap },
         { name: 'Services & Abonnements', href: '/services', icon: CreditCard },
@@ -138,9 +160,9 @@ export default function Sidebar() {
       roles: ['admin', 'manager'],
       items: [
         { name: 'Équipes', href: '/teams', icon: Users, roles: ['admin', 'manager'] },
-        { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin'] }, // ❌ Seul admin peut gérer TOUS les users
+        { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin'], permission: PERMISSIONS.MANAGE_ALL_USERS },
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users, roles: ['admin', 'manager'] },
-        { name: 'Config Business', href: '/BusinessSettings', icon: Package, roles: ['admin', 'manager'] },
+        { name: 'Config Business', href: '/BusinessSettings', icon: Package, roles: ['admin', 'manager'], permission: PERMISSIONS.BUSINESS_CONFIG },
         { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin, roles: ['admin', 'manager'] },
         { name: 'Taxonomie Secteurs', href: '/ManageSectorTaxonomy', icon: FolderOpen, roles: ['admin', 'manager'] },
         { name: 'Migration Leads', href: '/MigrateLeads', icon: Database, roles: ['admin'] },
@@ -162,17 +184,20 @@ export default function Sidebar() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout()
     navigate('/login')
-  }
+  }, [logout, navigate])
 
-  const hasAccess = (roles) => {
+  const hasAccess = useCallback((roles) => {
     if (!roles) return true
     return roles.includes(user?.role)
-  }
+  }, [user?.role])
 
   const renderNavItem = (item) => {
+    // Vérifier l'accès complet (rôle + permission)
+    if (!checkAccess(item)) return null
+
     const Icon = item.icon
     const isActive = location.pathname === item.href
     const linkClass = isActive
@@ -191,6 +216,10 @@ export default function Sidebar() {
     if (section.roles && !hasAccess(section.roles)) return null
     if (section.requireSuperAdmin && !isSuperAdmin) return null
 
+    // Pour les managers, vérifier s'il y a au moins un item accessible
+    const accessibleItems = section.items.filter(item => checkAccess(item))
+    if (accessibleItems.length === 0 && isManager) return null
+
     const Icon = section.icon
     const isExpanded = expandedSections[sectionKey]
 
@@ -208,9 +237,7 @@ export default function Sidebar() {
         </button>
         {isExpanded && (
           <div className='ml-2 mt-1 space-y-1'>
-            {section.items
-              .filter(item => hasAccess(item.roles))
-              .map(item => renderNavItem(item))}
+            {section.items.map(item => renderNavItem(item)).filter(Boolean)}
           </div>
         )}
       </div>
@@ -264,3 +291,6 @@ export default function Sidebar() {
     </div>
   )
 }
+
+// Mémoïse le Sidebar pour éviter les re-renders inutiles
+export default memo(Sidebar)
