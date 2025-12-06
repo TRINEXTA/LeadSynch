@@ -53,6 +53,12 @@ export default function LeadGenerationSmart() {
   const [departments, setDepartments] = useState([]);
   const [showItemSelector, setShowItemSelector] = useState(false);
 
+  // Recherche de ville
+  const [citySearch, setCitySearch] = useState("");
+  const [cityResults, setCityResults] = useState([]);
+  const [isSearchingCity, setIsSearchingCity] = useState(false);
+  const [selectedCity, setSelectedCity] = useState(null);
+
   // État utilisateur
   const [credits, setCredits] = useState({ available: 0, used: 0 });
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -178,6 +184,42 @@ export default function LeadGenerationSmart() {
     setAnalysis(null);
   };
 
+  // Recherche de ville (debounced)
+  const searchCities = async (query) => {
+    if (!query || query.length < 2) {
+      setCityResults([]);
+      return;
+    }
+
+    setIsSearchingCity(true);
+    try {
+      const response = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(query)}&fields=nom,code,departement,region,population&limit=10`);
+      const data = await response.json();
+      setCityResults(data.map(c => ({
+        code: c.code,
+        nom: c.nom,
+        departement: c.departement?.nom,
+        region: c.region?.nom,
+        population: c.population
+      })));
+    } catch (err) {
+      console.error('Erreur recherche ville:', err);
+      setCityResults([]);
+    } finally {
+      setIsSearchingCity(false);
+    }
+  };
+
+  // Debounce pour la recherche de ville
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (citySearch) {
+        searchCities(citySearch);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [citySearch]);
+
   // Analyser la disponibilité
   const handleAnalyze = async () => {
     if (!sector) {
@@ -195,13 +237,20 @@ export default function LeadGenerationSmart() {
       }
       geoCode = selectedRegion;
       geoName = regions.find(r => r.code === selectedRegion)?.nom || '';
-    } else {
+    } else if (geoType === 'department') {
       if (selectedItems.length === 0) {
         toast.error("Sélectionnez au moins un département");
         return;
       }
       geoCode = selectedItems.map(i => i.code).join(',');
       geoName = selectedItems.map(i => i.nom).join(', ');
+    } else if (geoType === 'city') {
+      if (!selectedCity) {
+        toast.error("Sélectionnez une ville");
+        return;
+      }
+      geoCode = selectedCity.nom;
+      geoName = `${selectedCity.nom} (${selectedCity.departement})`;
     }
 
     if (!isSuperAdmin && quantity > credits.available) {
@@ -258,11 +307,30 @@ export default function LeadGenerationSmart() {
     const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') ||
       (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://leadsynch-api.onrender.com');
 
-    // Construire la liste des villes à rechercher
-    let searchCity = analysis?.geoName || '';
+    // Construire les paramètres géographiques
+    let geoParams = {};
+
     if (geoType === 'region') {
-      searchCity = regions.find(r => r.code === selectedRegion)?.nom || '';
+      geoParams = {
+        geoType: 'region',
+        geoCode: selectedRegion
+      };
+    } else if (geoType === 'department') {
+      // Multi-sélection de départements
+      const deptCodes = selectedItems.map(item => item.code).join(',');
+      geoParams = {
+        geoType: 'department',
+        geoCode: deptCodes
+      };
+    } else if (geoType === 'city') {
+      // Ville unique
+      geoParams = {
+        geoType: 'city',
+        geoCode: selectedCity?.nom || ''
+      };
     }
+
+    console.log('🚀 Génération avec params:', { sector, ...geoParams, quantity: finalQuantity });
 
     try {
       const response = await fetch(`${API_BASE}/api/generate-leads-v2`, {
@@ -273,7 +341,7 @@ export default function LeadGenerationSmart() {
         },
         body: JSON.stringify({
           sector,
-          city: searchCity,
+          ...geoParams,
           quantity: finalQuantity,
           searchId: Date.now().toString()
         })
@@ -468,8 +536,9 @@ export default function LeadGenerationSmart() {
                 {/* Type de zone */}
                 <div className="flex gap-2">
                   {[
-                    { type: 'region', label: 'Par région', icon: Globe },
-                    { type: 'department', label: 'Par département', icon: Layers }
+                    { type: 'region', label: 'Région', icon: Globe },
+                    { type: 'department', label: 'Département', icon: Layers },
+                    { type: 'city', label: 'Ville', icon: MapPin }
                   ].map(({ type, label, icon: Icon }) => (
                     <button
                       key={type}
@@ -561,6 +630,62 @@ export default function LeadGenerationSmart() {
                     )}
                   </div>
                 )}
+
+                {/* Sélection ville - recherche */}
+                {geoType === 'city' && (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={citySearch}
+                        onChange={(e) => setCitySearch(e.target.value)}
+                        placeholder="Rechercher une ville..."
+                        className="w-full h-12 border-2 border-gray-200 rounded-xl pl-10 pr-4 focus:border-emerald-500 focus:outline-none"
+                      />
+                      {isSearchingCity && (
+                        <Loader2 className="absolute right-3 top-3.5 w-5 h-5 text-gray-400 animate-spin" />
+                      )}
+                    </div>
+
+                    {/* Ville sélectionnée */}
+                    {selectedCity && (
+                      <div className="p-3 bg-emerald-50 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-emerald-800">{selectedCity.nom}</p>
+                          <p className="text-sm text-emerald-600">{selectedCity.departement} • {selectedCity.region}</p>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedCity(null); setCitySearch(''); setAnalysis(null); }}
+                          className="p-1 hover:bg-emerald-200 rounded-full"
+                        >
+                          <X className="w-4 h-4 text-emerald-700" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Résultats de recherche */}
+                    {!selectedCity && cityResults.length > 0 && (
+                      <div className="border-2 border-gray-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+                        {cityResults.map(city => (
+                          <button
+                            key={city.code}
+                            onClick={() => { setSelectedCity(city); setCitySearch(''); setCityResults([]); setAnalysis(null); }}
+                            className="w-full p-3 text-left hover:bg-gray-50 border-b last:border-b-0 transition-colors"
+                          >
+                            <p className="font-medium text-gray-800">{city.nom}</p>
+                            <p className="text-sm text-gray-500">{city.departement} • {city.population?.toLocaleString()} hab.</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Message si pas de résultats */}
+                    {!selectedCity && citySearch.length >= 2 && cityResults.length === 0 && !isSearchingCity && (
+                      <p className="text-sm text-gray-500 text-center py-4">Aucune ville trouvée pour "{citySearch}"</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -622,9 +747,11 @@ export default function LeadGenerationSmart() {
                     <span className="font-medium text-right text-sm">
                       {geoType === 'region'
                         ? regions.find(r => r.code === selectedRegion)?.nom || '-'
-                        : selectedItems.length > 0
+                        : geoType === 'department' && selectedItems.length > 0
                           ? `${selectedItems.length} dépt.`
-                          : '-'
+                          : geoType === 'city' && selectedCity
+                            ? selectedCity.nom
+                            : '-'
                       }
                     </span>
                   </div>
@@ -637,7 +764,7 @@ export default function LeadGenerationSmart() {
                 {/* Bouton Analyser */}
                 <button
                   onClick={handleAnalyze}
-                  disabled={!sector || (geoType === 'region' && !selectedRegion) || (geoType === 'department' && selectedItems.length === 0) || isAnalyzing}
+                  disabled={!sector || (geoType === 'region' && !selectedRegion) || (geoType === 'department' && selectedItems.length === 0) || (geoType === 'city' && !selectedCity) || isAnalyzing}
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg transition-all"
                 >
                   {isAnalyzing ? (
@@ -684,26 +811,27 @@ export default function LeadGenerationSmart() {
                     </div>
                   )}
 
-                  {/* Bouton Générer */}
-                  {analysis.available > 0 && (
-                    <button
-                      onClick={() => handleGenerate(Math.min(analysis.available, analysis.requested))}
-                      disabled={isGenerating}
-                      className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50"
-                    >
-                      {isGenerating ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Génération... {leads.length} leads
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-5 h-5" />
-                          Générer {Math.min(analysis.available, analysis.requested)} leads
-                        </>
-                      )}
-                    </button>
-                  )}
+                  {/* Bouton Générer - toujours visible après analyse */}
+                  <button
+                    onClick={() => handleGenerate(analysis.requested)}
+                    disabled={isGenerating}
+                    className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Génération... {leads.length} leads
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5" />
+                        {analysis.available > 0
+                          ? `Générer ${analysis.requested} leads (${analysis.available} en base)`
+                          : `Rechercher ${analysis.requested} leads`
+                        }
+                      </>
+                    )}
+                  </button>
                 </CardContent>
               </Card>
             )}

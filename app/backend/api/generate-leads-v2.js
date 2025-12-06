@@ -155,7 +155,10 @@ async function handler(req, res) {
 async function handleGenerateLeads(req, res, tenant_id, user_id) {
   const {
     sector,
-    city,
+    city,           // Peut être un nom de ville OU une liste de villes séparées par virgule
+    cities,         // Liste de villes (array)
+    geoType,        // 'city', 'department', 'region'
+    geoCode,        // Code géographique
     radius = CONFIG.DEFAULT_RADIUS,
     quantity = 50,
     searchId,
@@ -163,8 +166,45 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   } = req.body;
 
   // Validation
-  if (!sector || !city) {
-    return res.status(400).json({ error: 'Secteur et ville requis' });
+  if (!sector) {
+    return res.status(400).json({ error: 'Secteur requis' });
+  }
+
+  // Déterminer les villes à rechercher
+  let citiesToSearch = [];
+
+  if (cities && Array.isArray(cities) && cities.length > 0) {
+    // Liste de villes fournie directement
+    citiesToSearch = cities;
+    log(`🏙️ [GENERATE] ${cities.length} villes fournies directement`);
+  } else if (geoType && geoCode) {
+    // Récupérer les villes selon le type géographique
+    log(`🗺️ [GENERATE] Récupération villes pour ${geoType}: ${geoCode}`);
+
+    const geoService = (await import('../lib/geoService.js')).default;
+
+    if (geoType === 'region') {
+      const regionCities = await geoService.getTopCitiesByRegion(geoCode, 100);
+      citiesToSearch = regionCities.map(c => c.nom);
+    } else if (geoType === 'department') {
+      // geoCode peut contenir plusieurs départements séparés par virgule
+      const deptCodes = geoCode.split(',');
+      for (const deptCode of deptCodes) {
+        const deptCities = await geoService.getCitiesByDepartment(deptCode.trim());
+        citiesToSearch.push(...deptCities.slice(0, 50).map(c => c.nom)); // Top 50 par département
+      }
+    } else if (geoType === 'city') {
+      citiesToSearch = [geoCode];
+    }
+
+    log(`🏙️ [GENERATE] ${citiesToSearch.length} villes trouvées`);
+  } else if (city) {
+    // Fallback: une seule ville fournie
+    citiesToSearch = city.includes(',') ? city.split(',').map(c => c.trim()) : [city];
+  }
+
+  if (citiesToSearch.length === 0) {
+    return res.status(400).json({ error: 'Aucune ville à rechercher. Fournir city, cities[], ou geoType+geoCode' });
   }
 
   if (quantity > CONFIG.MAX_QUANTITY) {
@@ -202,7 +242,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   activeSearches.set(searchId, searchState);
 
   try {
-    sendProgress({ type: 'start', message: 'Initialisation de la recherche...' });
+    sendProgress({ type: 'start', message: `Initialisation de la recherche dans ${citiesToSearch.length} ville(s)...` });
 
     const allLeads = [];
     const stats = {
@@ -213,78 +253,85 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       total: 0
     };
 
-    // ========== ÉTAPE 1: BASE INTERNE DU TENANT ==========
-    sendProgress({ type: 'progress', percent: 5, message: 'Recherche dans votre base de données...' });
+    const totalCities = citiesToSearch.length;
+    let processedCities = 0;
 
-    const internalLeads = await searchInternalDatabase(tenant_id, sector, city, quantity);
+    // ========== ÉTAPE 1: BASE INTERNE DU TENANT (ville par ville) ==========
+    sendProgress({ type: 'progress', percent: 5, message: `Recherche dans votre base (${totalCities} villes)...` });
 
-    if (internalLeads.length > 0) {
-      stats.fromInternalDb = internalLeads.length;
-      allLeads.push(...internalLeads);
+    for (const cityName of citiesToSearch) {
+      if (allLeads.length >= quantity || !searchState.active) break;
+      await waitIfPaused(searchState);
 
-      // Envoyer les leads un par un pour éviter les gros messages SSE
-      for (let i = 0; i < internalLeads.length; i++) {
-        sendProgress({
-          type: 'internal_lead',
-          lead: internalLeads[i],
-          index: i + 1,
-          total: internalLeads.length
-        });
+      const remaining = quantity - allLeads.length;
+      const cityLeads = await searchInternalDatabase(tenant_id, sector, cityName, remaining);
+
+      if (cityLeads.length > 0) {
+        stats.fromInternalDb += cityLeads.length;
+        allLeads.push(...cityLeads);
+
+        for (const lead of cityLeads) {
+          sendProgress({ type: 'internal_lead', lead, city: cityName });
+        }
       }
 
+      processedCities++;
+      const percent = 5 + Math.floor((processedCities / totalCities) * 10);
+      sendProgress({ type: 'progress', percent, message: `Base interne: ${cityName} (${allLeads.length} leads)` });
+    }
+
+    if (stats.fromInternalDb > 0) {
       sendProgress({
         type: 'internal_results',
         percent: 15,
-        found: internalLeads.length,
-        message: `${internalLeads.length} leads trouvés dans votre base`
-        // leads: envoyés un par un via internal_lead
+        found: stats.fromInternalDb,
+        message: `${stats.fromInternalDb} leads trouvés dans votre base`
       });
     }
 
     if (allLeads.length >= quantity) {
-      // NE PAS envoyer les leads ici - ils sont déjà envoyés dans internal_results
-      // Envoyer seulement le signal de fin pour éviter les gros messages SSE
       sendProgress({
         type: 'complete',
         percent: 100,
         total: allLeads.length,
         message: `Recherche terminée ! ${allLeads.length} leads trouvés dans votre base.`,
         stats
-        // leads: PAS ICI - déjà envoyés
       });
       res.end();
       return;
     }
 
-    // ========== ÉTAPE 2: CACHE GLOBAL ==========
-    sendProgress({ type: 'progress', percent: 20, message: 'Recherche dans le cache global...' });
+    // ========== ÉTAPE 2: CACHE GLOBAL (ville par ville) ==========
+    sendProgress({ type: 'progress', percent: 20, message: `Recherche cache global (${totalCities} villes)...` });
+    processedCities = 0;
 
-    await waitIfPaused(searchState);
-    if (!searchState.active) { res.end(); return; }
+    for (const cityName of citiesToSearch) {
+      if (allLeads.length >= quantity || !searchState.active) break;
+      await waitIfPaused(searchState);
 
-    const remaining1 = quantity - allLeads.length;
-    const globalLeads = await searchGlobalCache(sector, city, remaining1, allLeads);
+      const remaining = quantity - allLeads.length;
+      const cacheLeads = await searchGlobalCache(sector, cityName, remaining, allLeads);
 
-    if (globalLeads.length > 0) {
-      stats.fromGlobalCache = globalLeads.length;
-      allLeads.push(...globalLeads);
+      if (cacheLeads.length > 0) {
+        stats.fromGlobalCache += cacheLeads.length;
+        allLeads.push(...cacheLeads);
 
-      // Envoyer les leads un par un pour éviter les gros messages SSE
-      for (let i = 0; i < globalLeads.length; i++) {
-        sendProgress({
-          type: 'cache_lead',
-          lead: globalLeads[i],
-          index: i + 1,
-          total: globalLeads.length
-        });
+        for (const lead of cacheLeads) {
+          sendProgress({ type: 'cache_lead', lead, city: cityName });
+        }
       }
 
+      processedCities++;
+      const percent = 20 + Math.floor((processedCities / totalCities) * 15);
+      sendProgress({ type: 'progress', percent, message: `Cache: ${cityName} (${allLeads.length} leads)` });
+    }
+
+    if (stats.fromGlobalCache > 0) {
       sendProgress({
         type: 'cache_results',
-        percent: 30,
-        found: globalLeads.length,
-        message: `${globalLeads.length} leads trouvés dans le cache`
-        // leads: envoyés un par un via cache_lead
+        percent: 35,
+        found: stats.fromGlobalCache,
+        message: `${stats.fromGlobalCache} leads trouvés dans le cache`
       });
     }
 
@@ -295,83 +342,90 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         total: allLeads.length,
         message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
         stats
-        // leads: déjà envoyés dans les events précédents
       });
       res.end();
       return;
     }
 
-    // ========== ÉTAPE 3: API SIRENE INSEE (GRATUIT) ==========
-    sendProgress({ type: 'progress', percent: 35, message: 'Recherche API Sirene INSEE (données officielles)...' });
+    // ========== ÉTAPE 3: API SIRENE INSEE (ville par ville) ==========
+    sendProgress({ type: 'progress', percent: 40, message: `Recherche Sirene INSEE (${totalCities} villes)...` });
+    processedCities = 0;
 
-    await waitIfPaused(searchState);
-    if (!searchState.active) { res.end(); return; }
+    for (const cityName of citiesToSearch) {
+      if (allLeads.length >= quantity || !searchState.active) break;
+      await waitIfPaused(searchState);
 
-    const remaining2 = quantity - allLeads.length;
-    const sireneLeads = await searchSireneAPI(sector, city, remaining2, tenant_id, sendProgress, searchState);
+      const remaining = Math.min(25, quantity - allLeads.length); // Max 25 par ville pour Sirene
+      const sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
 
-    if (sireneLeads.length > 0) {
-      stats.fromSirene = sireneLeads.length;
-      allLeads.push(...sireneLeads);
+      if (sireneLeads.length > 0) {
+        stats.fromSirene += sireneLeads.length;
+        allLeads.push(...sireneLeads);
 
-      // Envoyer les leads Sirene un par un pour éviter les gros messages SSE
-      for (let i = 0; i < sireneLeads.length; i++) {
-        sendProgress({
-          type: 'sirene_lead',
-          lead: sireneLeads[i],
-          index: i + 1,
-          total: sireneLeads.length
-        });
+        for (const lead of sireneLeads) {
+          sendProgress({ type: 'sirene_lead', lead, city: cityName });
+        }
       }
 
+      processedCities++;
+      const percent = 40 + Math.floor((processedCities / totalCities) * 25);
+      sendProgress({ type: 'progress', percent, message: `Sirene: ${cityName} (${allLeads.length} leads)` });
+
+      // Pause pour éviter rate limiting
+      if (processedCities < totalCities) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+
+    if (stats.fromSirene > 0) {
       sendProgress({
         type: 'sirene_results',
-        percent: 50,
-        found: sireneLeads.length,
-        message: `${sireneLeads.length} entreprises trouvées via Sirene`
-        // leads: envoyés un par un via sirene_lead
+        percent: 65,
+        found: stats.fromSirene,
+        message: `${stats.fromSirene} entreprises trouvées via Sirene`
       });
+
+      // Consommer les crédits
+      if (!isSuperAdmin) {
+        await consumeCredits(tenant_id, stats.fromSirene, 'sirene_insee');
+      }
     }
 
     if (allLeads.length >= quantity) {
-      // Consommer les crédits pour les leads Sirene
-      if (!isSuperAdmin && sireneLeads.length > 0) {
-        await consumeCredits(tenant_id, sireneLeads.length, 'sirene_insee');
-      }
-
       sendProgress({
         type: 'complete',
         percent: 100,
         total: allLeads.length,
         message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
         stats
-        // leads: déjà envoyés dans sirene_results
       });
       res.end();
       return;
     }
 
-    // ========== ÉTAPE 4: GOOGLE MAPS (si activé et clé configurée) ==========
-    if (GOOGLE_API_KEY) {
-      sendProgress({ type: 'progress', percent: 55, message: 'Recherche Google Maps...' });
+    // ========== ÉTAPE 4: GOOGLE MAPS (si nécessaire et configuré) ==========
+    if (GOOGLE_API_KEY && allLeads.length < quantity) {
+      sendProgress({ type: 'progress', percent: 70, message: 'Recherche Google Maps...' });
 
-      await waitIfPaused(searchState);
-      if (!searchState.active) { res.end(); return; }
+      for (const cityName of citiesToSearch.slice(0, 10)) { // Max 10 villes pour Google Maps
+        if (allLeads.length >= quantity || !searchState.active) break;
+        await waitIfPaused(searchState);
 
-      const remaining3 = quantity - allLeads.length;
-      const googleLeads = await searchGoogleMaps(
-        sector, city, radius, remaining3,
-        tenant_id, allLeads, sendProgress, searchState
-      );
+        const remaining = quantity - allLeads.length;
+        const googleLeads = await searchGoogleMaps(
+          sector, cityName, radius, remaining,
+          tenant_id, allLeads, sendProgress, searchState
+        );
 
-      if (googleLeads.length > 0) {
-        stats.fromGoogleMaps = googleLeads.length;
-        allLeads.push(...googleLeads);
+        if (googleLeads.length > 0) {
+          stats.fromGoogleMaps += googleLeads.length;
+          allLeads.push(...googleLeads);
+        }
       }
 
       // Consommer les crédits pour Google Maps
-      if (!isSuperAdmin && googleLeads.length > 0) {
-        await consumeCredits(tenant_id, googleLeads.length, 'google_maps');
+      if (!isSuperAdmin && stats.fromGoogleMaps > 0) {
+        await consumeCredits(tenant_id, stats.fromGoogleMaps, 'google_maps');
       }
     }
 
@@ -383,12 +437,9 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
 
     stats.total = enrichedLeads.length;
 
-    // Envoyer les leads enrichis un par un pour éviter les gros messages
+    // Envoyer les leads enrichis un par un
     for (const lead of enrichedLeads) {
-      sendProgress({
-        type: 'enriched_lead',
-        lead
-      });
+      sendProgress({ type: 'enriched_lead', lead });
     }
 
     sendProgress({
@@ -397,7 +448,6 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       total: enrichedLeads.length,
       message: getCompleteMessage(stats),
       stats
-      // leads: envoyés individuellement via enriched_lead
     });
 
     res.end();
