@@ -865,22 +865,29 @@ async function handlePreviewSearch(req, res, tenant_id) {
 async function handleSaveLeads(req, res, tenant_id, user_id) {
   const { leads, database_id, create_new_database, new_database_name } = req.body;
 
+  log(`📥 [SAVE] Demande de sauvegarde: ${leads?.length || 0} leads`);
+  log(`📥 [SAVE] Options: database_id=${database_id}, create_new=${create_new_database}, name=${new_database_name}`);
+
   if (!leads || !Array.isArray(leads) || leads.length === 0) {
     return res.status(400).json({ error: 'Leads requis' });
   }
+
+  const errors = [];
 
   try {
     let targetDatabaseId = database_id;
 
     // Créer une nouvelle base si demandé
     if (create_new_database && new_database_name) {
+      log(`📁 [SAVE] Création nouvelle base: ${new_database_name}`);
       const newDb = await queryOne(`
         INSERT INTO lead_databases (id, tenant_id, name, sector, created_by, created_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
         RETURNING id
-      `, [uuidv4(), tenant_id, new_database_name, leads[0]?.sector || 'Divers', user_id]);
+      `, [uuidv4(), tenant_id, new_database_name, leads[0]?.sector || leads[0]?.industry || 'Divers', user_id]);
 
       targetDatabaseId = newDb.id;
+      log(`✅ [SAVE] Base créée: ${targetDatabaseId}`);
     }
 
     if (!targetDatabaseId) {
@@ -891,13 +898,26 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
     let inserted = 0;
     let duplicates = 0;
 
-    for (const lead of leads) {
+    for (let i = 0; i < leads.length; i++) {
+      const lead = leads[i];
+
       try {
-        // Vérifier doublon
-        const existing = await queryOne(
-          'SELECT id FROM leads WHERE tenant_id = $1 AND (email = $2 OR (company_name = $3 AND city = $4))',
-          [tenant_id, lead.email, lead.company_name, lead.city]
-        );
+        // Vérifier doublon (seulement si email existe)
+        let existing = null;
+        if (lead.email) {
+          existing = await queryOne(
+            'SELECT id FROM leads WHERE tenant_id = $1 AND email = $2',
+            [tenant_id, lead.email]
+          );
+        }
+
+        // Vérifier aussi par nom+ville
+        if (!existing && lead.company_name && lead.city) {
+          existing = await queryOne(
+            'SELECT id FROM leads WHERE tenant_id = $1 AND company_name = $2 AND city = $3',
+            [tenant_id, lead.company_name, lead.city]
+          );
+        }
 
         if (existing) {
           duplicates++;
@@ -912,17 +932,30 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
             id, tenant_id, database_id, company_name, contact_name, email, phone,
             address, city, postal_code, website, sector, industry,
             siren, siret, naf_code, employee_count, quality_score,
-            data_source, source, assigned_to, created_at, updated_at
+            data_source, source, assigned_to, status, created_at, updated_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'nouveau', NOW(), NOW()
           )
         `, [
           newLeadId, tenant_id, targetDatabaseId,
-          lead.company_name, lead.contact_name, lead.email, lead.phone,
-          lead.address, lead.city, lead.postal_code, lead.website,
-          lead.sector, lead.industry,
-          lead.siren, lead.siret, lead.naf_code, lead.employee_count, lead.quality_score || 0,
-          lead.data_source || 'generated', 'generation', user_id
+          lead.company_name || 'Sans nom',
+          lead.contact_name || null,
+          lead.email || null,
+          lead.phone || null,
+          lead.address || null,
+          lead.city || null,
+          lead.postal_code || null,
+          lead.website || null,
+          lead.sector || lead.industry || null,
+          lead.industry || lead.sector || null,
+          lead.siren || null,
+          lead.siret || null,
+          lead.naf_code || null,
+          lead.employee_count || null,
+          lead.quality_score || 0,
+          lead.data_source || 'generated',
+          'generation',
+          user_id
         ]);
 
         // 2. Créer aussi la relation (pour compatibilité avec import-csv)
@@ -933,28 +966,49 @@ async function handleSaveLeads(req, res, tenant_id, user_id) {
         `, [newLeadId, targetDatabaseId]);
 
         inserted++;
+
+        // Log progression
+        if (inserted % 20 === 0) {
+          log(`📊 [SAVE] Progression: ${inserted}/${leads.length} insérés`);
+        }
+
       } catch (err) {
-        error('Erreur insertion lead:', err.message);
+        error(`❌ [SAVE] Erreur lead #${i} (${lead.company_name}):`, err.message);
+        errors.push({ index: i, company: lead.company_name, error: err.message });
       }
     }
 
     // Mettre à jour le compteur de leads
-    await execute(
-      'UPDATE lead_databases SET leads_count = leads_count + $1 WHERE id = $2',
-      [inserted, targetDatabaseId]
-    );
+    await execute(`
+      UPDATE lead_databases SET
+        leads_count = (
+          SELECT COUNT(DISTINCT lead_id) FROM (
+            SELECT id as lead_id FROM leads WHERE database_id = $1
+            UNION
+            SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+          ) combined
+        )
+      WHERE id = $1
+    `, [targetDatabaseId]);
+
+    log(`✅ [SAVE] Terminé: ${inserted} insérés, ${duplicates} doublons, ${errors.length} erreurs`);
 
     return res.json({
       success: true,
       inserted,
       duplicates,
+      errors: errors.length,
+      errorDetails: errors.slice(0, 5), // Renvoyer les 5 premières erreurs
       total: leads.length,
       database_id: targetDatabaseId
     });
 
   } catch (err) {
-    error('Erreur sauvegarde leads:', err);
-    return res.status(500).json({ error: err.message });
+    error('❌ [SAVE] Erreur globale:', err);
+    return res.status(500).json({
+      error: err.message,
+      errorDetails: errors.slice(0, 5)
+    });
   }
 }
 
