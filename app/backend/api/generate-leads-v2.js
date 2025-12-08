@@ -311,12 +311,14 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     });
   }
 
-  if (quantity > CONFIG.MAX_QUANTITY) {
-    return res.status(400).json({ error: `Maximum ${CONFIG.MAX_QUANTITY} leads par recherche` });
-  }
-
   // Vérification des crédits (sauf super admin)
   const isSuperAdmin = req.user.is_super_admin === true;
+
+  // Limite de quantité (super admin a une limite plus élevée)
+  const maxQuantity = isSuperAdmin ? 10000 : CONFIG.MAX_QUANTITY;
+  if (quantity > maxQuantity) {
+    return res.status(400).json({ error: `Maximum ${maxQuantity} leads par recherche` });
+  }
 
   if (!isSuperAdmin && !skipExternal) {
     const creditCheck = await checkCredits(tenant_id, quantity);
