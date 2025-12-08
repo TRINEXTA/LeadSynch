@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, X, Trash2, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmDelete } from '../lib/confirmDialog';
 
 export default function ImageGallery({ onInsert }) {
   const [images, setImages] = useState([]);
@@ -55,7 +56,7 @@ export default function ImageGallery({ onInsert }) {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer cette image ?')) return;
+    if (!await confirmDelete('cette image')) return;
 
     try {
       await api.delete(`/images/${id}`);

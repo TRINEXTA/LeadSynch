@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction } from '../lib/confirmDialog';
 
 export default function SuperAdminInvoices() {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ export default function SuperAdminInvoices() {
   };
 
   const handleMarkAsPaid = async (invoiceId) => {
-    if (!window.confirm('Marquer cette facture comme payée ?')) return;
+    if (!await confirmAction('Marquer cette facture comme payée ?')) return;
 
     try {
       await api.post(`/super-admin/invoices/${invoiceId}/mark-paid`);
@@ -79,7 +80,7 @@ export default function SuperAdminInvoices() {
   };
 
   const handleSendReminder = async (invoiceId) => {
-    if (!window.confirm('Envoyer un rappel de paiement au client ?')) return;
+    if (!await confirmAction('Envoyer un rappel de paiement au client ?')) return;
 
     try {
       await api.post(`/super-admin/invoices/${invoiceId}/send-reminder`);

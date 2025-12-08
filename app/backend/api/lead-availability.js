@@ -179,7 +179,7 @@ async function countAvailableLeads(sector, cities, limit) {
         city,
         COUNT(*) as count
       FROM global_leads
-      WHERE (industry ILIKE $1 OR sector ILIKE $1)
+      WHERE industry ILIKE $1
         AND city IN (${cityPlaceholders})
         AND (company_status IS NULL OR company_status = 'active')
       GROUP BY city
@@ -196,7 +196,7 @@ async function countAvailableLeads(sector, cities, limit) {
           city,
           COUNT(*) as count
         FROM leads
-        WHERE (sector ILIKE $1 OR industry ILIKE $1)
+        WHERE industry ILIKE $1
           AND city IN (${cityPlaceholders})
           AND status NOT IN ('lost', 'deleted')
         GROUP BY city

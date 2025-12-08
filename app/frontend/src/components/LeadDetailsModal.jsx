@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Edit, Save, Phone, Mail, MapPin, Building2, User, Calendar, FileText, Plus, Trash2, Star, ExternalLink } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmDelete } from '../lib/confirmDialog';
 
 export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
   const [activeTab, setActiveTab] = useState('info');
@@ -93,7 +94,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
   };
 
   const handleDeleteContact = async (contactId) => {
-    if (!confirm('Supprimer ce contact ?')) return;
+    if (!await confirmDelete('ce contact')) return;
     try {
       await api.delete(`/leads/${lead.id}/contacts/${contactId}`);
       loadContacts();
@@ -104,7 +105,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
   };
 
   const handleDeletePhone = async (phoneId) => {
-    if (!confirm('Supprimer ce téléphone ?')) return;
+    if (!await confirmDelete('ce téléphone')) return;
     try {
       await api.delete(`/leads/${lead.id}/phones/${phoneId}`);
       loadPhones();
@@ -115,7 +116,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
   };
 
   const handleDeleteOffice = async (officeId) => {
-    if (!confirm('Supprimer ce bureau ?')) return;
+    if (!await confirmDelete('ce bureau')) return;
     try {
       await api.delete(`/leads/${lead.id}/offices/${officeId}`);
       loadOffices();
@@ -126,7 +127,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate }) {
   };
 
   const handleDeleteNote = async (noteId) => {
-    if (!confirm('Supprimer cette note ?')) return;
+    if (!await confirmDelete('cette note')) return;
     try {
       await api.delete(`/leads/${lead.id}/notes/${noteId}`);
       loadNotes();

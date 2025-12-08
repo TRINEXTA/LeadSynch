@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction } from '../lib/confirmDialog';
 
 export default function SuperAdminSubscriptions() {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ export default function SuperAdminSubscriptions() {
   };
 
   const handleRenewSubscription = async (subscriptionId) => {
-    if (!confirm('Renouveler cet abonnement pour 1 an ?')) return;
+    if (!await confirmAction('Renouveler cet abonnement pour 1 an ?')) return;
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/renew`);
@@ -79,7 +80,7 @@ export default function SuperAdminSubscriptions() {
   };
 
   const handleSuspendSubscription = async (subscriptionId) => {
-    if (!confirm('Suspendre cet abonnement ?')) return;
+    if (!await confirmAction('Suspendre cet abonnement ?')) return;
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/suspend`);
@@ -93,7 +94,7 @@ export default function SuperAdminSubscriptions() {
   };
 
   const handleActivateSubscription = async (subscriptionId) => {
-    if (!confirm('Réactiver cet abonnement ?')) return;
+    if (!await confirmAction('Réactiver cet abonnement ?')) return;
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/activate`);

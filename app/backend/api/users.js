@@ -533,20 +533,20 @@ async function handler(req, res) {
 
     return res.status(405).json({ error: 'Méthode non autorisée' });
 
-  } catch (error) {
-    error('❌ Users API error:', error);
-    error('Stack:', error.stack);
+  } catch (err) {
+    error('❌ Users API error:', err);
+    error('Stack:', err.stack);
 
-    if (error.name === 'ZodError') {
+    if (err.name === 'ZodError') {
       return res.status(400).json({
         error: 'Données invalides',
-        details: error.errors
+        details: err.errors
       });
     }
 
     return res.status(500).json({
       error: 'Erreur serveur',
-      message: error.message
+      message: err.message
     });
   }
 }

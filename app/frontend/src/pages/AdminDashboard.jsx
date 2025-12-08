@@ -126,8 +126,8 @@ export default function AdminDashboard() {
       const performers = calculateTopPerformers(leads, users);
       setTopPerformers(performers);
 
-    } catch (error) {
-      error('Erreur chargement dashboard admin:', error);
+    } catch (err) {
+      error('Erreur chargement dashboard admin:', err);
       if (!silent) {
         toast.error('Erreur lors du chargement des données');
       }

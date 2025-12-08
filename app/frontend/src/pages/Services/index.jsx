@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { confirmDelete } from '../../lib/confirmDialog';
 
 const CATEGORIES = [
   { value: 'consulting', label: 'Consulting', color: 'bg-blue-100 text-blue-800' },
@@ -77,7 +78,7 @@ export default function Services() {
   };
 
   const handleDeleteService = async (serviceId) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce service ?')) {
+    if (!await confirmDelete('ce service')) {
       return;
     }
 
