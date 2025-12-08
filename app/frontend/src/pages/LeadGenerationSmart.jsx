@@ -84,6 +84,11 @@ export default function LeadGenerationSmart() {
   const [newDbName, setNewDbName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Options Super Admin - Alimentation base de données
+  const [feedDatabaseMode, setFeedDatabaseMode] = useState(false); // Chercher uniquement de nouveaux leads
+  const [requirePhone, setRequirePhone] = useState(true); // Téléphone obligatoire
+  const [requireEmail, setRequireEmail] = useState(false); // Email obligatoire (optionnel)
+
   // Charger au démarrage
   useEffect(() => {
     loadRegions();
@@ -359,7 +364,19 @@ export default function LeadGenerationSmart() {
       };
     }
 
-    console.log('🚀 Génération avec params:', { sector, ...geoParams, quantity: finalQuantity });
+    // Options de génération
+    const generationOptions = {
+      sector,
+      ...geoParams,
+      quantity: finalQuantity,
+      searchId: Date.now().toString(),
+      // Options Super Admin - Alimentation base de données
+      feedDatabaseMode, // Si true, cherche uniquement de nouveaux leads (skip base interne)
+      requirePhone,     // Téléphone obligatoire
+      requireEmail      // Email obligatoire
+    };
+
+    console.log('🚀 Génération avec params:', generationOptions);
 
     try {
       const response = await fetch(`${API_BASE}/api/generate-leads-v2`, {
@@ -368,12 +385,7 @@ export default function LeadGenerationSmart() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({
-          sector,
-          ...geoParams,
-          quantity: finalQuantity,
-          searchId: Date.now().toString()
-        })
+        body: JSON.stringify(generationOptions)
       });
 
       if (!response.ok) {
@@ -773,6 +785,102 @@ export default function LeadGenerationSmart() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Options Super Admin - Alimentation base de données */}
+            {isSuperAdmin && (
+              <Card className="shadow-lg border-2 border-purple-400 overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Database className="w-5 h-5" />
+                    Options Super Admin
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  {/* Mode alimentation base de données */}
+                  <div
+                    onClick={() => setFeedDatabaseMode(!feedDatabaseMode)}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      feedDatabaseMode
+                        ? 'border-purple-500 bg-purple-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
+                        feedDatabaseMode ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
+                      }`}>
+                        {feedDatabaseMode && <CheckCircle2 className="w-4 h-4 text-white" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">Alimentation base de données</p>
+                        <p className="text-xs text-gray-500">Chercher uniquement de NOUVEAUX leads (ignorer les leads existants)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Validation des leads */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Filter className="w-4 h-4" />
+                      Validation des leads
+                    </p>
+
+                    {/* Téléphone obligatoire */}
+                    <div
+                      onClick={() => setRequirePhone(!requirePhone)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        requirePhone
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          requirePhone ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                        }`}>
+                          {requirePhone && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="text-sm">Téléphone obligatoire</span>
+                        <span className="text-xs text-green-600 ml-auto">Recommandé</span>
+                      </div>
+                    </div>
+
+                    {/* Email obligatoire */}
+                    <div
+                      onClick={() => setRequireEmail(!requireEmail)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        requireEmail
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          requireEmail ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                        }`}>
+                          {requireEmail && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="text-sm">Email obligatoire</span>
+                        <span className="text-xs text-gray-500 ml-auto">Optionnel</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Résumé des options */}
+                  <div className="p-3 bg-purple-100 rounded-lg text-xs text-purple-800">
+                    <p className="font-medium mb-1">Mode actif :</p>
+                    <ul className="space-y-1">
+                      {feedDatabaseMode && <li>• Recherche de nouveaux leads uniquement</li>}
+                      {requirePhone && <li>• Leads avec téléphone uniquement</li>}
+                      {requireEmail && <li>• Leads avec email uniquement</li>}
+                      {!feedDatabaseMode && !requirePhone && !requireEmail && (
+                        <li>• Mode standard (tous les leads)</li>
+                      )}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Colonne droite - Résumé et actions */}

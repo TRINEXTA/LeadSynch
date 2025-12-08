@@ -122,6 +122,40 @@ function getFallbackCitiesForDepartment(deptCode) {
 }
 
 /**
+ * Filtrer les leads selon les exigences téléphone/email
+ * @param {Array} leads - Liste des leads à filtrer
+ * @param {boolean} requirePhone - Si true, le lead DOIT avoir un téléphone
+ * @param {boolean} requireEmail - Si true, le lead DOIT avoir un email
+ * @returns {Array} - Leads filtrés
+ */
+function filterLeadsByRequirements(leads, requirePhone, requireEmail) {
+  if (!leads || !Array.isArray(leads)) return [];
+  if (!requirePhone && !requireEmail) return leads;
+
+  return leads.filter(lead => {
+    // Vérifier le téléphone si requis
+    if (requirePhone) {
+      const hasPhone = lead.phone && lead.phone.trim().length > 0;
+      if (!hasPhone) {
+        log(`🚫 [FILTER] Lead rejeté (pas de téléphone): ${lead.company_name}`);
+        return false;
+      }
+    }
+
+    // Vérifier l'email si requis
+    if (requireEmail) {
+      const hasEmail = lead.email && lead.email.trim().length > 0 && lead.email.includes('@');
+      if (!hasEmail) {
+        log(`🚫 [FILTER] Lead rejeté (pas d'email): ${lead.company_name}`);
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
  * Handler principal
  */
 async function handler(req, res) {
@@ -228,7 +262,11 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     radius = CONFIG.DEFAULT_RADIUS,
     quantity = 50,
     searchId,
-    skipExternal = false // Si true, ne cherche que dans les bases internes
+    skipExternal = false, // Si true, ne cherche que dans les bases internes
+    // Options Super Admin - Alimentation base de données
+    feedDatabaseMode = false, // Si true, cherche uniquement de nouveaux leads (skip base interne)
+    requirePhone = false,     // Si true, les leads DOIVENT avoir un téléphone
+    requireEmail = false      // Si true, les leads DOIVENT avoir un email
   } = req.body;
 
   // Validation
@@ -240,6 +278,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   let citiesToSearch = [];
 
   log(`🔍 [GENERATE] Params reçus: sector=${sector}, geoType=${geoType}, geoCode=${geoCode}, city=${city}, cities=${cities?.length || 0}`);
+  log(`🔧 [GENERATE] Options: feedDatabaseMode=${feedDatabaseMode}, requirePhone=${requirePhone}, requireEmail=${requireEmail}`);
 
   if (cities && Array.isArray(cities) && cities.length > 0) {
     // Liste de villes fournie directement
@@ -363,82 +402,111 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     let processedCities = 0;
 
     // ========== ÉTAPE 1: BASE INTERNE DU TENANT (ville par ville) ==========
-    sendProgress({ type: 'progress', percent: 5, message: `Recherche dans votre base (${totalCities} villes)...` });
+    // Skip si mode "Alimentation base de données" activé (on veut de NOUVEAUX leads)
+    if (!feedDatabaseMode) {
+      sendProgress({ type: 'progress', percent: 5, message: `Recherche dans votre base (${totalCities} villes)...` });
 
-    for (const cityName of citiesToSearch) {
-      if (allLeads.length >= quantity || !searchState.active) break;
-      await waitIfPaused(searchState);
+      for (const cityName of citiesToSearch) {
+        if (allLeads.length >= quantity || !searchState.active) break;
+        await waitIfPaused(searchState);
 
-      const remaining = quantity - allLeads.length;
-      const cityLeads = await searchInternalDatabase(tenant_id, sector, cityName, remaining);
+        const remaining = quantity - allLeads.length;
+        let cityLeads = await searchInternalDatabase(tenant_id, sector, cityName, remaining);
 
-      if (cityLeads.length > 0) {
-        stats.fromInternalDb += cityLeads.length;
-        allLeads.push(...cityLeads);
+        // Filtrer selon les exigences téléphone/email
+        cityLeads = filterLeadsByRequirements(cityLeads, requirePhone, requireEmail);
 
-        for (const lead of cityLeads) {
-          sendProgress({ type: 'internal_lead', lead, city: cityName });
+        if (cityLeads.length > 0) {
+          stats.fromInternalDb += cityLeads.length;
+          allLeads.push(...cityLeads);
+
+          for (const lead of cityLeads) {
+            sendProgress({ type: 'internal_lead', lead, city: cityName });
+          }
         }
+
+        processedCities++;
+        const percent = 5 + Math.floor((processedCities / totalCities) * 10);
+        sendProgress({ type: 'progress', percent, message: `Base interne: ${cityName} (${allLeads.length} leads)` });
       }
 
-      processedCities++;
-      const percent = 5 + Math.floor((processedCities / totalCities) * 10);
-      sendProgress({ type: 'progress', percent, message: `Base interne: ${cityName} (${allLeads.length} leads)` });
-    }
+      if (stats.fromInternalDb > 0) {
+        sendProgress({
+          type: 'internal_results',
+          percent: 15,
+          found: stats.fromInternalDb,
+          message: `${stats.fromInternalDb} leads trouvés dans votre base`
+        });
+      }
 
-    if (stats.fromInternalDb > 0) {
-      sendProgress({
-        type: 'internal_results',
-        percent: 15,
-        found: stats.fromInternalDb,
-        message: `${stats.fromInternalDb} leads trouvés dans votre base`
-      });
-    }
-
-    if (allLeads.length >= quantity) {
-      sendProgress({
-        type: 'complete',
-        percent: 100,
-        total: allLeads.length,
-        message: `Recherche terminée ! ${allLeads.length} leads trouvés dans votre base.`,
-        stats
-      });
-      res.end();
-      return;
+      if (allLeads.length >= quantity) {
+        sendProgress({
+          type: 'complete',
+          percent: 100,
+          total: allLeads.length,
+          message: `Recherche terminée ! ${allLeads.length} leads trouvés dans votre base.`,
+          stats
+        });
+        res.end();
+        return;
+      }
+    } else {
+      log(`📦 [GENERATE] Mode Alimentation BDD: skip base interne`);
+      sendProgress({ type: 'progress', percent: 15, message: `Mode Alimentation: recherche de nouveaux leads...` });
     }
 
     // ========== ÉTAPE 2: CACHE GLOBAL (ville par ville) ==========
-    sendProgress({ type: 'progress', percent: 20, message: `Recherche cache global (${totalCities} villes)...` });
-    processedCities = 0;
+    // Skip aussi le cache si mode "Alimentation base de données" (on veut des leads vraiment nouveaux)
+    if (!feedDatabaseMode) {
+      sendProgress({ type: 'progress', percent: 20, message: `Recherche cache global (${totalCities} villes)...` });
+      processedCities = 0;
 
-    for (const cityName of citiesToSearch) {
-      if (allLeads.length >= quantity || !searchState.active) break;
-      await waitIfPaused(searchState);
+      for (const cityName of citiesToSearch) {
+        if (allLeads.length >= quantity || !searchState.active) break;
+        await waitIfPaused(searchState);
 
-      const remaining = quantity - allLeads.length;
-      const cacheLeads = await searchGlobalCache(sector, cityName, remaining, allLeads);
+        const remaining = quantity - allLeads.length;
+        let cacheLeads = await searchGlobalCache(sector, cityName, remaining, allLeads);
 
-      if (cacheLeads.length > 0) {
-        stats.fromGlobalCache += cacheLeads.length;
-        allLeads.push(...cacheLeads);
+        // Filtrer selon les exigences téléphone/email
+        cacheLeads = filterLeadsByRequirements(cacheLeads, requirePhone, requireEmail);
 
-        for (const lead of cacheLeads) {
-          sendProgress({ type: 'cache_lead', lead, city: cityName });
+        if (cacheLeads.length > 0) {
+          stats.fromGlobalCache += cacheLeads.length;
+          allLeads.push(...cacheLeads);
+
+          for (const lead of cacheLeads) {
+            sendProgress({ type: 'cache_lead', lead, city: cityName });
+          }
         }
+
+        processedCities++;
+        const percent = 20 + Math.floor((processedCities / totalCities) * 15);
+        sendProgress({ type: 'progress', percent, message: `Cache: ${cityName} (${allLeads.length} leads)` });
       }
 
-      processedCities++;
-      const percent = 20 + Math.floor((processedCities / totalCities) * 15);
-      sendProgress({ type: 'progress', percent, message: `Cache: ${cityName} (${allLeads.length} leads)` });
-    }
+      if (stats.fromGlobalCache > 0) {
+        sendProgress({
+          type: 'cache_results',
+          percent: 35,
+          found: stats.fromGlobalCache,
+          message: `${stats.fromGlobalCache} leads trouvés dans le cache`
+        });
+      }
 
-    if (stats.fromGlobalCache > 0) {
-      sendProgress({
-        type: 'cache_results',
-        percent: 35,
-        found: stats.fromGlobalCache,
-        message: `${stats.fromGlobalCache} leads trouvés dans le cache`
-      });
+      if (allLeads.length >= quantity || skipExternal) {
+        sendProgress({
+          type: 'complete',
+          percent: 100,
+          total: allLeads.length,
+          message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
+          stats
+        });
+        res.end();
+        return;
+      }
+    } else {
+      log(`📦 [GENERATE] Mode Alimentation BDD: skip cache global`);
     }
 
     if (allLeads.length >= quantity || skipExternal) {
@@ -462,7 +530,10 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       await waitIfPaused(searchState);
 
       const remaining = Math.min(25, quantity - allLeads.length); // Max 25 par ville pour Sirene
-      const sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
+      let sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
+
+      // Filtrer selon les exigences téléphone/email
+      sireneLeads = filterLeadsByRequirements(sireneLeads, requirePhone, requireEmail);
 
       if (sireneLeads.length > 0) {
         stats.fromSirene += sireneLeads.length;
@@ -518,10 +589,13 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         await waitIfPaused(searchState);
 
         const remaining = quantity - allLeads.length;
-        const googleLeads = await searchGoogleMaps(
+        let googleLeads = await searchGoogleMaps(
           sector, cityName, radius, remaining,
           tenant_id, allLeads, sendProgress, searchState
         );
+
+        // Filtrer selon les exigences téléphone/email
+        googleLeads = filterLeadsByRequirements(googleLeads, requirePhone, requireEmail);
 
         if (googleLeads.length > 0) {
           stats.fromGoogleMaps += googleLeads.length;
