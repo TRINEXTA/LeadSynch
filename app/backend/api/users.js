@@ -1,5 +1,5 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware } from '../middleware/auth.js';
 import { queryAll, queryOne, execute } from '../lib/db.js';
 import { hashPassword } from '../lib/auth.js';
 import { sendTemporaryPassword } from '../lib/email.js';
