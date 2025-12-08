@@ -1,52 +1,52 @@
 import { log, error, warn } from "../../lib/logger.js";
-﻿import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../../config/db.js';
+import { z } from 'zod';
+
+// Schéma de validation Zod pour le login
+const loginSchema = z.object({
+  email: z.string()
+    .email('Format d\'email invalide')
+    .min(1, 'Email requis')
+    .max(255, 'Email trop long')
+    .transform(val => val.toLowerCase().trim()),
+  password: z.string()
+    .min(1, 'Mot de passe requis')
+    .max(128, 'Mot de passe trop long')
+});
 
 async function handler(req, res) {
-  log('========== LOGIN REQUEST ==========');
-  log('Method:', req.method);
-  log('Origin:', req.headers.origin);
-  log('Content-Type:', req.headers['content-type']);
-  // ⚠️ SÉCURITÉ: Ne jamais logger le body complet (contient le mot de passe)
-  
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { email, password } = req.body;
-    log('📧 Tentative de connexion pour:', email);
-
-    if (!email || !password) {
-      log('ERREUR: Email ou mot de passe manquant');
-      return res.status(400).json({ error: 'Email et mot de passe requis' });
+    // Validation des inputs avec Zod
+    const validationResult = loginSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => e.message).join(', ');
+      return res.status(400).json({ error: errors });
     }
 
-    // Chercher l'utilisateur avec first_name, last_name et is_super_admin
+    const { email, password } = validationResult.data;
+
+    // Chercher l'utilisateur
     const { rows } = await db.query(
       `SELECT u.*, t.name as tenant_name
        FROM users u
        LEFT JOIN tenants t ON u.tenant_id = t.id
        WHERE u.email = $1`,
-      [email.toLowerCase()]
+      [email]
     );
 
-    log('Utilisateur trouve:', rows.length > 0 ? 'OUI' : 'NON');
-
     if (rows.length === 0) {
-      log('ERREUR: Utilisateur non trouve');
       return res.status(401).json({ error: 'Identifiants incorrects' });
     }
 
     const user = rows[0];
-    log('User ID:', user.id);
-    log('User role:', user.role);
-    log('User active:', user.is_active);
-    log('User name:', user.first_name, user.last_name);
 
     if (!user.is_active) {
-      log('ERREUR: Compte desactive');
       return res.status(401).json({ error: 'Compte désactivé' });
     }
 
@@ -54,18 +54,16 @@ async function handler(req, res) {
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
-      log('ERREUR: Mot de passe incorrect');
       return res.status(401).json({ error: 'Identifiants incorrects' });
     }
 
-    // ✅ CORRECTION : Mettre à jour last_login
+    // Mettre à jour last_login
     await db.query(
       'UPDATE users SET last_login = NOW() WHERE id = $1',
       [user.id]
     );
-    log('✅ last_login mis à jour');
 
-    // Générer le token JWT avec first_name, last_name et is_super_admin
+    // Générer le token JWT
     const token = jwt.sign(
       {
         id: user.id,
@@ -80,8 +78,7 @@ async function handler(req, res) {
       { expiresIn: '7d' }
     );
 
-    log('Token genere avec succes');
-    log('========== LOGIN SUCCESS ==========');
+    log('✅ Login successful:', email);
 
     // Retourner first_name, last_name et is_super_admin
     return res.json({
@@ -99,10 +96,8 @@ async function handler(req, res) {
       }
     });
 
-  } catch (error) {
-    error('========== LOGIN ERROR ==========');
-    error('Error:', error);
-    error('Stack:', error.stack);
+  } catch (err) {
+    error('Login error:', err.message);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }
