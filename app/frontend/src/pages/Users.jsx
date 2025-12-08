@@ -1,5 +1,5 @@
-import { log, error, warn } from "../lib/logger.js";
-﻿import React, { useState, useEffect } from 'react';
+import { log, error as logError, warn } from "../lib/logger.js";
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key, Settings, Check } from 'lucide-react';
 import api from '../api/axios';
@@ -48,8 +48,8 @@ export default function Users() {
       const response = await api.get('/users');
       log('👥 Users chargés:', response.data.users);
       setUsers(response.data.users || []);
-    } catch (error) {
-      error('❌ Erreur users:', error);
+    } catch (err) {
+      logError('❌ Erreur users:', err);
       toast.error('Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
@@ -60,8 +60,8 @@ export default function Users() {
     try {
       const response = await api.get('/teams');
       setTeams(response.data.teams || []);
-    } catch (error) {
-      error('❌ Erreur teams:', error);
+    } catch (err) {
+      logError('❌ Erreur teams:', err);
     }
   };
 
@@ -111,9 +111,9 @@ export default function Users() {
         permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
       });
       loadUsers();
-    } catch (error) {
-      error('❌ Erreur:', error);
-      toast.error(error.response?.data?.error || 'Erreur lors de la sauvegarde');
+    } catch (err) {
+      logError('❌ Erreur:', err);
+      toast.error(err.response?.data?.error || 'Erreur lors de la sauvegarde');
     }
   };
 
