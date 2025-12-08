@@ -7,9 +7,9 @@ import { checkQuota, incrementQuota } from '../lib/quotaService.js';
 async function handler(req, res) {
   const tenant_id = req.user.tenant_id;
   const { campaign_id } = req.body;
-  
-  const SUPER_ADMIN_TENANT = '584544e5-892c-4550-a9f6-f8360d7c3eb9';
-  const isSuperAdmin = tenant_id === SUPER_ADMIN_TENANT;
+
+  // Utiliser le flag is_super_admin du token JWT (sécurisé)
+  const isSuperAdmin = req.user.is_super_admin === true;
   
   try {
     if (!campaign_id) {

@@ -1,11 +1,23 @@
 import { log, error, warn } from "../../lib/logger.js";
-﻿// api/auth/me.js
+// api/auth/me.js
 import { authMiddleware } from '../../middleware/auth.js';
+import { allowedOrigins } from '../../config/middlewares.js';
 
-// Handler sans auth pour OPTIONS
+// Pattern pour les URLs Vercel dynamiques
+const vercelPattern = /^https:\/\/leadsynch-.*\.vercel\.app$/;
+
+// Valider l'origine contre la liste blanche
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (vercelPattern.test(origin)) return true;
+  return false;
+}
+
+// Handler sans auth pour OPTIONS - CORS sécurisé
 function optionsHandler(req, res) {
   const origin = req.headers.origin;
-  if (origin) {
+  if (origin && isOriginAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -16,25 +28,13 @@ function optionsHandler(req, res) {
 
 // Handler avec auth pour GET
 async function getHandler(req, res) {
-  log('========== /auth/me REQUEST ==========');
-  log('Method:', req.method);
-  log('Origin:', req.headers.origin);
-  log('Authorization header:', req.headers.authorization);
-  log('User from middleware:', req.user ? 'OK' : 'NULL');
-  
-  if (req.user) {
-    log('User ID:', req.user.id);
-    log('User email:', req.user.email);
-    log('User name:', req.user.first_name, req.user.last_name);
-  }
-  
   const origin = req.headers.origin;
-  if (origin) {
+  if (origin && isOriginAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
-  
-  // ✅ Retourner toutes les infos user incluant les permissions
+
+  // Retourner toutes les infos user incluant les permissions
   return res.json({
     id: req.user.id,
     email: req.user.email,

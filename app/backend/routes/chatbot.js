@@ -1,34 +1,29 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import express from 'express';
+import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 
 const router = express.Router();
 
-// Vérifier que la clé API est configurée
-if (!process.env.ANTHROPIC_API_KEY) {
-  error('⚠️ ========================================');
-  error('⚠️ ANTHROPIC_API_KEY non configurée !');
-  error('⚠️ Le chatbot website ne fonctionnera pas');
-  error('⚠️ Configurez ANTHROPIC_API_KEY dans vos variables d\'environnement');
-  error('⚠️ ========================================');
+// Vérifier que la clé API est configurée au démarrage
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const isApiKeyConfigured = ANTHROPIC_API_KEY && ANTHROPIC_API_KEY.length > 10;
+
+if (!isApiKeyConfigured) {
+  warn('⚠️ ANTHROPIC_API_KEY non configurée - Le chatbot sera désactivé');
 }
 
-// Initialiser le client Anthropic
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || 'sk-ant-dummy-key',
-});
+// Initialiser le client Anthropic seulement si la clé est configurée
+const anthropic = isApiKeyConfigured ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
 
 // Route pour poser une question au chatbot
 router.post('/ask', async (req, res) => {
   try {
-    // Vérifier la clé API
-    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'sk-ant-dummy-key') {
-      error('❌ ANTHROPIC_API_KEY manquante - Le chatbot ne peut pas fonctionner');
+    // Vérifier que le service est disponible
+    if (!anthropic) {
       return res.status(503).json({
         error: 'Service IA temporairement indisponible',
         message: 'Le chatbot Asefi n\'est pas configuré. Veuillez contacter le support technique.',
-        support_email: 'support@leadsynch.com',
-        details: 'ANTHROPIC_API_KEY manquante en production'
+        support_email: 'support@leadsynch.com'
       });
     }
 

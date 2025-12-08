@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext .js,.jsx --fix"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -23,8 +25,10 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.16",
     "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.37.5",
+    "postcss": "^8.5.6",
     "terser": "^5.44.1",
     "vite": "^7.2.2"
   }

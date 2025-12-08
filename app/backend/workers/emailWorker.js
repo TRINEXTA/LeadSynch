@@ -199,86 +199,113 @@ const processCampaign = async (campaign) => {
 
     log(`📧 [EMAIL WORKER] ${emailsToSend.length} emails à envoyer pour "${campaign.name}"...`);
 
-    let successCount = 0;
-    let failCount = 0;
+    // Collecteurs pour batch updates (optimisation N+1)
+    const successIds = [];
+    const failedEmails = []; // { id, error_message }
 
-    // Envoyer les emails
-    for (const emailData of emailsToSend) {
-      try {
-        // Personnaliser le template avec gestion intelligente des salutations
-        let htmlBody = template.html_body;
+    // Fonction pour personnaliser le template
+    const personalizeTemplate = (htmlBody, emailData) => {
+      let result = htmlBody;
 
-        // Liste des synonymes pour les variables de prénom/nom
-        // Supporte {{PRENOM}}, {{prenom}}, {{contact_name}}, {{contact_first_name}}, etc.
-        const nameVariablePattern = /\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}\}/gi;
+      const nameVariablePattern = /\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}\}/gi;
+      const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}\}\s*([,!]?)/gi;
 
-        // Gérer les patterns de salutation spéciaux
-        // "Bonjour {{PRENOM}}," -> "Bonjour," si prenom n'existe pas
-        const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_first_name|contactName|name|nom|NOM)\}\}\s*([,!]?)/gi;
-        htmlBody = htmlBody.replace(greetingPattern, (match, greeting, variable, punctuation) => {
-          if (emailData.contact_name && emailData.contact_name.trim()) {
-            return `${greeting} ${emailData.contact_name}${punctuation}`;
-          }
-          return `${greeting}${punctuation}`;
-        });
-
-        // Remplacer les autres occurrences de variables de nom restantes
-        htmlBody = htmlBody.replace(nameVariablePattern, emailData.contact_name || '');
-
-        // Remplacer les autres variables
-        htmlBody = htmlBody
-          .replace(/\{\{(company|COMPANY|company_name|COMPANY_NAME|entreprise|ENTREPRISE)\}\}/gi, emailData.company || 'Entreprise')
-          .replace(/\{\{(lead_email|email|EMAIL|mail|MAIL)\}\}/gi, emailData.email);
-
-        // Nettoyer les espaces multiples
-        htmlBody = htmlBody.replace(/  +/g, ' ');
-
-        // Ajouter pixel de tracking si activé
-        if (campaign.track_clicks) {
-          const trackingPixel = `<img src="${process.env.APP_URL || 'https://leadsynch.com'}/api/track/open/${emailData.id}" width="1" height="1" style="display:none;" />`;
-          htmlBody += trackingPixel;
+      result = result.replace(greetingPattern, (match, greeting, variable, punctuation) => {
+        if (emailData.contact_name && emailData.contact_name.trim()) {
+          return `${greeting} ${emailData.contact_name}${punctuation}`;
         }
+        return `${greeting}${punctuation}`;
+      });
 
-        log(`📤 [EMAIL WORKER] Envoi à ${emailData.recipient_email}...`);
+      result = result.replace(nameVariablePattern, emailData.contact_name || '');
+      result = result
+        .replace(/\{\{(company|COMPANY|company_name|COMPANY_NAME|entreprise|ENTREPRISE)\}\}/gi, emailData.company || 'Entreprise')
+        .replace(/\{\{(lead_email|email|EMAIL|mail|MAIL)\}\}/gi, emailData.email)
+        .replace(/  +/g, ' ');
 
-        // Envoyer l'email
-        const result = await sendEmail({
-          to: emailData.recipient_email,
-          subject: campaign.subject || template.subject,
-          htmlBody: htmlBody,
-          fromName: 'LeadSync'
-        });
-
-        // Marquer comme envoyé
-        await execute(
-          `UPDATE email_queue 
-           SET status = 'sent', 
-               sent_at = NOW()
-           WHERE id = $1`,
-          [emailData.id]
-        );
-
-        successCount++;
-        log(`✅ [EMAIL WORKER] Email envoyé à ${emailData.recipient_email}`);
-
-      } catch (error) {
-        error(`❌ [EMAIL WORKER] Erreur envoi à ${emailData.recipient_email}:`, error.message);
-        
-        // Marquer comme échec
-        await execute(
-          `UPDATE email_queue 
-           SET status = 'failed', 
-               error_message = $1
-           WHERE id = $2`,
-          [error.message, emailData.id]
-        );
-
-        failCount++;
+      if (campaign.track_clicks) {
+        result += `<img src="${process.env.APP_URL || 'https://leadsynch.com'}/api/track/open/${emailData.id}" width="1" height="1" style="display:none;" />`;
       }
 
-      // Pause entre chaque email (pour éviter le rate limiting)
-      await new Promise(resolve => setTimeout(resolve, 200));
+      return result;
+    };
+
+    // Envoyer les emails par batch de 10 avec pause entre les batches
+    const BATCH_SIZE = 10;
+    const BATCH_DELAY_MS = 500;
+
+    for (let i = 0; i < emailsToSend.length; i += BATCH_SIZE) {
+      const batch = emailsToSend.slice(i, i + BATCH_SIZE);
+
+      // Traiter le batch en parallèle
+      const results = await Promise.allSettled(
+        batch.map(async (emailData) => {
+          const htmlBody = personalizeTemplate(template.html_body, emailData);
+
+          await sendEmail({
+            to: emailData.recipient_email,
+            subject: campaign.subject || template.subject,
+            htmlBody: htmlBody,
+            fromName: 'LeadSync'
+          });
+
+          return emailData.id;
+        })
+      );
+
+      // Collecter les résultats
+      results.forEach((result, index) => {
+        const emailData = batch[index];
+        if (result.status === 'fulfilled') {
+          successIds.push(result.value);
+        } else {
+          failedEmails.push({
+            id: emailData.id,
+            error_message: result.reason?.message || 'Unknown error'
+          });
+        }
+      });
+
+      // Pause entre les batches (sauf pour le dernier)
+      if (i + BATCH_SIZE < emailsToSend.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+      }
     }
+
+    // BATCH UPDATE : Marquer les emails envoyés avec succès
+    if (successIds.length > 0) {
+      await execute(
+        `UPDATE email_queue
+         SET status = 'sent', sent_at = NOW()
+         WHERE id = ANY($1)`,
+        [successIds]
+      );
+      log(`✅ [EMAIL WORKER] ${successIds.length} emails envoyés avec succès`);
+    }
+
+    // BATCH UPDATE : Marquer les emails échoués
+    if (failedEmails.length > 0) {
+      // Pour les erreurs, on doit faire une mise à jour par erreur unique
+      const errorGroups = {};
+      failedEmails.forEach(({ id, error_message }) => {
+        const key = error_message.substring(0, 200);
+        if (!errorGroups[key]) errorGroups[key] = [];
+        errorGroups[key].push(id);
+      });
+
+      for (const [errorMsg, ids] of Object.entries(errorGroups)) {
+        await execute(
+          `UPDATE email_queue
+           SET status = 'failed', error_message = $1
+           WHERE id = ANY($2)`,
+          [errorMsg, ids]
+        );
+      }
+      log(`❌ [EMAIL WORKER] ${failedEmails.length} emails échoués`);
+    }
+
+    const successCount = successIds.length;
+    const failCount = failedEmails.length;
 
     // Mettre à jour les statistiques de la campagne
     const stats = await queryOne(
