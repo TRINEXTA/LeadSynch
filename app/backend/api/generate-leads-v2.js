@@ -28,7 +28,7 @@ const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API
 
 // Configuration
 const CONFIG = {
-  MAX_QUANTITY: 500,
+  MAX_QUANTITY: 10000,  // Limite augmentée (était 500)
   DEFAULT_RADIUS: 10,
   COST_PER_LEAD: 0.10
 };
