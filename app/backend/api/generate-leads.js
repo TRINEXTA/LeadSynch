@@ -225,35 +225,42 @@ async function handler(req, res) {
 
       log(`🔍 Recherche intelligente: ${sector} à ${city}, rayon ${radius}km, quantité ${quantity}`);
 
-      // 1. VÉRIFIER LES CRÉDITS DISPONIBLES
-      const creditCheck = await queryAll(
-        `SELECT credits_remaining FROM lead_credits WHERE tenant_id = $1`,
-        [tenant_id]
-      );
+      // Super admin bypass pour les crédits
+      const isSuperAdmin = req.user.is_super_admin === true;
 
-      if (creditCheck.length === 0) {
-        // Initialiser si n'existe pas
-        await execute(
-          `INSERT INTO lead_credits (tenant_id, credits_remaining) VALUES ($1, 0)`,
+      // 1. VÉRIFIER LES CRÉDITS DISPONIBLES (sauf super admin)
+      if (!isSuperAdmin) {
+        const creditCheck = await queryAll(
+          `SELECT credits_remaining FROM lead_credits WHERE tenant_id = $1`,
           [tenant_id]
         );
-        return res.status(402).json({
-          error: 'Crédits insuffisants',
-          message: 'Vous n\'avez pas de crédits. Veuillez acheter des crédits pour générer des leads.',
-          credits_remaining: 0
-        });
-      }
 
-      const creditsAvailable = creditCheck[0].credits_remaining;
-      log(`💳 Crédits disponibles: ${creditsAvailable}`);
+        if (creditCheck.length === 0) {
+          // Initialiser si n'existe pas
+          await execute(
+            `INSERT INTO lead_credits (tenant_id, credits_remaining) VALUES ($1, 0)`,
+            [tenant_id]
+          );
+          return res.status(402).json({
+            error: 'Crédits insuffisants',
+            message: 'Vous n\'avez pas de crédits. Veuillez acheter des crédits pour générer des leads.',
+            credits_remaining: 0
+          });
+        }
 
-      if (creditsAvailable < quantity) {
-        return res.status(402).json({
-          error: 'Crédits insuffisants',
-          credits_remaining: creditsAvailable,
-          credits_needed: quantity,
-          message: `Vous avez ${creditsAvailable} crédits disponibles mais ${quantity} sont nécessaires.`
-        });
+        const creditsAvailable = creditCheck[0].credits_remaining;
+        log(`💳 Crédits disponibles: ${creditsAvailable}`);
+
+        if (creditsAvailable < quantity) {
+          return res.status(402).json({
+            error: 'Crédits insuffisants',
+            credits_remaining: creditsAvailable,
+            credits_needed: quantity,
+            message: `Vous avez ${creditsAvailable} crédits disponibles mais ${quantity} sont nécessaires.`
+          });
+        }
+      } else {
+        log(`👑 Super admin - bypass vérification crédits`);
       }
 
       // 2. RECHERCHE INTELLIGENTE: D'ABORD LA BASE DE DONNÉES (0.03€)
@@ -276,8 +283,8 @@ async function handler(req, res) {
       let creditsConsumed = 0;
       let totalCost = 0;
 
-      // Consommer les crédits pour les leads de la base (0.10€)
-      if (foundInDatabase > 0) {
+      // Consommer les crédits pour les leads de la base (0.10€) - sauf super admin
+      if (foundInDatabase > 0 && !isSuperAdmin) {
         const dbCost = foundInDatabase * 0.10;
         creditsConsumed += foundInDatabase;
         totalCost += dbCost;
@@ -373,19 +380,20 @@ async function handler(req, res) {
                     ]
                   );
 
-                  // Enregistrer l'usage pour ce lead Google Maps (0.10€)
-                  await execute(
-                    `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
-                     VALUES ($1, $2, 1, 'google_maps', 0.10)`,
-                    [tenant_id, newLead.id]
-                  );
+                  // Enregistrer l'usage pour ce lead Google Maps (0.10€) - sauf super admin
+                  if (!isSuperAdmin) {
+                    await execute(
+                      `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
+                       VALUES ($1, $2, 1, 'google_maps', 0.10)`,
+                      [tenant_id, newLead.id]
+                    );
+                    creditsConsumed++;
+                    totalCost += 0.10;
+                    log(`💰 1 crédit consommé (Google Maps): 0.10€`);
+                  }
 
                   newLeads.push(newLead);
                   googleLeadsGenerated++;
-                  creditsConsumed++;
-                  totalCost += 0.10;
-
-                  log(`💰 1 crédit consommé (Google Maps): 0.10€`);
 
                 } catch (detailsError) {
                   error(`Erreur détails:`, detailsError.message);
@@ -399,8 +407,8 @@ async function handler(req, res) {
         }
       }
 
-      // 4. METTRE À JOUR LES CRÉDITS RESTANTS
-      if (creditsConsumed > 0) {
+      // 4. METTRE À JOUR LES CRÉDITS RESTANTS (sauf super admin)
+      if (creditsConsumed > 0 && !isSuperAdmin) {
         await execute(
           `UPDATE lead_credits
            SET credits_remaining = credits_remaining - $1,
@@ -420,21 +428,22 @@ async function handler(req, res) {
         found_in_database: foundInDatabase,
         fetched_from_google: googleLeadsGenerated,
         total: totalLeads.length,
-        credits_consumed: creditsConsumed,
+        credits_consumed: isSuperAdmin ? 0 : creditsConsumed,
         cost_per_lead: 0.10,
-        total_cost: totalCost.toFixed(2),
-        credits_remaining: creditsAvailable - creditsConsumed,
+        total_cost: isSuperAdmin ? '0.00' : totalCost.toFixed(2),
+        credits_remaining: isSuperAdmin ? 999999 : (creditsAvailable - creditsConsumed),
+        unlimited: isSuperAdmin || undefined,
         leads: totalLeads.slice(0, quantity)
       });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
 
-  } catch (error) {
-    error('Generate leads error:', error);
-    return res.status(500).json({ 
-      error: 'Server error', 
-      details: error.message 
+  } catch (err) {
+    error('Generate leads error:', err);
+    return res.status(500).json({
+      error: 'Server error',
+      details: err.message
     });
   }
 }
