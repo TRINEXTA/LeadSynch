@@ -522,14 +522,17 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     }
 
     // ========== ÉTAPE 3: API SIRENE INSEE (ville par ville) ==========
-    sendProgress({ type: 'progress', percent: 40, message: `Recherche Sirene INSEE (${totalCities} villes)...` });
+    // Si téléphone requis, Sirene est moins utile (pas de téléphones) - limiter
+    const sireneLimit = requirePhone ? Math.min(totalCities, 20) : totalCities;
+    sendProgress({ type: 'progress', percent: 40, message: `Recherche Sirene INSEE (${sireneLimit} villes)...` });
     processedCities = 0;
 
-    for (const cityName of citiesToSearch) {
+    for (const cityName of citiesToSearch.slice(0, sireneLimit)) {
       if (allLeads.length >= quantity || !searchState.active) break;
       await waitIfPaused(searchState);
 
-      const remaining = Math.min(25, quantity - allLeads.length); // Max 25 par ville pour Sirene
+      // Augmenter la limite par ville pour les grandes recherches
+      const remaining = Math.min(100, quantity - allLeads.length); // Max 100 par ville pour Sirene (avec pagination)
       let sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
 
       // Filtrer selon les exigences téléphone/email
@@ -545,12 +548,12 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       }
 
       processedCities++;
-      const percent = 40 + Math.floor((processedCities / totalCities) * 25);
+      const percent = 40 + Math.floor((processedCities / sireneLimit) * 25);
       sendProgress({ type: 'progress', percent, message: `Sirene: ${cityName} (${allLeads.length} leads)` });
 
       // Pause pour éviter rate limiting
-      if (processedCities < totalCities) {
-        await new Promise(r => setTimeout(r, 200));
+      if (processedCities < sireneLimit) {
+        await new Promise(r => setTimeout(r, 150));
       }
     }
 
@@ -581,10 +584,13 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     }
 
     // ========== ÉTAPE 4: GOOGLE MAPS (si nécessaire et configuré) ==========
-    if (GOOGLE_API_KEY && allLeads.length < quantity) {
-      sendProgress({ type: 'progress', percent: 70, message: 'Recherche Google Maps...' });
+    // Augmenter le nombre de villes si grande quantité demandée ou si téléphone requis
+    const googleMapsCityLimit = requirePhone ? Math.min(citiesToSearch.length, 50) : Math.min(Math.ceil(quantity / 20), 30);
 
-      for (const cityName of citiesToSearch.slice(0, 10)) { // Max 10 villes pour Google Maps
+    if (GOOGLE_API_KEY && allLeads.length < quantity) {
+      sendProgress({ type: 'progress', percent: 70, message: `Recherche Google Maps (${googleMapsCityLimit} villes)...` });
+
+      for (const cityName of citiesToSearch.slice(0, googleMapsCityLimit)) { // Limite dynamique
         if (allLeads.length >= quantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
@@ -720,47 +726,66 @@ async function searchGlobalCache(sector, city, limit, excludeLeads = []) {
 }
 
 /**
- * Rechercher via API Sirene (GRATUIT)
+ * Rechercher via API Sirene (GRATUIT) - AVEC PAGINATION
  */
 async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, searchState) {
-  try {
-    const response = await axios.get('https://recherche-entreprises.api.gouv.fr/search', {
-      params: {
-        q: `${sector} ${city}`,
-        per_page: Math.min(limit, 25),
-        page: 1
-      },
-      timeout: 10000
-    });
+  const leads = [];
+  const maxPages = Math.ceil(limit / 25); // Nombre de pages nécessaires
+  const maxPagesAllowed = 10; // Limite pour ne pas surcharger l'API
+  const pagesToFetch = Math.min(maxPages, maxPagesAllowed);
 
-    if (!response.data?.results) {
-      return [];
-    }
+  for (let page = 1; page <= pagesToFetch; page++) {
+    if (leads.length >= limit || !searchState.active) break;
+    await waitIfPaused(searchState);
 
-    const leads = [];
+    try {
+      const response = await axios.get('https://recherche-entreprises.api.gouv.fr/search', {
+        params: {
+          q: `${sector} ${city}`,
+          per_page: 25,
+          page: page
+        },
+        timeout: 10000
+      });
 
-    for (const company of response.data.results) {
-      await waitIfPaused(searchState);
-      if (!searchState.active) break;
+      if (!response.data?.results || response.data.results.length === 0) {
+        break; // Plus de résultats
+      }
 
-      const lead = formatSireneResult(company, sector);
+      for (const company of response.data.results) {
+        await waitIfPaused(searchState);
+        if (!searchState.active) break;
 
-      // Sauvegarder dans le cache global
-      await saveToGlobalCache(lead, tenant_id);
+        const lead = formatSireneResult(company, sector);
 
-      leads.push(lead);
+        // Sauvegarder dans le cache global
+        await saveToGlobalCache(lead, tenant_id);
 
-      if (leads.length >= limit) break;
-    }
+        leads.push(lead);
 
-    return leads;
+        if (leads.length >= limit) break;
+      }
 
-  } catch (err) {
-    if (err.response?.status !== 429) {
+      // Si moins de 25 résultats, pas la peine de continuer
+      if (response.data.results.length < 25) break;
+
+      // Petite pause entre les pages pour éviter rate limiting
+      if (page < pagesToFetch && leads.length < limit) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+    } catch (err) {
+      if (err.response?.status === 429) {
+        // Rate limited, arrêter
+        warn(`Sirene rate limited à la page ${page}`);
+        break;
+      }
       error('Erreur Sirene:', err.message);
+      break;
     }
-    return [];
   }
+
+  return leads;
 }
 
 /**
