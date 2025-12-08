@@ -42,8 +42,8 @@ jobs:
           NODE_ENV: test
           JWT_SECRET: test-secret-key-for-ci-testing-only-32chars
 
-  frontend-lint:
-    name: Frontend Lint & Build
+  frontend-tests:
+    name: Frontend Tests, Lint & Build
     runs-on: ubuntu-latest
 
     defaults:
@@ -63,6 +63,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run tests
+        run: npm test
 
       - name: Run linter
         run: npm run lint
