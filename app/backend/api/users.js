@@ -53,7 +53,7 @@ async function handler(req, res) {
         users = await queryAll(
           `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
                   u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
-                  u.is_super_admin, u.permissions, u.team_id,
+                  u.is_super_admin, u.permissions,
                   t.name as tenant_name
            FROM users u
            LEFT JOIN tenants t ON u.tenant_id = t.id
