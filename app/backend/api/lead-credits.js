@@ -17,7 +17,20 @@ const PRICE_PER_LEAD = 0.10; // Prix unique par lead (peu importe la source)
  */
 router.get('/', async (req, res) => {
   try {
-    const { tenant_id: tenantId } = req.user;
+    const { tenant_id: tenantId, is_super_admin } = req.user;
+
+    // Super admin a des crédits illimités
+    if (is_super_admin) {
+      return res.json({
+        credits: {
+          tenant_id: tenantId,
+          credits_remaining: 999999,
+          credits_purchased: 0,
+          credits_used: 0,
+          unlimited: true
+        }
+      });
+    }
 
     const { rows } = await q(
       `SELECT * FROM lead_credits WHERE tenant_id = $1`,
@@ -36,9 +49,9 @@ router.get('/', async (req, res) => {
     }
 
     res.json({ credits: rows[0] });
-  } catch (error) {
-    error('Erreur récupération crédits:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur récupération crédits:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -59,9 +72,9 @@ router.get('/history', async (req, res) => {
     );
 
     res.json({ purchases: rows });
-  } catch (error) {
-    error('Erreur historique crédits:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur historique crédits:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -110,9 +123,9 @@ router.get('/usage', async (req, res) => {
         return acc;
       }, {})
     });
-  } catch (error) {
-    error('Erreur usage crédits:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur usage crédits:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -195,9 +208,9 @@ router.post('/purchase', async (req, res) => {
       credits_added: credits_amount,
       credits_remaining: updatedCredits[0].credits_remaining
     });
-  } catch (error) {
-    error('Erreur achat crédits:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur achat crédits:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -258,9 +271,9 @@ router.post('/complete-purchase/:purchase_id', async (req, res) => {
       message: 'Achat finalisé avec succès',
       credits_added: purchase.amount_credits
     });
-  } catch (error) {
-    error('Erreur finalisation achat:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur finalisation achat:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -270,7 +283,7 @@ router.post('/complete-purchase/:purchase_id', async (req, res) => {
  */
 router.post('/consume', async (req, res) => {
   try {
-    const { tenant_id: tenantId } = req.user;
+    const { tenant_id: tenantId, is_super_admin } = req.user;
     const { lead_id, source } = req.body; // source: 'database' ou 'google_maps'
 
     if (!['database', 'google_maps'].includes(source)) {
@@ -278,6 +291,16 @@ router.post('/consume', async (req, res) => {
     }
 
     const cost = PRICE_PER_LEAD; // Tarif unique quelle que soit la source
+
+    // Super admin bypass - pas de consommation de crédits
+    if (is_super_admin) {
+      return res.json({
+        message: 'Super admin - crédit non consommé',
+        credits_remaining: 999999,
+        cost_euros: 0,
+        unlimited: true
+      });
+    }
 
     // Vérifier les crédits disponibles
     const { rows: credits } = await q(
@@ -314,9 +337,9 @@ router.post('/consume', async (req, res) => {
       credits_remaining: credits[0].credits_remaining - 1,
       cost_euros: cost
     });
-  } catch (error) {
-    error('Erreur consommation crédit:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur consommation crédit:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
