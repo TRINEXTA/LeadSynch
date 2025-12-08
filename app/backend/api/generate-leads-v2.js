@@ -522,79 +522,95 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     }
 
     // ========== ÉTAPE 3: API SIRENE INSEE (ville par ville) ==========
-    // Si téléphone requis, Sirene est moins utile (pas de téléphones) - limiter
-    const sireneLimit = requirePhone ? Math.min(totalCities, 20) : totalCities;
-    sendProgress({ type: 'progress', percent: 40, message: `Recherche Sirene INSEE (${sireneLimit} villes)...` });
-    processedCities = 0;
+    // SKIP Sirene si téléphone requis - Sirene n'a PAS de numéros de téléphone
+    if (!requirePhone) {
+      sendProgress({ type: 'progress', percent: 40, message: `Recherche Sirene INSEE (${totalCities} villes)...` });
+      processedCities = 0;
 
-    for (const cityName of citiesToSearch.slice(0, sireneLimit)) {
-      if (allLeads.length >= quantity || !searchState.active) break;
-      await waitIfPaused(searchState);
-
-      // Augmenter la limite par ville pour les grandes recherches
-      const remaining = Math.min(100, quantity - allLeads.length); // Max 100 par ville pour Sirene (avec pagination)
-      let sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
-
-      // Filtrer selon les exigences téléphone/email
-      sireneLeads = filterLeadsByRequirements(sireneLeads, requirePhone, requireEmail);
-
-      if (sireneLeads.length > 0) {
-        stats.fromSirene += sireneLeads.length;
-        allLeads.push(...sireneLeads);
-
-        for (const lead of sireneLeads) {
-          sendProgress({ type: 'sirene_lead', lead, city: cityName });
-        }
-      }
-
-      processedCities++;
-      const percent = 40 + Math.floor((processedCities / sireneLimit) * 25);
-      sendProgress({ type: 'progress', percent, message: `Sirene: ${cityName} (${allLeads.length} leads)` });
-
-      // Pause pour éviter rate limiting
-      if (processedCities < sireneLimit) {
-        await new Promise(r => setTimeout(r, 150));
-      }
-    }
-
-    if (stats.fromSirene > 0) {
-      sendProgress({
-        type: 'sirene_results',
-        percent: 65,
-        found: stats.fromSirene,
-        message: `${stats.fromSirene} entreprises trouvées via Sirene`
-      });
-
-      // Consommer les crédits
-      if (!isSuperAdmin) {
-        await consumeCredits(tenant_id, stats.fromSirene, 'sirene_insee');
-      }
-    }
-
-    if (allLeads.length >= quantity) {
-      sendProgress({
-        type: 'complete',
-        percent: 100,
-        total: allLeads.length,
-        message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
-        stats
-      });
-      res.end();
-      return;
-    }
-
-    // ========== ÉTAPE 4: GOOGLE MAPS (si nécessaire et configuré) ==========
-    // Augmenter le nombre de villes si grande quantité demandée ou si téléphone requis
-    const googleMapsCityLimit = requirePhone ? Math.min(citiesToSearch.length, 50) : Math.min(Math.ceil(quantity / 20), 30);
-
-    if (GOOGLE_API_KEY && allLeads.length < quantity) {
-      sendProgress({ type: 'progress', percent: 70, message: `Recherche Google Maps (${googleMapsCityLimit} villes)...` });
-
-      for (const cityName of citiesToSearch.slice(0, googleMapsCityLimit)) { // Limite dynamique
+      for (const cityName of citiesToSearch) {
         if (allLeads.length >= quantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
+        // Augmenter la limite par ville pour les grandes recherches
+        const remaining = Math.min(100, quantity - allLeads.length);
+        let sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
+
+        // Filtrer selon les exigences email (pas téléphone car déjà vérifié ci-dessus)
+        sireneLeads = filterLeadsByRequirements(sireneLeads, false, requireEmail);
+
+        if (sireneLeads.length > 0) {
+          stats.fromSirene += sireneLeads.length;
+          allLeads.push(...sireneLeads);
+
+          for (const lead of sireneLeads) {
+            sendProgress({ type: 'sirene_lead', lead, city: cityName });
+          }
+        }
+
+        processedCities++;
+        const percent = 40 + Math.floor((processedCities / totalCities) * 25);
+        sendProgress({ type: 'progress', percent, message: `Sirene: ${cityName} (${allLeads.length} leads)` });
+
+        // Pause pour éviter rate limiting
+        if (processedCities < totalCities) {
+          await new Promise(r => setTimeout(r, 150));
+        }
+      }
+
+      if (stats.fromSirene > 0) {
+        sendProgress({
+          type: 'sirene_results',
+          percent: 65,
+          found: stats.fromSirene,
+          message: `${stats.fromSirene} entreprises trouvées via Sirene`
+        });
+
+        // Consommer les crédits
+        if (!isSuperAdmin) {
+          await consumeCredits(tenant_id, stats.fromSirene, 'sirene_insee');
+        }
+      }
+
+      if (allLeads.length >= quantity) {
+        sendProgress({
+          type: 'complete',
+          percent: 100,
+          total: allLeads.length,
+          message: `Recherche terminée ! ${allLeads.length} leads trouvés.`,
+          stats
+        });
+        res.end();
+        return;
+      }
+    } else {
+      log(`📞 [GENERATE] requirePhone=true → Skip Sirene (pas de téléphones)`);
+      sendProgress({ type: 'progress', percent: 40, message: `Mode téléphone requis: passage direct à Google Maps...` });
+    }
+
+    // ========== ÉTAPE 4: GOOGLE MAPS (PRINCIPAL pour les téléphones) ==========
+    // Chercher dans TOUTES les villes jusqu'à atteindre la quantité
+    if (GOOGLE_API_KEY && allLeads.length < quantity) {
+      const googleStartPercent = requirePhone ? 40 : 70;
+      sendProgress({ type: 'progress', percent: googleStartPercent, message: `Recherche Google Maps (${citiesToSearch.length} villes disponibles)...` });
+
+      let googleProcessedCities = 0;
+      let consecutiveEmptyCities = 0;
+      const maxEmptyCities = 10; // Arrêter si 10 villes consécutives sans résultat
+
+      for (const cityName of citiesToSearch) {
+        if (allLeads.length >= quantity || !searchState.active) break;
+
+        // Si trop de villes vides consécutives, arrêter
+        if (consecutiveEmptyCities >= maxEmptyCities) {
+          log(`⚠️ [GENERATE] ${maxEmptyCities} villes vides consécutives, arrêt Google Maps`);
+          break;
+        }
+
+        await waitIfPaused(searchState);
+
         const remaining = quantity - allLeads.length;
+        const leadsBeforeCity = allLeads.length;
+
         let googleLeads = await searchGoogleMaps(
           sector, cityName, radius, remaining,
           tenant_id, allLeads, sendProgress, searchState
@@ -606,13 +622,29 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         if (googleLeads.length > 0) {
           stats.fromGoogleMaps += googleLeads.length;
           allLeads.push(...googleLeads);
+          consecutiveEmptyCities = 0; // Reset counter
+        } else {
+          consecutiveEmptyCities++;
         }
+
+        googleProcessedCities++;
+        const googlePercent = googleStartPercent + Math.floor((googleProcessedCities / citiesToSearch.length) * (90 - googleStartPercent));
+        sendProgress({
+          type: 'progress',
+          percent: Math.min(googlePercent, 89),
+          message: `Google Maps: ${cityName} (${allLeads.length}/${quantity} leads)`
+        });
       }
 
       // Consommer les crédits pour Google Maps
       if (!isSuperAdmin && stats.fromGoogleMaps > 0) {
         await consumeCredits(tenant_id, stats.fromGoogleMaps, 'google_maps');
       }
+
+      log(`✅ [GENERATE] Google Maps terminé: ${stats.fromGoogleMaps} leads de ${googleProcessedCities} villes`);
+    } else if (!GOOGLE_API_KEY) {
+      warn(`⚠️ [GENERATE] GOOGLE_API_KEY non configurée - impossible de chercher avec téléphone`);
+      sendProgress({ type: 'warning', message: 'API Google Maps non configurée' });
     }
 
     // ========== ENRICHISSEMENT FINAL ==========
@@ -789,95 +821,120 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
 }
 
 /**
- * Rechercher via Google Maps
+ * Rechercher via Google Maps - VERSION OPTIMISÉE
  */
 async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeLeads, sendProgress, searchState) {
   const leads = [];
   const googleTypes = SECTOR_TO_GOOGLE_TYPES[sector] || ['establishment'];
-  const excludeNames = excludeLeads.map(l => l.company_name?.toLowerCase()).filter(Boolean);
+  const excludeNames = new Set(excludeLeads.map(l => l.company_name?.toLowerCase()).filter(Boolean));
+  const processedPlaceIds = new Set();
 
+  // Essayer plusieurs types Google pour ce secteur
   for (const type of googleTypes) {
     if (leads.length >= limit || !searchState.active) break;
 
     await waitIfPaused(searchState);
 
     try {
-      const response = await googleMapsClient.textSearch({
-        params: {
-          query: `${type} ${city}`,
-          radius: radius * 1000,
-          key: GOOGLE_API_KEY,
-          language: 'fr'
-        }
-      });
+      // Recherche textSearch avec plusieurs formulations
+      const queries = [
+        `${type} ${city}`,
+        `${sector} ${city}`,
+        `${type} à ${city}`
+      ];
 
-      const places = response.data.results || [];
-
-      for (const place of places) {
+      for (const query of queries) {
         if (leads.length >= limit || !searchState.active) break;
 
-        await waitIfPaused(searchState);
-
-        // Vérifier si déjà trouvé
-        if (excludeNames.includes(place.name?.toLowerCase())) continue;
-
-        // Vérifier si déjà dans global_leads
-        const existing = await queryOne(
-          'SELECT id FROM global_leads WHERE google_place_id = $1',
-          [place.place_id]
-        );
-        if (existing) continue;
-
-        // Récupérer les détails
-        const detailsResponse = await googleMapsClient.placeDetails({
+        const response = await googleMapsClient.textSearch({
           params: {
-            place_id: place.place_id,
-            fields: ['name', 'formatted_address', 'geometry', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'types'],
+            query: query,
+            radius: radius * 1000,
             key: GOOGLE_API_KEY,
             language: 'fr'
           }
         });
 
-        const details = detailsResponse.data.result;
+        const places = response.data.results || [];
+        log(`🗺️ [GOOGLE] Query "${query}" → ${places.length} résultats`);
 
-        // Scraper les emails du site web
-        let emails = [];
-        if (details.website) {
-          emails = await scrapeEmailsFromWebsite(details.website);
+        for (const place of places) {
+          if (leads.length >= limit || !searchState.active) break;
+
+          await waitIfPaused(searchState);
+
+          // Éviter les doublons par place_id
+          if (processedPlaceIds.has(place.place_id)) continue;
+          processedPlaceIds.add(place.place_id);
+
+          // Vérifier si déjà trouvé par nom
+          if (excludeNames.has(place.name?.toLowerCase())) continue;
+
+          try {
+            // Récupérer les détails
+            const detailsResponse = await googleMapsClient.placeDetails({
+              params: {
+                place_id: place.place_id,
+                fields: ['name', 'formatted_address', 'geometry', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'types'],
+                key: GOOGLE_API_KEY,
+                language: 'fr'
+              }
+            });
+
+            const details = detailsResponse.data.result;
+            if (!details) continue;
+
+            // Scraper les emails du site web (avec timeout court)
+            let emails = [];
+            if (details.website) {
+              try {
+                emails = await scrapeEmailsFromWebsite(details.website);
+              } catch {
+                // Ignorer les erreurs de scraping
+              }
+            }
+
+            const lead = {
+              company_name: details.name,
+              phone: details.formatted_phone_number || null,
+              website: details.website || null,
+              email: emails[0] || null,
+              all_emails: emails.join(', ') || null,
+              address: details.formatted_address || null,
+              city: city,
+              latitude: details.geometry?.location?.lat || null,
+              longitude: details.geometry?.location?.lng || null,
+              industry: sector,
+              google_place_id: place.place_id,
+              google_types: JSON.stringify(details.types || []),
+              rating: details.rating || null,
+              review_count: details.user_ratings_total || null,
+              data_source: 'google_maps'
+            };
+
+            // Sauvegarder dans le cache global (non bloquant)
+            saveToGlobalCache(lead, tenant_id).catch(() => {});
+
+            leads.push(lead);
+            excludeNames.add(lead.company_name?.toLowerCase());
+
+            sendProgress({
+              type: 'new_lead',
+              percent: 55 + Math.floor((leads.length / limit) * 35),
+              generated: leads.length,
+              lead: lead
+            });
+
+          } catch (detailErr) {
+            // Continuer avec le prochain lieu
+            warn(`Google Maps detail error: ${detailErr.message}`);
+          }
         }
 
-        const lead = {
-          company_name: details.name,
-          phone: details.formatted_phone_number || null,
-          website: details.website || null,
-          email: emails[0] || null,
-          all_emails: emails.join(', ') || null,
-          address: details.formatted_address || null,
-          city: city,
-          latitude: details.geometry?.location?.lat || null,
-          longitude: details.geometry?.location?.lng || null,
-          industry: sector,
-          google_place_id: place.place_id,
-          google_types: JSON.stringify(details.types || []),
-          rating: details.rating || null,
-          review_count: details.user_ratings_total || null,
-          data_source: 'google_maps'
-        };
-
-        // Sauvegarder dans le cache global
-        await saveToGlobalCache(lead, tenant_id);
-
-        leads.push(lead);
-        excludeNames.push(lead.company_name?.toLowerCase());
-
-        sendProgress({
-          type: 'new_lead',
-          percent: 55 + Math.floor((leads.length / limit) * 35),
-          generated: leads.length,
-          lead: lead
-        });
-
+        // Petite pause entre les requêtes
+        await new Promise(r => setTimeout(r, 100));
       }
+
     } catch (err) {
       error(`Erreur Google Maps (${type}):`, err.message);
     }
