@@ -55,6 +55,72 @@ const SECTOR_TO_GOOGLE_TYPES = {
 // Gestion des recherches actives
 const activeSearches = new Map();
 
+// Fallback - Grandes villes par région (en cas d'échec API geo.gouv.fr)
+const FALLBACK_CITIES_BY_REGION = {
+  '11': ['Paris', 'Boulogne-Billancourt', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Nanterre', 'Créteil', 'Versailles', 'Vitry-sur-Seine', 'Colombes'], // Île-de-France
+  '84': ['Lyon', 'Saint-Étienne', 'Grenoble', 'Villeurbanne', 'Clermont-Ferrand', 'Annecy', 'Chambéry', 'Valence', 'Vénissieux', 'Caluire-et-Cuire'], // Auvergne-Rhône-Alpes
+  '93': ['Marseille', 'Nice', 'Toulon', 'Aix-en-Provence', 'Avignon', 'Cannes', 'Antibes', 'La Seyne-sur-Mer', 'Hyères', 'Fréjus'], // PACA
+  '75': ['Bordeaux', 'Limoges', 'Poitiers', 'La Rochelle', 'Pau', 'Mérignac', 'Pessac', 'Angoulême', 'Niort', 'Biarritz'], // Nouvelle-Aquitaine
+  '76': ['Toulouse', 'Montpellier', 'Nîmes', 'Perpignan', 'Béziers', 'Colomiers', 'Narbonne', 'Albi', 'Tarbes', 'Castres'], // Occitanie
+  '32': ['Lille', 'Roubaix', 'Tourcoing', 'Dunkerque', 'Calais', 'Villeneuve-d\'Ascq', 'Valenciennes', 'Arras', 'Lens', 'Cambrai'], // Hauts-de-France
+  '44': ['Strasbourg', 'Reims', 'Metz', 'Mulhouse', 'Nancy', 'Colmar', 'Troyes', 'Charleville-Mézières', 'Châlons-en-Champagne', 'Épinal'], // Grand Est
+  '52': ['Nantes', 'Angers', 'Le Mans', 'Saint-Nazaire', 'Cholet', 'La Roche-sur-Yon', 'Laval', 'Saumur', 'Saint-Herblain', 'Rezé'], // Pays de la Loire
+  '53': ['Rennes', 'Brest', 'Quimper', 'Lorient', 'Vannes', 'Saint-Brieuc', 'Saint-Malo', 'Lanester', 'Fougères', 'Concarneau'], // Bretagne
+  '28': ['Rouen', 'Le Havre', 'Caen', 'Cherbourg-en-Cotentin', 'Évreux', 'Dieppe', 'Saint-Lô', 'Alençon', 'Lisieux', 'Fécamp'], // Normandie
+  '27': ['Dijon', 'Besançon', 'Belfort', 'Chalon-sur-Saône', 'Auxerre', 'Nevers', 'Mâcon', 'Sens', 'Montbéliard', 'Le Creusot'], // Bourgogne-Franche-Comté
+  '24': ['Tours', 'Orléans', 'Bourges', 'Blois', 'Chartres', 'Châteauroux', 'Joué-lès-Tours', 'Dreux', 'Vierzon', 'Montargis'], // Centre-Val de Loire
+  '94': ['Ajaccio', 'Bastia', 'Porto-Vecchio', 'Corte', 'Calvi', 'Bonifacio', 'Propriano', 'Sartène', 'Ghisonaccia', 'Île-Rousse'] // Corse
+};
+
+// Fallback - Grandes villes par département
+const FALLBACK_CITIES_BY_DEPARTMENT = {
+  '75': ['Paris'],
+  '13': ['Marseille', 'Aix-en-Provence', 'Arles', 'Martigues', 'Aubagne', 'Istres', 'Salon-de-Provence'],
+  '69': ['Lyon', 'Villeurbanne', 'Vénissieux', 'Caluire-et-Cuire', 'Saint-Priest', 'Vaulx-en-Velin', 'Bron'],
+  '31': ['Toulouse', 'Colomiers', 'Tournefeuille', 'Blagnac', 'Muret', 'Cugnaux', 'Balma'],
+  '06': ['Nice', 'Cannes', 'Antibes', 'Grasse', 'Cagnes-sur-Mer', 'Le Cannet', 'Menton'],
+  '33': ['Bordeaux', 'Mérignac', 'Pessac', 'Talence', 'Villenave-d\'Ornon', 'Bègles', 'Gradignan'],
+  '59': ['Lille', 'Roubaix', 'Tourcoing', 'Dunkerque', 'Villeneuve-d\'Ascq', 'Valenciennes', 'Wattrelos'],
+  '44': ['Nantes', 'Saint-Nazaire', 'Saint-Herblain', 'Rezé', 'Orvault', 'Vertou', 'Couëron'],
+  '34': ['Montpellier', 'Béziers', 'Sète', 'Agde', 'Lunel', 'Mauguio', 'Frontignan'],
+  '67': ['Strasbourg', 'Haguenau', 'Schiltigheim', 'Illkirch-Graffenstaden', 'Lingolsheim', 'Sélestat', 'Bischwiller'],
+  '92': ['Boulogne-Billancourt', 'Nanterre', 'Colombes', 'Courbevoie', 'Asnières-sur-Seine', 'Rueil-Malmaison', 'Levallois-Perret'],
+  '93': ['Saint-Denis', 'Montreuil', 'Aubervilliers', 'Aulnay-sous-Bois', 'Drancy', 'Noisy-le-Grand', 'Pantin'],
+  '94': ['Créteil', 'Vitry-sur-Seine', 'Champigny-sur-Marne', 'Ivry-sur-Seine', 'Saint-Maur-des-Fossés', 'Maisons-Alfort', 'Fontenay-sous-Bois'],
+  '78': ['Versailles', 'Sartrouville', 'Mantes-la-Jolie', 'Saint-Germain-en-Laye', 'Poissy', 'Conflans-Sainte-Honorine', 'Montigny-le-Bretonneux'],
+  '91': ['Évry-Courcouronnes', 'Corbeil-Essonnes', 'Massy', 'Savigny-sur-Orge', 'Sainte-Geneviève-des-Bois', 'Viry-Châtillon', 'Athis-Mons'],
+  '95': ['Argenteuil', 'Cergy', 'Sarcelles', 'Garges-lès-Gonesse', 'Franconville', 'Goussainville', 'Bezons'],
+  '77': ['Meaux', 'Chelles', 'Melun', 'Pontault-Combault', 'Savigny-le-Temple', 'Villeparisis', 'Torcy'],
+  '38': ['Grenoble', 'Saint-Martin-d\'Hères', 'Échirolles', 'Vienne', 'Voiron', 'Fontaine', 'Bourgoin-Jallieu'],
+  '83': ['Toulon', 'La Seyne-sur-Mer', 'Hyères', 'Fréjus', 'Draguignan', 'Saint-Raphaël', 'Six-Fours-les-Plages'],
+  '35': ['Rennes', 'Saint-Malo', 'Fougères', 'Bruz', 'Cesson-Sévigné', 'Vitré', 'Betton'],
+  '29': ['Brest', 'Quimper', 'Concarneau', 'Morlaix', 'Landerneau', 'Douarnenez', 'Guipavas']
+};
+
+/**
+ * Obtenir les villes de fallback pour une région
+ */
+function getFallbackCitiesForRegion(regionCode) {
+  const cities = FALLBACK_CITIES_BY_REGION[regionCode];
+  if (cities && cities.length > 0) {
+    return cities;
+  }
+  // Fallback générique - grandes villes de France
+  return ['Paris', 'Lyon', 'Marseille', 'Toulouse', 'Bordeaux', 'Lille', 'Nantes', 'Strasbourg', 'Nice', 'Rennes'];
+}
+
+/**
+ * Obtenir les villes de fallback pour un département
+ */
+function getFallbackCitiesForDepartment(deptCode) {
+  const cities = FALLBACK_CITIES_BY_DEPARTMENT[deptCode];
+  if (cities && cities.length > 0) {
+    return cities;
+  }
+  // Fallback générique - utiliser le nom de département comme recherche
+  return [`Département ${deptCode}`];
+}
+
 /**
  * Handler principal
  */
@@ -173,6 +239,8 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   // Déterminer les villes à rechercher
   let citiesToSearch = [];
 
+  log(`🔍 [GENERATE] Params reçus: sector=${sector}, geoType=${geoType}, geoCode=${geoCode}, city=${city}, cities=${cities?.length || 0}`);
+
   if (cities && Array.isArray(cities) && cities.length > 0) {
     // Liste de villes fournie directement
     citiesToSearch = cities;
@@ -181,20 +249,51 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     // Récupérer les villes selon le type géographique
     log(`🗺️ [GENERATE] Récupération villes pour ${geoType}: ${geoCode}`);
 
-    const geoService = (await import('../lib/geoService.js')).default;
+    try {
+      const geoService = (await import('../lib/geoService.js')).default;
 
-    if (geoType === 'region') {
-      const regionCities = await geoService.getTopCitiesByRegion(geoCode, 100);
-      citiesToSearch = regionCities.map(c => c.nom);
-    } else if (geoType === 'department') {
-      // geoCode peut contenir plusieurs départements séparés par virgule
-      const deptCodes = geoCode.split(',');
-      for (const deptCode of deptCodes) {
-        const deptCities = await geoService.getCitiesByDepartment(deptCode.trim());
-        citiesToSearch.push(...deptCities.slice(0, 50).map(c => c.nom)); // Top 50 par département
+      if (geoType === 'region') {
+        const regionCities = await geoService.getTopCitiesByRegion(geoCode, 100);
+        log(`🗺️ [GENERATE] getTopCitiesByRegion retourné: ${regionCities?.length || 0} villes`);
+        citiesToSearch = regionCities.map(c => c.nom);
+
+        // Fallback si l'API échoue - utiliser les grandes villes par région
+        if (citiesToSearch.length === 0) {
+          log(`⚠️ [GENERATE] API geo échouée, utilisation fallback pour région ${geoCode}`);
+          citiesToSearch = getFallbackCitiesForRegion(geoCode);
+        }
+      } else if (geoType === 'department') {
+        // geoCode peut contenir plusieurs départements séparés par virgule
+        const deptCodes = geoCode.split(',');
+        for (const deptCode of deptCodes) {
+          const deptCities = await geoService.getCitiesByDepartment(deptCode.trim());
+          log(`🗺️ [GENERATE] getCitiesByDepartment(${deptCode}) retourné: ${deptCities?.length || 0} villes`);
+          citiesToSearch.push(...deptCities.slice(0, 50).map(c => c.nom)); // Top 50 par département
+        }
+
+        // Fallback si l'API échoue
+        if (citiesToSearch.length === 0) {
+          log(`⚠️ [GENERATE] API geo échouée, utilisation fallback pour départements ${geoCode}`);
+          for (const deptCode of deptCodes) {
+            citiesToSearch.push(...getFallbackCitiesForDepartment(deptCode.trim()));
+          }
+        }
+      } else if (geoType === 'city') {
+        citiesToSearch = [geoCode];
       }
-    } else if (geoType === 'city') {
-      citiesToSearch = [geoCode];
+    } catch (geoError) {
+      error(`❌ [GENERATE] Erreur geoService: ${geoError.message}`);
+      // Utiliser le fallback en cas d'erreur
+      if (geoType === 'region') {
+        citiesToSearch = getFallbackCitiesForRegion(geoCode);
+      } else if (geoType === 'department') {
+        const deptCodes = geoCode.split(',');
+        for (const deptCode of deptCodes) {
+          citiesToSearch.push(...getFallbackCitiesForDepartment(deptCode.trim()));
+        }
+      } else if (geoType === 'city') {
+        citiesToSearch = [geoCode];
+      }
     }
 
     log(`🏙️ [GENERATE] ${citiesToSearch.length} villes trouvées`);
@@ -204,7 +303,12 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   }
 
   if (citiesToSearch.length === 0) {
-    return res.status(400).json({ error: 'Aucune ville à rechercher. Fournir city, cities[], ou geoType+geoCode' });
+    error(`❌ [GENERATE] Aucune ville trouvée! geoType=${geoType}, geoCode=${geoCode}, city=${city}`);
+    return res.status(400).json({
+      error: 'Aucune ville à rechercher',
+      details: `geoType=${geoType}, geoCode=${geoCode}, city=${city}`,
+      suggestion: 'Vérifiez que vous avez sélectionné une zone géographique valide'
+    });
   }
 
   if (quantity > CONFIG.MAX_QUANTITY) {
