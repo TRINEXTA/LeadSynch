@@ -4,6 +4,7 @@ import { FileText, Download, Mail, Eye, Trash2, Filter, Search, Plus, CheckCircl
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import { confirmDelete } from '../lib/confirmDialog';
 
 const STATUS_CONFIG = {
   draft: { label: 'Brouillon', color: 'gray', icon: Clock },
@@ -159,7 +160,7 @@ L'équipe Trinexta`;
   };
 
   const handleDelete = async (proposalId) => {
-    if (!confirm('Supprimer cette proposition ?')) return;
+    if (!await confirmDelete('cette proposition')) return;
 
     try {
       await api.delete(`/proposals/${proposalId}`);

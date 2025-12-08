@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Package, FileText, CreditCard, Plus, Edit, Trash2, Eye, EyeOff, Save, X } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmDelete } from '../lib/confirmDialog';
 
 export default function BusinessSettings() {
   // États accordéons
@@ -53,7 +54,7 @@ export default function BusinessSettings() {
 
   // ========== PRODUITS ==========
   const deleteProduct = async (id) => {
-    if (!confirm('Supprimer ce produit ?')) return;
+    if (!await confirmDelete('ce produit')) return;
     try {
       await api.delete(`/business-config/products/${id}`);
       toast.success('Produit supprimé');
@@ -65,7 +66,7 @@ export default function BusinessSettings() {
 
   // ========== DOCUMENTS LÉGAUX ==========
   const deleteLegalDoc = async (id) => {
-    if (!confirm('Supprimer ce document ?')) return;
+    if (!await confirmDelete('ce document')) return;
     try {
       await api.delete(`/business-config/legal-documents/${id}`);
       toast.success('Document supprimé');
@@ -77,7 +78,7 @@ export default function BusinessSettings() {
 
   // ========== LIENS PAIEMENT ==========
   const deletePaymentLink = async (id) => {
-    if (!confirm('Supprimer ce lien ?')) return;
+    if (!await confirmDelete('ce lien')) return;
     try {
       await api.delete(`/business-config/payment-links/${id}`);
       toast.success('Lien supprimé');

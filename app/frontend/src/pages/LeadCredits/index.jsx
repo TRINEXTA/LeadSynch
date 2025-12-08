@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction } from '../../lib/confirmDialog';
 
 const PRICE_PER_PROSPECT = 0.10; // Prix fixe par prospect
 
@@ -53,7 +54,7 @@ export default function LeadCredits() {
 
     const price = count * PRICE_PER_PROSPECT;
 
-    if (!confirm(`Acheter ${count} prospects pour ${price.toFixed(2)}€ ?`)) {
+    if (!await confirmAction(`Acheter ${count} prospects pour ${price.toFixed(2)}€ ?`)) {
       return;
     }
 

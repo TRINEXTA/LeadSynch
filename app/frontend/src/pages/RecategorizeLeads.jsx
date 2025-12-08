@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sparkles, Database, TrendingUp, CheckCircle, Loader2, AlertCircle, Zap } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction } from '../lib/confirmDialog';
 
 export default function RecategorizeLeads() {
   const [leads, setLeads] = useState([]);
@@ -69,7 +70,7 @@ export default function RecategorizeLeads() {
       return;
     }
 
-    if (!confirm(`Recatégoriser ${selectedLeads.length} leads avec l'IA ASEFI ?`)) {
+    if (!await confirmAction(`Recatégoriser ${selectedLeads.length} leads avec l'IA ASEFI ?`)) {
       return;
     }
 

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction, confirmDelete } from '../lib/confirmDialog';
 
 export default function SuperAdminTenantDetails() {
   const { id } = useParams();
@@ -90,7 +91,7 @@ export default function SuperAdminTenantDetails() {
   };
 
   const handleSuspend = async () => {
-    if (!window.confirm('Suspendre ce client ? Tous ses utilisateurs seront bloqués.')) return;
+    if (!await confirmAction('Suspendre ce client ? Tous ses utilisateurs seront bloqués.')) return;
 
     try {
       await api.post(`/super-admin/tenants/${id}/suspend`);
@@ -103,7 +104,7 @@ export default function SuperAdminTenantDetails() {
   };
 
   const handleActivate = async () => {
-    if (!window.confirm('Réactiver ce client ?')) return;
+    if (!await confirmAction('Réactiver ce client ?')) return;
 
     try {
       await api.post(`/super-admin/tenants/${id}/activate`);
@@ -116,8 +117,8 @@ export default function SuperAdminTenantDetails() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('⚠️ ATTENTION ! Supprimer définitivement ce client et TOUTES ses données ? Cette action est IRRÉVERSIBLE !')) return;
-    if (!window.confirm('Êtes-vous VRAIMENT sûr ? Toutes les données seront perdues.')) return;
+    if (!await confirmDelete('ce client et TOUTES ses données')) return;
+    if (!await confirmAction('⚠️ DERNIÈRE CONFIRMATION : Êtes-vous VRAIMENT sûr ? Cette action est IRRÉVERSIBLE.')) return;
 
     try {
       await api.delete(`/super-admin/tenants/${id}`);
@@ -170,7 +171,7 @@ export default function SuperAdminTenantDetails() {
       toast.error('Aucun abonnement actif à renouveler');
       return;
     }
-    if (!window.confirm('Renouveler l\'abonnement de ce client ?')) return;
+    if (!await confirmAction('Renouveler l\'abonnement de ce client ?')) return;
 
     try {
       await api.post(`/super-admin/subscriptions/${subscriptionId}/renew`);

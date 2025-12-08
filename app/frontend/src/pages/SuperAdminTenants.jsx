@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction } from '../lib/confirmDialog';
 
 const STATUS_COLORS = {
   trial: 'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -142,7 +143,7 @@ export default function SuperAdminTenants() {
   };
 
   const handleSuspend = async (tenantId) => {
-    if (!window.confirm('Suspendre ce client ? Il n\'aura plus accès à LeadSynch.')) return;
+    if (!await confirmAction('Suspendre ce client ? Il n\'aura plus accès à LeadSynch.')) return;
 
     const reason = window.prompt('Raison de la suspension:');
     if (!reason) return;
@@ -158,7 +159,7 @@ export default function SuperAdminTenants() {
   };
 
   const handleActivate = async (tenantId) => {
-    if (!window.confirm('Réactiver ce client ?')) return;
+    if (!await confirmAction('Réactiver ce client ?')) return;
 
     try {
       await api.post(`/super-admin/tenants/${tenantId}/activate`);

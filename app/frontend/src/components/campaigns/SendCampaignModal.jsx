@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Send, AlertTriangle, CheckCircle, Loader2, Mail, Database, Tag, Users } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { confirmAction } from '../../lib/confirmDialog';
 
 export default function SendCampaignModal({ campaign, onClose, onSent }) {
   const [templates, setTemplates] = useState([]);
@@ -132,7 +133,7 @@ export default function SendCampaignModal({ campaign, onClose, onSent }) {
       ? `?? Envoyer un TEST � ${leadsToSend} leads ?\n\nBase: ${databases.find(d => d.id == selectedDatabase)?.name}\n${selectedSector ? `Secteur: ${selectedSector}\n` : ''}Template: ${templates.find(t => t.id == selectedTemplate)?.name}`
       : `?? ENVOYER LA CAMPAGNE � ${leadsCount} leads ?\n\nBase: ${databases.find(d => d.id == selectedDatabase)?.name}\n${selectedSector ? `Secteur: ${selectedSector}\n` : ''}Template: ${templates.find(t => t.id == selectedTemplate)?.name}\n\nQuota restant: ${quotaInfo.remaining === -1 ? '8' : quotaInfo.remaining} emails`;
 
-    if (!confirm(confirmMessage)) return;
+    if (!await confirmAction(confirmMessage)) return;
 
     setSending(true);
     setProgress(10);

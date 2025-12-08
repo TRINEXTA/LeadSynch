@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, Building, User, Mail, Phone, MapPin, Globe, DollarSign, Tag } from 'lucide-react';
 import LeadHistoryPanel from "./LeadHistoryPanel";
 import toast from 'react-hot-toast';
+import { confirmDelete } from '../lib/confirmDialog';
 
 export default function LeadModal({ lead, stage, onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -90,7 +91,7 @@ export default function LeadModal({ lead, stage, onClose, onSave }) {
   const handleDelete = async () => {
     if (!lead) return;
 
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer le lead "${lead.company_name}" ?`)) {
+    if (!await confirmDelete(`le lead "${lead.company_name}"`)) {
       return;
     }
 
