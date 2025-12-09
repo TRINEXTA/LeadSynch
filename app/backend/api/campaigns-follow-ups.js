@@ -10,6 +10,7 @@ import { Router } from 'express';
 import { log, error, warn } from '../lib/logger.js';
 import db from '../config/db.js';
 import { z } from 'zod';
+import { authenticateToken } from '../middleware/auth.js';
 import {
   generateFollowUpTemplates,
   regenerateFollowUpTemplate,
@@ -51,7 +52,7 @@ const updateFollowUpSchema = z.object({
  * GET /api/campaigns/:campaignId/follow-ups
  * Récupère les relances configurées pour une campagne
  */
-router.get('/:campaignId/follow-ups', async (req, res) => {
+router.get('/:campaignId/follow-ups', authenticateToken, async (req, res) => {
   try {
     const { campaignId } = req.params;
     const tenantId = req.user.tenant_id;
@@ -127,7 +128,7 @@ router.get('/:campaignId/follow-ups', async (req, res) => {
  * POST /api/campaigns/:campaignId/follow-ups/enable
  * Active les relances pour une campagne
  */
-router.post('/:campaignId/follow-ups/enable', async (req, res) => {
+router.post('/:campaignId/follow-ups/enable', authenticateToken, async (req, res) => {
   try {
     const { campaignId } = req.params;
     const tenantId = req.user.tenant_id;
@@ -185,12 +186,86 @@ router.post('/:campaignId/follow-ups/enable', async (req, res) => {
 /**
  * POST /api/campaigns/:campaignId/follow-ups/generate-templates
  * Génère les templates de relance avec Asefi
+ *
+ * Pour nouvelles campagnes (campaignId=0), utilise les données du body:
+ * - template_id: ID du template principal
+ * - follow_up_count: Nombre de relances (1 ou 2)
+ * - campaign_name, campaign_objective, goal_description
  */
-router.post('/:campaignId/follow-ups/generate-templates', async (req, res) => {
+router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, async (req, res) => {
   try {
     const { campaignId } = req.params;
-    const tenantId = req.user.tenant_id;
+    const tenantId = req.user?.tenant_id;
 
+    if (!tenantId) {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+
+    // CAS 1: Nouvelle campagne (campaignId = 0 ou "0")
+    if (campaignId === '0' || campaignId === 0) {
+      const { template_id, follow_up_count = 1, campaign_name, campaign_objective, goal_description } = req.body;
+
+      if (!template_id) {
+        return res.status(400).json({ error: 'template_id requis pour générer les templates' });
+      }
+
+      // Récupérer le template
+      const template = await queryOne(`
+        SELECT et.*, t.name as company_name
+        FROM email_templates et
+        LEFT JOIN tenants t ON et.tenant_id = t.id
+        WHERE et.id = $1 AND et.tenant_id = $2
+      `, [template_id, tenantId]);
+
+      if (!template) {
+        return res.status(404).json({ error: 'Template non trouvé' });
+      }
+
+      log(`🤖 [API] Génération templates relance pour nouvelle campagne...`);
+
+      // Générer avec Asefi
+      const result = await generateFollowUpTemplates({
+        originalSubject: template.subject,
+        originalHtml: template.html_body,
+        campaignObjective: campaign_objective || goal_description || 'Prospection commerciale',
+        companyName: template.company_name || 'Notre entreprise',
+        followUpCount: follow_up_count,
+        delayDays: 3
+      });
+
+      // Retourner les templates générés (sans les sauvegarder en DB car pas encore de campagne)
+      const templates = [];
+
+      if (result.templates.opened_not_clicked) {
+        templates.push({
+          follow_up_number: 1,
+          target_audience: 'opened_not_clicked',
+          subject: result.templates.opened_not_clicked.subject,
+          html_content: result.templates.opened_not_clicked.html,
+          delay_days: 3
+        });
+      }
+
+      if (follow_up_count === 2 && result.templates.not_opened) {
+        templates.push({
+          follow_up_number: 2,
+          target_audience: 'not_opened',
+          subject: result.templates.not_opened.subject,
+          html_content: result.templates.not_opened.html,
+          delay_days: 6
+        });
+      }
+
+      log(`✅ [API] ${templates.length} template(s) générés pour nouvelle campagne`);
+
+      return res.json({
+        success: true,
+        templates,
+        message: `${templates.length} template(s) de relance générés`
+      });
+    }
+
+    // CAS 2: Campagne existante
     // Récupérer la campagne et son template
     const campaign = await queryOne(`
       SELECT c.*, et.html_body, et.subject as template_subject, t.name as company_name
@@ -291,7 +366,7 @@ router.post('/:campaignId/follow-ups/generate-templates', async (req, res) => {
  * PUT /api/campaigns/:campaignId/follow-ups/:followUpId
  * Modifier une relance (subject, content, delay, status)
  */
-router.put('/:campaignId/follow-ups/:followUpId', async (req, res) => {
+router.put('/:campaignId/follow-ups/:followUpId', authenticateToken, async (req, res) => {
   try {
     const { campaignId, followUpId } = req.params;
     const tenantId = req.user.tenant_id;
@@ -368,7 +443,7 @@ router.put('/:campaignId/follow-ups/:followUpId', async (req, res) => {
  * POST /api/campaigns/:campaignId/follow-ups/:followUpId/regenerate
  * Régénère un template avec Asefi selon le feedback
  */
-router.post('/:campaignId/follow-ups/:followUpId/regenerate', async (req, res) => {
+router.post('/:campaignId/follow-ups/:followUpId/regenerate', authenticateToken, async (req, res) => {
   try {
     const { campaignId, followUpId } = req.params;
     const { feedback } = req.body;
@@ -428,7 +503,7 @@ router.post('/:campaignId/follow-ups/:followUpId/regenerate', async (req, res) =
  * DELETE /api/campaigns/:campaignId/follow-ups
  * Désactive les relances pour une campagne
  */
-router.delete('/:campaignId/follow-ups', async (req, res) => {
+router.delete('/:campaignId/follow-ups', authenticateToken, async (req, res) => {
   try {
     const { campaignId } = req.params;
     const tenantId = req.user.tenant_id;
@@ -475,7 +550,7 @@ router.delete('/:campaignId/follow-ups', async (req, res) => {
  * GET /api/campaigns/:campaignId/follow-ups/analyze
  * Analyse les problèmes de délivrabilité avec Asefi
  */
-router.get('/:campaignId/follow-ups/analyze', async (req, res) => {
+router.get('/:campaignId/follow-ups/analyze', authenticateToken, async (req, res) => {
   try {
     const { campaignId } = req.params;
     const tenantId = req.user.tenant_id;
@@ -545,7 +620,7 @@ router.get('/:campaignId/follow-ups/analyze', async (req, res) => {
  * GET /api/campaigns/:campaignId/follow-ups/:followUpId/stats
  * Stats détaillées d'une relance
  */
-router.get('/:campaignId/follow-ups/:followUpId/stats', async (req, res) => {
+router.get('/:campaignId/follow-ups/:followUpId/stats', authenticateToken, async (req, res) => {
   try {
     const { campaignId, followUpId } = req.params;
     const tenantId = req.user.tenant_id;
