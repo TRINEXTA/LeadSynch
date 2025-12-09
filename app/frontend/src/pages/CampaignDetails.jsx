@@ -524,6 +524,8 @@ export default function CampaignDetails() {
                           <div key={fu.id} className={`bg-white rounded-xl p-4 border-2 ${
                             fu.status === 'active' ? 'border-green-300' :
                             fu.status === 'completed' ? 'border-blue-300' :
+                            fu.status === 'validated' ? 'border-emerald-300' :
+                            fu.status === 'test_sent' ? 'border-amber-300' :
                             fu.status === 'paused' ? 'border-yellow-300' :
                             fu.status === 'cancelled' ? 'border-red-300' :
                             'border-gray-200'
@@ -567,6 +569,8 @@ export default function CampaignDetails() {
                                 <span className={`px-3 py-1 rounded-lg text-sm font-semibold ${
                                   fu.status === 'active' ? 'bg-green-100 text-green-700' :
                                   fu.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                  fu.status === 'validated' ? 'bg-emerald-100 text-emerald-700' :
+                                  fu.status === 'test_sent' ? 'bg-amber-100 text-amber-700' :
                                   fu.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
                                   fu.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                                   fu.status === 'scheduled' ? 'bg-purple-100 text-purple-700' :
@@ -574,14 +578,120 @@ export default function CampaignDetails() {
                                 }`}>
                                   {fu.status === 'active' ? '🟢 En cours' :
                                    fu.status === 'completed' ? '✅ Termine' :
+                                   fu.status === 'validated' ? '✅ Valide' :
+                                   fu.status === 'test_sent' ? '📧 Test envoye' :
                                    fu.status === 'paused' ? '⏸️ En pause' :
                                    fu.status === 'cancelled' ? '❌ Annule' :
                                    fu.status === 'scheduled' ? '📅 Planifie' :
                                    '⏳ En attente'}
                                 </span>
+                              </div>
+                            </div>
 
-                                {/* Actions */}
-                                {fu.status === 'active' && (
+                            {/* Actions selon statut */}
+                            <div className="mt-4 pt-4 border-t border-gray-100">
+                              {/* Statut pending : Envoyer test */}
+                              {fu.status === 'pending' && (
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const res = await api.post(`/campaigns/${campaignId}/follow-ups/send-test`, {
+                                          follow_up_id: fu.id
+                                        });
+                                        toast.success(res.data.message || 'Email test envoye !');
+                                        loadCampaignDetails();
+                                      } catch (err) {
+                                        toast.error(err.response?.data?.error || 'Erreur');
+                                      }
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center gap-2"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                    Envoyer email test
+                                  </button>
+                                  <span className="text-sm text-gray-500">
+                                    Recevez le test dans votre boite mail avant l'envoi reel
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Statut test_sent : Valider ou Modifier */}
+                              {fu.status === 'test_sent' && (
+                                <div className="space-y-3">
+                                  <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
+                                    📧 Email test envoye ! Verifiez votre boite mail et choisissez une action :
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          await api.post(`/campaigns/${campaignId}/follow-ups/${fu.id}/validate`);
+                                          toast.success('Relance validee !');
+                                          loadCampaignDetails();
+                                        } catch (err) {
+                                          toast.error('Erreur');
+                                        }
+                                      }}
+                                      className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 flex items-center gap-2"
+                                    >
+                                      ✅ Valider et preparer l'envoi
+                                    </button>
+                                    <button
+                                      onClick={() => setShowFollowUpSection(true)}
+                                      className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-semibold hover:bg-purple-200 flex items-center gap-2"
+                                    >
+                                      ✏️ Modifier moi-meme
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        const feedback = prompt('Decrivez ce que vous souhaitez modifier :');
+                                        if (feedback) {
+                                          try {
+                                            const res = await api.post(`/campaigns/${campaignId}/follow-ups/${fu.id}/request-modification`, { feedback });
+                                            toast.success(res.data.message || 'Template modifie !');
+                                            loadCampaignDetails();
+                                          } catch (err) {
+                                            toast.error('Erreur');
+                                          }
+                                        }
+                                      }}
+                                      className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 flex items-center gap-2"
+                                    >
+                                      <Sparkles className="w-4 h-4" />
+                                      Demander a Asefi
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          await api.post(`/campaigns/${campaignId}/follow-ups/send-test`, {
+                                            follow_up_id: fu.id
+                                          });
+                                          toast.success('Nouveau test envoye !');
+                                        } catch (err) {
+                                          toast.error('Erreur');
+                                        }
+                                      }}
+                                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
+                                    >
+                                      🔄 Renvoyer test
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Statut validated : Pret a demarrer */}
+                              {fu.status === 'validated' && (
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg">
+                                    ✅ Template valide et pret pour l'envoi
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Statut active : Pause/Cancel */}
+                              {fu.status === 'active' && (
+                                <div className="flex items-center gap-2">
                                   <button
                                     onClick={async () => {
                                       try {
@@ -592,13 +702,32 @@ export default function CampaignDetails() {
                                         toast.error('Erreur');
                                       }
                                     }}
-                                    className="p-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200"
-                                    title="Mettre en pause"
+                                    className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 flex items-center gap-1"
                                   >
-                                    <Pause className="w-4 h-4" />
+                                    <Pause className="w-4 h-4" /> Pause
                                   </button>
-                                )}
-                                {fu.status === 'paused' && (
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm('Annuler cette relance ?')) {
+                                        try {
+                                          await api.post(`/campaigns/${campaignId}/follow-ups/${fu.id}/cancel`);
+                                          toast.success('Relance annulee');
+                                          loadCampaignDetails();
+                                        } catch (err) {
+                                          toast.error('Erreur');
+                                        }
+                                      }
+                                    }}
+                                    className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
+                                  >
+                                    <StopCircle className="w-4 h-4" /> Annuler
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Statut paused : Resume/Cancel */}
+                              {fu.status === 'paused' && (
+                                <div className="flex items-center gap-2">
                                   <button
                                     onClick={async () => {
                                       try {
@@ -609,13 +738,10 @@ export default function CampaignDetails() {
                                         toast.error('Erreur');
                                       }
                                     }}
-                                    className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
-                                    title="Reprendre"
+                                    className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1"
                                   >
-                                    <Play className="w-4 h-4" />
+                                    <Play className="w-4 h-4" /> Reprendre
                                   </button>
-                                )}
-                                {(fu.status === 'pending' || fu.status === 'active' || fu.status === 'paused') && (
                                   <button
                                     onClick={async () => {
                                       if (confirm('Annuler cette relance ?')) {
