@@ -484,9 +484,25 @@ const sendFollowUpEmails = async (campaign, followUp, emailsToSend) => {
       .replace(/  +/g, ' ')
       .replace(/\s+\./g, '.');
 
-    // Ajouter le pixel de tracking pour cette relance
+    // Ajouter tracking si activé
     if (campaign.track_clicks) {
-      result += `<img src="${process.env.APP_URL || 'https://leadsynch.com'}/api/track/open?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}" width="1" height="1" style="display:none;" />`;
+      const appUrl = process.env.APP_URL || 'https://leadsynch.com';
+
+      // 1. Wrapper tous les liens pour le click tracking
+      result = result.replace(
+        /href=["']([^"']+)["']/gi,
+        (match, url) => {
+          // Ne pas tracker les liens de désinscription ou mailto
+          if (url.includes('unsubscribe') || url.startsWith('mailto:') || url.startsWith('#')) {
+            return match;
+          }
+          const trackedUrl = `${appUrl}/api/track/click?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}&url=${encodeURIComponent(url)}`;
+          return `href="${trackedUrl}"`;
+        }
+      );
+
+      // 2. Ajouter le pixel de tracking pour les ouvertures
+      result += `<img src="${appUrl}/api/track/open?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}" width="1" height="1" style="display:none;" />`;
     }
 
     return result;

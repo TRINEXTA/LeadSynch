@@ -11,44 +11,63 @@ const isValidUUID = (str) => {
 
 export const trackOpen = async (req, res) => {
   try {
-    const { lead_id, campaign_id } = req.query;
+    const { lead_id, campaign_id, follow_up_id } = req.query;
 
     // Validation UUID pour éviter les injections
     if (lead_id && campaign_id && isValidUUID(lead_id) && isValidUUID(campaign_id)) {
       const lead = await queryOne('SELECT tenant_id FROM leads WHERE id = $1::uuid', [lead_id]);
       if (lead) {
-        await query(
-          `INSERT INTO email_tracking (tenant_id, lead_id, campaign_id, event_type, created_at)
-           VALUES ($1, $2::uuid, $3::uuid, 'open', NOW())
-           ON CONFLICT DO NOTHING`,
-          [lead.tenant_id, lead_id, campaign_id]
-        );
+        // Inclure follow_up_id si présent
+        if (follow_up_id && isValidUUID(follow_up_id)) {
+          await query(
+            `INSERT INTO email_tracking (tenant_id, lead_id, campaign_id, follow_up_id, event_type, created_at)
+             VALUES ($1, $2::uuid, $3::uuid, $4::uuid, 'open', NOW())
+             ON CONFLICT DO NOTHING`,
+            [lead.tenant_id, lead_id, campaign_id, follow_up_id]
+          );
+        } else {
+          await query(
+            `INSERT INTO email_tracking (tenant_id, lead_id, campaign_id, event_type, created_at)
+             VALUES ($1, $2::uuid, $3::uuid, 'open', NOW())
+             ON CONFLICT DO NOTHING`,
+            [lead.tenant_id, lead_id, campaign_id]
+          );
+        }
       }
     }
     res.set('Content-Type', 'image/gif');
     res.send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
-  } catch (error) {
-    error('Erreur track open:', error);
+  } catch (err) {
+    error('Erreur track open:', err);
     res.status(200).send();
   }
 };
 
 export const trackClick = async (req, res) => {
   try {
-    const { lead_id, campaign_id, url } = req.query;
+    const { lead_id, campaign_id, follow_up_id, url } = req.query;
 
     // Validation UUID pour éviter les injections
     if (lead_id && campaign_id && isValidUUID(lead_id) && isValidUUID(campaign_id)) {
       const lead = await queryOne('SELECT tenant_id FROM leads WHERE id = $1::uuid', [lead_id]);
 
       if (lead) {
-        // 1) log email_tracking
-        await query(
-          `INSERT INTO email_tracking (tenant_id, lead_id, campaign_id, event_type, created_at)
-           VALUES ($1, $2::uuid, $3::uuid, 'click', NOW())
-           ON CONFLICT DO NOTHING`,
-          [lead.tenant_id, lead_id, campaign_id]
-        );
+        // 1) log email_tracking avec follow_up_id si présent
+        if (follow_up_id && isValidUUID(follow_up_id)) {
+          await query(
+            `INSERT INTO email_tracking (tenant_id, lead_id, campaign_id, follow_up_id, event_type, created_at)
+             VALUES ($1, $2::uuid, $3::uuid, $4::uuid, 'click', NOW())
+             ON CONFLICT DO NOTHING`,
+            [lead.tenant_id, lead_id, campaign_id, follow_up_id]
+          );
+        } else {
+          await query(
+            `INSERT INTO email_tracking (tenant_id, lead_id, campaign_id, event_type, created_at)
+             VALUES ($1, $2::uuid, $3::uuid, 'click', NOW())
+             ON CONFLICT DO NOTHING`,
+            [lead.tenant_id, lead_id, campaign_id]
+          );
+        }
 
         // 2) lead → contacted
         await query(
@@ -70,8 +89,8 @@ export const trackClick = async (req, res) => {
     }
 
     res.redirect(url || 'https://trinexta.fr');
-  } catch (error) {
-    error('Erreur track click:', error);
+  } catch (err) {
+    error('Erreur track click:', err);
     res.redirect('https://trinexta.fr');
   }
 };
