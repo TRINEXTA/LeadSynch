@@ -510,6 +510,216 @@ router.post('/:campaignId/follow-ups/:followUpId/regenerate', authenticateToken,
   }
 });
 
+// ==================== SEND TEST EMAIL ====================
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/send-test
+ * Envoie un email test au client avant l'envoi réel
+ */
+router.post('/:campaignId/follow-ups/send-test', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const tenantId = req.user.tenant_id;
+    const userId = req.user.id;
+    const { follow_up_id, test_email } = req.body;
+
+    // Récupérer l'email de l'utilisateur si pas fourni
+    const user = await queryOne(`
+      SELECT email, first_name, last_name FROM users WHERE id = $1
+    `, [userId]);
+
+    const recipientEmail = test_email || user?.email;
+    if (!recipientEmail) {
+      return res.status(400).json({ error: 'Adresse email de test requise' });
+    }
+
+    // Récupérer la campagne
+    const campaign = await queryOne(`
+      SELECT c.*, t.name as company_name
+      FROM campaigns c
+      LEFT JOIN tenants t ON c.tenant_id = t.id
+      WHERE c.id = $1 AND c.tenant_id = $2
+    `, [campaignId, tenantId]);
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    // Récupérer le template de relance
+    const followUp = await queryOne(`
+      SELECT * FROM campaign_follow_ups
+      WHERE id = $1 AND campaign_id = $2
+    `, [follow_up_id, campaignId]);
+
+    if (!followUp) {
+      return res.status(404).json({ error: 'Relance non trouvée' });
+    }
+
+    // Personnaliser avec des données de test
+    let htmlContent = followUp.html_content;
+    const testData = {
+      contact_name: user?.first_name || 'Jean',
+      company: 'Entreprise Test',
+      email: recipientEmail
+    };
+
+    // Remplacer les variables
+    htmlContent = htmlContent
+      .replace(/\{\{(contact_name|prenom|firstname|name)\}\}/gi, testData.contact_name)
+      .replace(/\{\{(company|entreprise|company_name)\}\}/gi, testData.company)
+      .replace(/\{\{(email|mail)\}\}/gi, testData.email);
+
+    // Ajouter bannière TEST
+    const testBanner = `
+      <div style="background: #FEF3C7; border: 2px solid #F59E0B; padding: 15px; margin-bottom: 20px; text-align: center; border-radius: 8px;">
+        <strong style="color: #92400E;">⚠️ CECI EST UN EMAIL TEST</strong><br>
+        <span style="color: #92400E; font-size: 14px;">Relance #${followUp.follow_up_number} - ${followUp.target_audience === 'opened_not_clicked' ? 'Ont ouvert sans cliquer' : 'N\'ont pas ouvert'}</span>
+      </div>
+    `;
+    htmlContent = testBanner + htmlContent;
+
+    // Importer le service d'envoi
+    const { sendEmail } = await import('../services/elasticEmail.js');
+
+    // Envoyer l'email test
+    await sendEmail({
+      to: recipientEmail,
+      subject: `[TEST] ${followUp.subject}`,
+      htmlBody: htmlContent,
+      fromName: campaign.company_name || 'LeadSync'
+    });
+
+    // Marquer la relance comme "test envoyé"
+    await execute(`
+      UPDATE campaign_follow_ups
+      SET status = 'test_sent', updated_at = NOW()
+      WHERE id = $1
+    `, [follow_up_id]);
+
+    log(`📧 [API] Email test envoyé à ${recipientEmail} pour relance #${followUp.follow_up_number}`);
+
+    res.json({
+      success: true,
+      message: `Email test envoyé à ${recipientEmail}`,
+      recipient: recipientEmail,
+      follow_up_number: followUp.follow_up_number
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur send-test:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== VALIDATE TEST (APPROVE FOR SENDING) ====================
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/:followUpId/validate
+ * Valide le test et approuve l'envoi réel
+ */
+router.post('/:campaignId/follow-ups/:followUpId/validate', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId, followUpId } = req.params;
+    const tenantId = req.user.tenant_id;
+
+    const followUp = await queryOne(`
+      SELECT fu.*, c.name as campaign_name
+      FROM campaign_follow_ups fu
+      JOIN campaigns c ON fu.campaign_id = c.id
+      WHERE fu.id = $1 AND fu.campaign_id = $2 AND fu.tenant_id = $3
+    `, [followUpId, campaignId, tenantId]);
+
+    if (!followUp) {
+      return res.status(404).json({ error: 'Relance non trouvée' });
+    }
+
+    // Passer en statut "validated" (prêt pour envoi)
+    await execute(`
+      UPDATE campaign_follow_ups
+      SET status = 'validated', updated_at = NOW()
+      WHERE id = $1
+    `, [followUpId]);
+
+    log(`✅ [API] Relance #${followUp.follow_up_number} validée pour ${followUp.campaign_name}`);
+
+    res.json({
+      success: true,
+      message: `Relance #${followUp.follow_up_number} validée et prête pour l'envoi`
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur validate:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== REQUEST ASEFI MODIFICATION ====================
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/:followUpId/request-modification
+ * Demande une modification à Asefi avec feedback
+ */
+router.post('/:campaignId/follow-ups/:followUpId/request-modification', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId, followUpId } = req.params;
+    const { feedback } = req.body;
+    const tenantId = req.user.tenant_id;
+
+    if (!feedback || feedback.trim().length === 0) {
+      return res.status(400).json({ error: 'Veuillez décrire les modifications souhaitées' });
+    }
+
+    // Récupérer la relance
+    const followUp = await queryOne(`
+      SELECT fu.*, c.subject as campaign_subject, et.html_body as original_html,
+             t.name as company_name
+      FROM campaign_follow_ups fu
+      JOIN campaigns c ON fu.campaign_id = c.id
+      LEFT JOIN email_templates et ON c.template_id = et.id
+      LEFT JOIN tenants t ON c.tenant_id = t.id
+      WHERE fu.id = $1 AND fu.campaign_id = $2 AND fu.tenant_id = $3
+    `, [followUpId, campaignId, tenantId]);
+
+    if (!followUp) {
+      return res.status(404).json({ error: 'Relance non trouvée' });
+    }
+
+    log(`🤖 [API] Modification Asefi demandée pour relance #${followUp.follow_up_number}...`);
+
+    // Régénérer avec le feedback
+    const { regenerateFollowUpTemplate } = await import('../lib/followUpTemplateGenerator.js');
+
+    const result = await regenerateFollowUpTemplate({
+      targetAudience: followUp.target_audience,
+      originalSubject: followUp.campaign_subject,
+      originalHtml: followUp.original_html,
+      previousTemplate: {
+        subject: followUp.subject,
+        html: followUp.html_content
+      },
+      feedback: feedback,
+      companyName: followUp.company_name
+    });
+
+    // Mettre à jour avec le nouveau contenu
+    const updated = await queryOne(`
+      UPDATE campaign_follow_ups
+      SET subject = $1, html_content = $2, status = 'pending', updated_at = NOW()
+      WHERE id = $3
+      RETURNING *
+    `, [result.template.subject, result.template.html, followUpId]);
+
+    log(`✅ [API] Template modifié par Asefi selon feedback`);
+
+    res.json({
+      success: true,
+      message: 'Template modifié par Asefi. Vous pouvez renvoyer un test.',
+      follow_up: updated
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur request-modification:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== SAVE MANUAL TEMPLATES ====================
 /**
  * POST /api/campaigns/:campaignId/follow-ups/save-templates

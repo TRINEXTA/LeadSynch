@@ -48,10 +48,10 @@ const processFollowUpQueue = async () => {
 
     // 2. Récupérer les campagnes avec relances activées (y compris terminées pour relances tardives)
     const campaignsWithFollowUps = await queryAll(`
-      SELECT DISTINCT c.id, c.name, c.tenant_id, c.subject, c.status,
+      SELECT c.id, c.name, c.tenant_id, c.subject, c.status,
              c.follow_ups_enabled, c.follow_up_delay_days,
              c.send_time_start, c.send_time_end, c.send_days,
-             c.track_clicks
+             c.track_clicks, c.created_at
       FROM campaigns c
       WHERE c.follow_ups_enabled = true
       AND c.status NOT IN ('archived', 'closed')
@@ -484,9 +484,25 @@ const sendFollowUpEmails = async (campaign, followUp, emailsToSend) => {
       .replace(/  +/g, ' ')
       .replace(/\s+\./g, '.');
 
-    // Ajouter le pixel de tracking pour cette relance
+    // Ajouter tracking si activé
     if (campaign.track_clicks) {
-      result += `<img src="${process.env.APP_URL || 'https://leadsynch.com'}/api/track/open?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}" width="1" height="1" style="display:none;" />`;
+      const appUrl = process.env.APP_URL || 'https://leadsynch.com';
+
+      // 1. Wrapper tous les liens pour le click tracking
+      result = result.replace(
+        /href=["']([^"']+)["']/gi,
+        (match, url) => {
+          // Ne pas tracker les liens de désinscription ou mailto
+          if (url.includes('unsubscribe') || url.startsWith('mailto:') || url.startsWith('#')) {
+            return match;
+          }
+          const trackedUrl = `${appUrl}/api/track/click?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}&url=${encodeURIComponent(url)}`;
+          return `href="${trackedUrl}"`;
+        }
+      );
+
+      // 2. Ajouter le pixel de tracking pour les ouvertures
+      result += `<img src="${appUrl}/api/track/open?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}" width="1" height="1" style="display:none;" />`;
     }
 
     return result;
