@@ -270,6 +270,7 @@ export class ElasticEmailPolling {
       }
 
       await this.updateCampaignCounters();
+      await this.syncClicksToPipeline();
 
       log('\n✅ [POLLING] Synchronisation globale terminée\n');
       return { success: true, campaignsProcessed: campaigns.length };
@@ -320,6 +321,59 @@ export class ElasticEmailPolling {
       log('✅ [POLLING] Compteurs mis à jour');
     } catch (error) {
       error('❌ [POLLING] Erreur updateCampaignCounters:', error);
+    }
+  }
+
+  // Synchronise automatiquement les clics de email_tracking vers pipeline_leads
+  async syncClicksToPipeline() {
+    try {
+      log('🔄 [POLLING] Synchronisation des clics vers pipeline...');
+
+      // Récupérer les clics qui ne sont pas encore dans pipeline_leads
+      const { rows: missingClicks } = await query(`
+        SELECT DISTINCT et.lead_id, et.campaign_id, et.tenant_id
+        FROM email_tracking et
+        WHERE et.event_type = 'click'
+          AND NOT EXISTS (
+            SELECT 1 FROM pipeline_leads pl
+            WHERE pl.lead_id = et.lead_id
+              AND pl.campaign_id = et.campaign_id
+          )
+      `);
+
+      if (missingClicks.length === 0) {
+        log('✅ [POLLING] Tous les clics sont déjà dans le pipeline');
+        return;
+      }
+
+      log(`📥 [POLLING] ${missingClicks.length} clics à injecter dans le pipeline`);
+
+      for (const click of missingClicks) {
+        try {
+          await execute(
+            `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+             ON CONFLICT (tenant_id, lead_id, campaign_id)
+             DO UPDATE SET stage = 'leads_click', updated_at = NOW()`,
+            [click.tenant_id, click.lead_id, click.campaign_id]
+          );
+        } catch (insertErr) {
+          // Fallback ancienne contrainte
+          if (insertErr.message?.includes('constraint')) {
+            await execute(
+              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id)
+               DO UPDATE SET stage = 'leads_click', updated_at = NOW()`,
+              [click.tenant_id, click.lead_id, click.campaign_id]
+            );
+          }
+        }
+      }
+
+      log(`✅ [POLLING] ${missingClicks.length} clics injectés dans le pipeline`);
+    } catch (err) {
+      error('❌ [POLLING] Erreur syncClicksToPipeline:', err.message);
     }
   }
 }
