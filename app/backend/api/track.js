@@ -39,10 +39,10 @@ function isValidRedirectUrl(urlString) {
   }
 }
 
-// 📩 Ouverture d'email
+// 📩 Ouverture d'email (supporte les relances avec follow_up_id)
 router.get("/open", async (req, res) => {
   try {
-    const { lead_id, campaign_id } = req.query;
+    const { lead_id, campaign_id, follow_up_id } = req.query;
 
     // Validation des paramètres UUID
     if (!lead_id || !campaign_id) {
@@ -51,6 +51,11 @@ router.get("/open", async (req, res) => {
 
     if (!isValidUUID(lead_id) || !isValidUUID(campaign_id)) {
       return res.status(400).send("Invalid params format");
+    }
+
+    // Valider follow_up_id si présent
+    if (follow_up_id && !isValidUUID(follow_up_id)) {
+      return res.status(400).send("Invalid follow_up_id format");
     }
 
     // Vérifier que le lead et la campagne existent et appartiennent au même tenant
@@ -73,18 +78,28 @@ router.get("/open", async (req, res) => {
       return res.end(pixel);
     }
 
+    // Enregistrer l'ouverture (avec follow_up_id si relance)
     await execute(`
-      INSERT INTO email_tracking (tenant_id, campaign_id, lead_id, event_type, created_at)
-      VALUES ($3, $2, $1, 'open', NOW())
+      INSERT INTO email_tracking (tenant_id, campaign_id, lead_id, follow_up_id, event_type, created_at)
+      VALUES ($3, $2, $1, $4, 'open', NOW())
       ON CONFLICT DO NOTHING
-    `, [lead_id, campaign_id, lead.tenant_id]);
+    `, [lead_id, campaign_id, lead.tenant_id, follow_up_id || null]);
+
+    // Si c'est une relance, mettre à jour les stats
+    if (follow_up_id) {
+      await execute(`
+        UPDATE campaign_follow_ups
+        SET total_opened = total_opened + 1, updated_at = NOW()
+        WHERE id = $1
+      `, [follow_up_id]);
+    }
 
     // Pixel transparent 1x1 pour les ouvertures
     const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
     res.writeHead(200, { "Content-Type": "image/gif" });
     res.end(pixel);
-  } catch (error) {
-    error('Track open error:', error.message);
+  } catch (err) {
+    error('Track open error:', err.message);
     // Retourner le pixel même en cas d'erreur pour ne pas bloquer l'affichage email
     const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
     res.writeHead(200, { "Content-Type": "image/gif" });
@@ -92,10 +107,10 @@ router.get("/open", async (req, res) => {
   }
 });
 
-// 🖱️ Clic sur lien
+// 🖱️ Clic sur lien (supporte les relances avec follow_up_id)
 router.get("/click", async (req, res) => {
   try {
-    const { lead_id, campaign_id, url } = req.query;
+    const { lead_id, campaign_id, url, follow_up_id } = req.query;
 
     // Validation des paramètres UUID
     if (!lead_id || !campaign_id) {
@@ -104,6 +119,11 @@ router.get("/click", async (req, res) => {
 
     if (!isValidUUID(lead_id) || !isValidUUID(campaign_id)) {
       return res.status(400).send("Invalid params format");
+    }
+
+    // Valider follow_up_id si présent
+    if (follow_up_id && !isValidUUID(follow_up_id)) {
+      return res.status(400).send("Invalid follow_up_id format");
     }
 
     // Décoder l'URL
@@ -130,11 +150,12 @@ router.get("/click", async (req, res) => {
       return res.redirect(decodedUrl || "https://leadsynch.com");
     }
 
+    // Enregistrer le clic (avec follow_up_id si relance)
     await execute(`
-      INSERT INTO email_tracking (tenant_id, campaign_id, lead_id, event_type, created_at)
-      VALUES ($3, $2, $1, 'click', NOW())
+      INSERT INTO email_tracking (tenant_id, campaign_id, lead_id, follow_up_id, event_type, created_at)
+      VALUES ($3, $2, $1, $4, 'click', NOW())
       ON CONFLICT DO NOTHING
-    `, [lead_id, campaign_id, lead.tenant_id]);
+    `, [lead_id, campaign_id, lead.tenant_id, follow_up_id || null]);
 
     // 🔄 Envoie le lead dans le pipeline commercial
     await execute(`
@@ -143,10 +164,19 @@ router.get("/click", async (req, res) => {
       ON CONFLICT (lead_id, campaign_id) DO UPDATE SET stage = 'leads_click', updated_at = NOW()
     `, [lead_id, campaign_id]);
 
+    // Si c'est une relance, mettre à jour les stats
+    if (follow_up_id) {
+      await execute(`
+        UPDATE campaign_follow_ups
+        SET total_clicked = total_clicked + 1, updated_at = NOW()
+        WHERE id = $1
+      `, [follow_up_id]);
+    }
+
     // Redirection vers le lien réel (validé)
     res.redirect(decodedUrl || "https://leadsynch.com");
-  } catch (error) {
-    error('Track click error:', error.message);
+  } catch (err) {
+    error('Track click error:', err.message);
     res.redirect("https://leadsynch.com");
   }
 });

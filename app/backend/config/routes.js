@@ -65,6 +65,9 @@ import healthRoute from '../api/health.js';
 import trainingRoute from '../api/training.js';
 import aiGenerateTemplateRoute from '../api/ai-generate-template.js';
 import checkBlacklistRoute from '../api/check-blacklist.js';
+import campaignFollowUpsRoute from '../api/campaigns-follow-ups.js';
+import campaignModifyRoute from '../api/campaigns-modify.js';
+import spamDetectionRoute from '../api/spam-detection.js';
 import rgpdController from '../controllers/rgpdController.js';
 import unsubscribeController from '../controllers/unsubscribeController.js';
 import * as emailTrackingController from '../controllers/emailTrackingController.js';
@@ -100,6 +103,10 @@ export function setupRoutes(app) {
   app.use('/api/users', usersRoute);
   app.use('/api/teams', teamsRoute);
   app.use('/api/campaigns', campaignsRoute);
+  app.use('/api/campaigns', campaignFollowUpsRoute); // Follow-ups routes (nested under campaigns)
+  app.use('/api/campaigns', campaignModifyRoute); // Modification routes (nested under campaigns)
+  app.use('/api/campaigns', spamDetectionRoute); // Spam detection routes (nested under campaigns)
+  app.use('/api', spamDetectionRoute); // Also expose /api/validate-emails
   app.use('/api/campaign-detailed-stats', campaignDetailedStatsRoute);
   app.use('/api/validation-requests', validationRequestsRoute);
   app.use('/api/lead-sector-assignment', leadSectorAssignmentRoute);
