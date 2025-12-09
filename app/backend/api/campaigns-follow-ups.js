@@ -124,10 +124,10 @@ router.get('/:campaignId/follow-ups', authenticateToken, async (req, res) => {
   }
 });
 
-// ==================== ENABLE FOLLOW-UPS ====================
+// ==================== ENABLE/UPDATE FOLLOW-UPS ====================
 /**
  * POST /api/campaigns/:campaignId/follow-ups/enable
- * Active les relances pour une campagne
+ * Active ou met à jour les relances pour une campagne
  */
 router.post('/:campaignId/follow-ups/enable', authenticateToken, async (req, res) => {
   try {
@@ -148,15 +148,11 @@ router.post('/:campaignId/follow-ups/enable', authenticateToken, async (req, res
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
-    if (campaign.status === 'archived') {
-      return res.status(400).json({ error: 'Impossible d\'activer les relances sur une campagne archivée' });
+    if (campaign.status === 'archived' || campaign.status === 'closed') {
+      return res.status(400).json({ error: 'Impossible de modifier les relances sur une campagne archivée ou clôturée' });
     }
 
-    if (campaign.follow_ups_enabled) {
-      return res.status(400).json({ error: 'Les relances sont déjà activées pour cette campagne' });
-    }
-
-    // Mettre à jour la campagne
+    // Mettre à jour la campagne (activation ou mise à jour)
     await execute(`
       UPDATE campaigns
       SET follow_ups_enabled = true,
@@ -166,12 +162,13 @@ router.post('/:campaignId/follow-ups/enable', authenticateToken, async (req, res
       WHERE id = $3
     `, [data.follow_up_count, data.delay_days, campaignId]);
 
-    log(`✅ [API] Relances activées pour campagne ${campaign.name}: ${data.follow_up_count} relance(s), ${data.delay_days} jours`);
+    const action = campaign.follow_ups_enabled ? 'mises à jour' : 'activées';
+    log(`✅ [API] Relances ${action} pour campagne ${campaign.name}: ${data.follow_up_count} relance(s), ${data.delay_days} jours`);
 
     res.json({
       success: true,
-      message: `Relances activées: ${data.follow_up_count} relance(s) avec ${data.delay_days} jours de délai`,
-      next_step: 'generate_templates'
+      message: `Relances ${action}: ${data.follow_up_count} relance(s) avec ${data.delay_days} jours de délai`,
+      next_step: campaign.follow_ups_enabled ? null : 'generate_templates'
     });
 
   } catch (err) {
@@ -556,6 +553,143 @@ router.delete('/:campaignId/follow-ups', authenticateToken, async (req, res) => 
 
   } catch (err) {
     error('❌ [API] Erreur disable follow-ups:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== PAUSE/RESUME FOLLOW-UP ====================
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/:followUpId/pause
+ * Met en pause une relance spécifique
+ */
+router.post('/:campaignId/follow-ups/:followUpId/pause', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId, followUpId } = req.params;
+    const tenantId = req.user.tenant_id;
+
+    const followUp = await queryOne(`
+      SELECT fu.*, c.name as campaign_name
+      FROM campaign_follow_ups fu
+      JOIN campaigns c ON fu.campaign_id = c.id
+      WHERE fu.id = $1 AND fu.campaign_id = $2 AND fu.tenant_id = $3
+    `, [followUpId, campaignId, tenantId]);
+
+    if (!followUp) {
+      return res.status(404).json({ error: 'Relance non trouvée' });
+    }
+
+    if (followUp.status === 'completed' || followUp.status === 'cancelled') {
+      return res.status(400).json({ error: 'Impossible de mettre en pause une relance terminée ou annulée' });
+    }
+
+    await execute(`
+      UPDATE campaign_follow_ups
+      SET status = 'paused', updated_at = NOW()
+      WHERE id = $1
+    `, [followUpId]);
+
+    log(`⏸️ [API] Relance #${followUp.follow_up_number} mise en pause`);
+
+    res.json({
+      success: true,
+      message: `Relance #${followUp.follow_up_number} mise en pause`
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur pause follow-up:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/:followUpId/resume
+ * Reprend une relance mise en pause
+ */
+router.post('/:campaignId/follow-ups/:followUpId/resume', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId, followUpId } = req.params;
+    const tenantId = req.user.tenant_id;
+
+    const followUp = await queryOne(`
+      SELECT fu.*, c.name as campaign_name
+      FROM campaign_follow_ups fu
+      JOIN campaigns c ON fu.campaign_id = c.id
+      WHERE fu.id = $1 AND fu.campaign_id = $2 AND fu.tenant_id = $3
+    `, [followUpId, campaignId, tenantId]);
+
+    if (!followUp) {
+      return res.status(404).json({ error: 'Relance non trouvée' });
+    }
+
+    if (followUp.status !== 'paused') {
+      return res.status(400).json({ error: 'Cette relance n\'est pas en pause' });
+    }
+
+    await execute(`
+      UPDATE campaign_follow_ups
+      SET status = 'active', updated_at = NOW()
+      WHERE id = $1
+    `, [followUpId]);
+
+    log(`▶️ [API] Relance #${followUp.follow_up_number} reprise`);
+
+    res.json({
+      success: true,
+      message: `Relance #${followUp.follow_up_number} reprise`
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur resume follow-up:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/:followUpId/cancel
+ * Annule définitivement une relance
+ */
+router.post('/:campaignId/follow-ups/:followUpId/cancel', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId, followUpId } = req.params;
+    const tenantId = req.user.tenant_id;
+
+    const followUp = await queryOne(`
+      SELECT fu.*, c.name as campaign_name
+      FROM campaign_follow_ups fu
+      JOIN campaigns c ON fu.campaign_id = c.id
+      WHERE fu.id = $1 AND fu.campaign_id = $2 AND fu.tenant_id = $3
+    `, [followUpId, campaignId, tenantId]);
+
+    if (!followUp) {
+      return res.status(404).json({ error: 'Relance non trouvée' });
+    }
+
+    if (followUp.status === 'completed') {
+      return res.status(400).json({ error: 'Impossible d\'annuler une relance déjà terminée' });
+    }
+
+    await execute(`
+      UPDATE campaign_follow_ups
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE id = $1
+    `, [followUpId]);
+
+    // Annuler aussi les emails en attente dans la queue
+    await execute(`
+      UPDATE follow_up_queue
+      SET status = 'cancelled'
+      WHERE follow_up_id = $1 AND status = 'pending'
+    `, [followUpId]);
+
+    log(`🛑 [API] Relance #${followUp.follow_up_number} annulée`);
+
+    res.json({
+      success: true,
+      message: `Relance #${followUp.follow_up_number} annulée définitivement`
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur cancel follow-up:', err);
     res.status(500).json({ error: err.message });
   }
 });
