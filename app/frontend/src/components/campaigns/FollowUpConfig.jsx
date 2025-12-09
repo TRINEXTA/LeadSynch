@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { RefreshCw, Mail, Sparkles, Eye, Edit3, Check, AlertCircle, Clock, Target, Users } from 'lucide-react';
+import { RefreshCw, Mail, Sparkles, Eye, Edit3, Check, AlertCircle, Clock, Target, Users, PenLine } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
 import DOMPurify from 'dompurify';
@@ -36,6 +36,14 @@ export default function FollowUpConfig({
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [editedContent, setEditedContent] = useState({ subject: '', html: '' });
+
+  // Mode: 'choice' | 'asefi' | 'manual'
+  const [templateMode, setTemplateMode] = useState('choice');
+  // Manual template inputs
+  const [manualTemplates, setManualTemplates] = useState({
+    1: { subject: '', html_content: '' },
+    2: { subject: '', html_content: '' }
+  });
 
   // Use external generating state if provided
   const isGenerating = generatingTemplates !== undefined ? generatingTemplates : generating;
@@ -257,26 +265,75 @@ export default function FollowUpConfig({
             </div>
           </div>
 
-          {/* Bouton génération */}
-          {templates.length === 0 ? (
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-6 text-center">
-              <Sparkles className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Prêt à générer vos templates de relance ?
+          {/* Choix du mode: Écrire soi-même ou Générer avec Asefi */}
+          {templates.length === 0 && templateMode === 'choice' ? (
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+                Comment voulez-vous créer vos templates de relance ?
               </h3>
-              <p className="text-gray-600 mb-4">
-                Asefi va analyser votre campagne et créer des emails de relance personnalisés
-              </p>
+
               {!hasTemplate ? (
                 <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-4">
                   <AlertCircle className="w-5 h-5 text-yellow-600 mx-auto mb-2" />
-                  <p className="text-yellow-700 text-sm">
+                  <p className="text-yellow-700 text-sm text-center">
                     Veuillez d'abord sélectionner un template principal à l'étape précédente
                   </p>
                 </div>
               ) : (
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Option: Écrire soi-même */}
+                  <button
+                    onClick={() => setTemplateMode('manual')}
+                    className="bg-white border-2 border-gray-200 hover:border-purple-400 rounded-xl p-6 text-left transition-all hover:shadow-lg group"
+                  >
+                    <div className="w-14 h-14 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <PenLine className="w-7 h-7 text-purple-600" />
+                    </div>
+                    <h4 className="font-bold text-gray-900 text-lg mb-2">Écrire moi-même</h4>
+                    <p className="text-gray-600 text-sm">
+                      Rédigez vos propres emails de relance avec un contrôle total sur le contenu
+                    </p>
+                  </button>
+
+                  {/* Option: Générer avec Asefi */}
+                  <button
+                    onClick={() => setTemplateMode('asefi')}
+                    className="bg-white border-2 border-gray-200 hover:border-blue-400 rounded-xl p-6 text-left transition-all hover:shadow-lg group"
+                  >
+                    <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Sparkles className="w-7 h-7 text-blue-600" />
+                    </div>
+                    <h4 className="font-bold text-gray-900 text-lg mb-2">Générer avec Asefi</h4>
+                    <p className="text-gray-600 text-sm">
+                      Notre IA analyse votre campagne et crée des relances personnalisées automatiquement
+                    </p>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : templates.length === 0 && templateMode === 'asefi' ? (
+            /* Mode Asefi - Génération automatique */
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
                 <button
-                  onClick={handleGenerateTemplates}
+                  onClick={() => setTemplateMode('choice')}
+                  className="text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  ← Retour
+                </button>
+              </div>
+              <div className="text-center">
+                <Sparkles className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Prêt à générer vos templates de relance ?
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Asefi va analyser votre campagne et créer des emails de relance personnalisés
+                </p>
+                <button
+                  onClick={() => {
+                    handleGenerateTemplates();
+                  }}
                   disabled={isGenerating}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 flex items-center gap-2 mx-auto"
                 >
@@ -292,7 +349,168 @@ export default function FollowUpConfig({
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          ) : templates.length === 0 && templateMode === 'manual' ? (
+            /* Mode Manuel - Écrire soi-même */
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setTemplateMode('choice')}
+                  className="text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  ← Retour
+                </button>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <PenLine className="w-5 h-5 text-purple-600" />
+                  Rédiger vos templates de relance
+                </h3>
+              </div>
+
+              {/* Relance 1 */}
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <Eye className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Relance #1</h4>
+                    <p className="text-sm text-gray-600">Pour ceux qui ont ouvert mais pas cliqué</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Sujet de l'email
+                    </label>
+                    <input
+                      type="text"
+                      value={manualTemplates[1].subject}
+                      onChange={(e) => setManualTemplates({
+                        ...manualTemplates,
+                        1: { ...manualTemplates[1], subject: e.target.value }
+                      })}
+                      placeholder="Ex: Suite à notre précédent email..."
+                      className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Contenu de l'email (HTML ou texte)
+                    </label>
+                    <textarea
+                      value={manualTemplates[1].html_content}
+                      onChange={(e) => setManualTemplates({
+                        ...manualTemplates,
+                        1: { ...manualTemplates[1], html_content: e.target.value }
+                      })}
+                      rows={6}
+                      placeholder="Bonjour {{contact_name}},&#10;&#10;Suite à notre précédent email..."
+                      className="w-full border-2 border-gray-200 rounded-xl p-3 font-mono text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Variables disponibles: {'{{contact_name}}'}, {'{{company}}'}, {'{{sender_name}}'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Relance 2 (si 2 relances) */}
+              {followUpCount === 2 && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                      <Mail className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">Relance #2</h4>
+                      <p className="text-sm text-gray-600">Pour ceux qui n'ont pas ouvert</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Sujet de l'email
+                      </label>
+                      <input
+                        type="text"
+                        value={manualTemplates[2].subject}
+                        onChange={(e) => setManualTemplates({
+                          ...manualTemplates,
+                          2: { ...manualTemplates[2], subject: e.target.value }
+                        })}
+                        placeholder="Ex: [Rappel] Ne passez pas à côté..."
+                        className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Contenu de l'email (HTML ou texte)
+                      </label>
+                      <textarea
+                        value={manualTemplates[2].html_content}
+                        onChange={(e) => setManualTemplates({
+                          ...manualTemplates,
+                          2: { ...manualTemplates[2], html_content: e.target.value }
+                        })}
+                        rows={6}
+                        placeholder="Bonjour {{contact_name}},&#10;&#10;Nous n'avons pas eu de retour..."
+                        className="w-full border-2 border-gray-200 rounded-xl p-3 font-mono text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Variables disponibles: {'{{contact_name}}'}, {'{{company}}'}, {'{{sender_name}}'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
+
+              {/* Bouton valider */}
+              <button
+                onClick={() => {
+                  // Validation
+                  if (!manualTemplates[1].subject || !manualTemplates[1].html_content) {
+                    toast.error('Veuillez remplir le sujet et le contenu de la relance #1');
+                    return;
+                  }
+                  if (followUpCount === 2 && (!manualTemplates[2].subject || !manualTemplates[2].html_content)) {
+                    toast.error('Veuillez remplir le sujet et le contenu de la relance #2');
+                    return;
+                  }
+
+                  // Créer les templates
+                  const newTemplates = [
+                    {
+                      id: 'manual-1',
+                      follow_up_number: 1,
+                      target_audience: 'opened_not_clicked',
+                      subject: manualTemplates[1].subject,
+                      html_content: manualTemplates[1].html_content,
+                      delay_days: delayDays,
+                      status: 'pending'
+                    }
+                  ];
+
+                  if (followUpCount === 2) {
+                    newTemplates.push({
+                      id: 'manual-2',
+                      follow_up_number: 2,
+                      target_audience: 'not_opened',
+                      subject: manualTemplates[2].subject,
+                      html_content: manualTemplates[2].html_content,
+                      delay_days: delayDays * 2,
+                      status: 'pending'
+                    });
+                  }
+
+                  onTemplatesChange(newTemplates);
+                  toast.success('Templates de relance créés !');
+                }}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 flex items-center justify-center gap-2"
+              >
+                <Check className="w-5 h-5" />
+                Valider mes templates de relance
+              </button>
             </div>
           ) : (
             /* Templates générés */
