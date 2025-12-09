@@ -88,13 +88,28 @@ export class ElasticEmailPolling {
 
       // 2) Toujours upsert le pipeline sur "click" (même si l'event existait déjà)
       if (eventType === 'click') {
-        await execute(
-          `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
-           ON CONFLICT (lead_id, campaign_id)
-           DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
-          [tenantId, leadId, campaignId]
-        );
+        try {
+          await execute(
+            `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+             ON CONFLICT (tenant_id, lead_id, campaign_id)
+             DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
+            [tenantId, leadId, campaignId]
+          );
+        } catch (insertErr) {
+          // Fallback: ancienne contrainte (lead_id, campaign_id)
+          if (insertErr.message?.includes('constraint')) {
+            await execute(
+              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id)
+               DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
+              [tenantId, leadId, campaignId]
+            );
+          } else {
+            throw insertErr;
+          }
+        }
         log(`🧩 [POLLING] Lead injecté/MAJ dans pipeline (leads_click): ${leadId}`);
       }
     } catch (error) {
@@ -240,7 +255,7 @@ export class ElasticEmailPolling {
       const { rows: campaigns } = await query(
         `SELECT id, name, status
            FROM campaigns
-          WHERE status IN ('active', 'tracking')
+          WHERE status IN ('active', 'tracking', 'relances_en_cours', 'surveillance', 'completed', 'paused')
             AND type = 'email'
             AND created_at > NOW() - INTERVAL '30 days'
           ORDER BY created_at DESC`
@@ -271,7 +286,7 @@ export class ElasticEmailPolling {
       const { rows: campaigns } = await query(
         `SELECT id
            FROM campaigns
-          WHERE status IN ('active', 'tracking')
+          WHERE status IN ('active', 'tracking', 'relances_en_cours', 'surveillance', 'completed', 'paused')
             AND type = 'email'`
       );
 
