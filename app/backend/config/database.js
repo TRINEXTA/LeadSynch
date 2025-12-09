@@ -6,9 +6,9 @@ const db = {
   query: async (text, params) => {
     try {
       return await pool.query(text, params);
-    } catch (error) {
-      error('Database query error:', error);
-      throw error;
+    } catch (err) {
+      error('Database query error:', err);
+      throw err;
     }
   }
 };
