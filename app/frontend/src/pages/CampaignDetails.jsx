@@ -757,10 +757,10 @@ export default function CampaignDetails() {
                                     className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
                                     title="Annuler"
                                   >
-                                    <StopCircle className="w-4 h-4" />
+                                    <StopCircle className="w-4 h-4" /> Annuler
                                   </button>
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
