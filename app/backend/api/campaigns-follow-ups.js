@@ -510,6 +510,83 @@ router.post('/:campaignId/follow-ups/:followUpId/regenerate', authenticateToken,
   }
 });
 
+// ==================== SAVE MANUAL TEMPLATES ====================
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/save-templates
+ * Sauvegarde les templates manuels (écrits par l'utilisateur)
+ */
+router.post('/:campaignId/follow-ups/save-templates', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const tenantId = req.user.tenant_id;
+    const { templates, follow_up_count, delay_days } = req.body;
+
+    // Vérifier la campagne
+    const campaign = await queryOne(`
+      SELECT id, name, follow_ups_enabled FROM campaigns
+      WHERE id = $1 AND tenant_id = $2
+    `, [campaignId, tenantId]);
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    if (!templates || templates.length === 0) {
+      return res.status(400).json({ error: 'Aucun template fourni' });
+    }
+
+    // Activer les relances si pas déjà fait
+    await execute(`
+      UPDATE campaigns
+      SET follow_ups_enabled = true,
+          follow_ups_count = $1,
+          follow_up_delay_days = $2,
+          updated_at = NOW()
+      WHERE id = $3
+    `, [follow_up_count || templates.length, delay_days || 3, campaignId]);
+
+    // Sauvegarder chaque template
+    const savedTemplates = [];
+    for (const template of templates) {
+      const saved = await queryOne(`
+        INSERT INTO campaign_follow_ups
+        (campaign_id, tenant_id, follow_up_number, target_audience, delay_days,
+         subject, html_content, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        ON CONFLICT (campaign_id, follow_up_number)
+        DO UPDATE SET
+          subject = EXCLUDED.subject,
+          html_content = EXCLUDED.html_content,
+          target_audience = EXCLUDED.target_audience,
+          delay_days = EXCLUDED.delay_days,
+          updated_at = NOW()
+        RETURNING *
+      `, [
+        campaignId,
+        tenantId,
+        template.follow_up_number,
+        template.target_audience || (template.follow_up_number === 1 ? 'opened_not_clicked' : 'not_opened'),
+        template.delay_days || (delay_days * template.follow_up_number),
+        template.subject,
+        template.html_content
+      ]);
+      savedTemplates.push(saved);
+    }
+
+    log(`✅ [API] ${savedTemplates.length} template(s) manuel(s) sauvegardé(s) pour ${campaign.name}`);
+
+    res.json({
+      success: true,
+      message: `${savedTemplates.length} template(s) sauvegardé(s)`,
+      follow_ups: savedTemplates
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur save-templates:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== DISABLE FOLLOW-UPS ====================
 /**
  * DELETE /api/campaigns/:campaignId/follow-ups

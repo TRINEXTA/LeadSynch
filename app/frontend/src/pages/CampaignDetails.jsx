@@ -125,13 +125,29 @@ export default function CampaignDetails() {
   const handleSaveFollowUpConfig = async () => {
     setSavingFollowUp(true);
     try {
-      await api.post(`/campaigns/${campaignId}/follow-ups/enable`, {
-        enabled: followUpEnabled,
-        follow_up_count: followUpCount,
-        delay_days: followUpDelayDays
-      });
+      // Si des templates existent (générés ou manuels), les sauvegarder
+      if (followUpTemplates.length > 0) {
+        const response = await api.post(`/campaigns/${campaignId}/follow-ups/save-templates`, {
+          templates: followUpTemplates,
+          follow_up_count: followUpCount,
+          delay_days: followUpDelayDays
+        });
 
-      toast.success('Configuration des relances sauvegardée');
+        if (response.data.success) {
+          setFollowUpTemplates(response.data.follow_ups || followUpTemplates);
+          toast.success('Relances configurées et sauvegardées !');
+        }
+      } else {
+        // Sinon, juste activer les relances
+        await api.post(`/campaigns/${campaignId}/follow-ups/enable`, {
+          enabled: followUpEnabled,
+          follow_up_count: followUpCount,
+          delay_days: followUpDelayDays
+        });
+        toast.success('Configuration des relances sauvegardée');
+      }
+
+      setShowFollowUpSection(false);
       loadCampaignDetails();
     } catch (err) {
       error('Erreur sauvegarde follow-up:', err);
@@ -145,11 +161,25 @@ export default function CampaignDetails() {
   const handleGenerateFollowUpTemplates = async () => {
     setSavingFollowUp(true);
     try {
-      const response = await api.post(`/campaigns/${campaignId}/follow-ups/generate-templates`);
+      // D'abord activer les relances avec les paramètres
+      await api.post(`/campaigns/${campaignId}/follow-ups/enable`, {
+        follow_up_count: followUpCount,
+        delay_days: followUpDelayDays
+      });
+
+      // Puis générer les templates
+      const response = await api.post(`/campaigns/${campaignId}/follow-ups/generate-templates`, {
+        follow_up_count: followUpCount,
+        delay_days: followUpDelayDays
+      });
 
       if (response.data.success) {
         setFollowUpTemplates(response.data.follow_ups || response.data.templates || []);
-        toast.success('Templates de relance générés par Asefi !');
+        setFollowUpEnabled(true);
+        toast.success('Templates de relance générés et sauvegardés !');
+        // Fermer le panneau de config et recharger
+        setShowFollowUpSection(false);
+        loadCampaignDetails();
       }
     } catch (err) {
       error('Erreur génération templates:', err);
