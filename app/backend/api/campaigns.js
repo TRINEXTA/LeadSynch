@@ -1068,7 +1068,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         ), 0) as email_leads_count,
         -- Total leads assignés dans CETTE campagne
         CASE
-          WHEN $5 = 'email' THEN COALESCE((
+          WHEN $4 = 'email' THEN COALESCE((
             SELECT COUNT(DISTINCT eq.lead_id)
             FROM email_queue eq
             JOIN leads l ON eq.lead_id = l.id
@@ -1082,7 +1082,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         END as leads_assigned,
         -- Leads contactés (emails ouverts ou pipeline pas cold_call)
         CASE
-          WHEN $5 = 'email' THEN COALESCE((
+          WHEN $4 = 'email' THEN COALESCE((
             SELECT COUNT(DISTINCT et.lead_id)
             FROM email_tracking et
             WHERE et.campaign_id = $1
@@ -1097,7 +1097,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
         END as leads_contacted,
         -- RDV obtenus / Clics
         CASE
-          WHEN $5 = 'email' THEN COALESCE((
+          WHEN $4 = 'email' THEN COALESCE((
             SELECT COUNT(DISTINCT et.lead_id)
             FROM email_tracking et
             WHERE et.campaign_id = $1
@@ -1134,7 +1134,7 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
           )
         )
       ORDER BY u.first_name, u.last_name`,
-      [campaignId, tenantId, assignedUserIds, campaign.database_id, campaign.type || 'email']
+      [campaignId, tenantId, assignedUserIds, campaign.type || 'email']
     );
 
     log(`📋 Campagne ${campaignId}: ${commercials.length} commerciaux trouvés`);
