@@ -280,8 +280,22 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
 
+    // Récupérer les paramètres du body ou de la campagne
+    const { follow_up_count, delay_days } = req.body;
+    const followUpCount = follow_up_count || campaign.follow_ups_count || 1;
+    const delayDays = delay_days || campaign.follow_up_delay_days || 3;
+
+    // Si les relances ne sont pas activées, les activer automatiquement
     if (!campaign.follow_ups_enabled) {
-      return res.status(400).json({ error: 'Activez d\'abord les relances avec POST /enable' });
+      log(`📌 [API] Activation automatique des relances pour campagne ${campaignId}`);
+      await execute(`
+        UPDATE campaigns
+        SET follow_ups_enabled = true,
+            follow_ups_count = $1,
+            follow_up_delay_days = $2,
+            updated_at = NOW()
+        WHERE id = $3
+      `, [followUpCount, delayDays, campaignId]);
     }
 
     if (!campaign.html_body) {
@@ -296,8 +310,8 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
       originalHtml: campaign.html_body,
       campaignObjective: campaign.objective || campaign.description,
       companyName: campaign.company_name || 'Notre entreprise',
-      followUpCount: campaign.follow_ups_count,
-      delayDays: campaign.follow_up_delay_days
+      followUpCount: followUpCount,
+      delayDays: delayDays
     });
 
     // Créer les entrées dans campaign_follow_ups
@@ -313,7 +327,7 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
     }
 
     // Relance 2: not_opened (si demandé)
-    if (campaign.follow_ups_count === 2 && result.templates.not_opened) {
+    if (followUpCount === 2 && result.templates.not_opened) {
       followUpsToCreate.push({
         follow_up_number: 2,
         target_audience: 'not_opened',
