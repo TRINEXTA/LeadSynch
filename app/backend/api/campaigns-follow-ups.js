@@ -557,6 +557,147 @@ router.delete('/:campaignId/follow-ups', authenticateToken, async (req, res) => 
   }
 });
 
+// ==================== START NOW (FORCE) ====================
+/**
+ * POST /api/campaigns/:campaignId/follow-ups/start-now
+ * Force le démarrage immédiat des relances (sans attendre le délai)
+ */
+router.post('/:campaignId/follow-ups/start-now', authenticateToken, async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const tenantId = req.user.tenant_id;
+
+    // Vérifier la campagne
+    const campaign = await queryOne(`
+      SELECT c.*, t.name as company_name
+      FROM campaigns c
+      LEFT JOIN tenants t ON c.tenant_id = t.id
+      WHERE c.id = $1 AND c.tenant_id = $2
+    `, [campaignId, tenantId]);
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campagne non trouvée' });
+    }
+
+    if (!campaign.follow_ups_enabled) {
+      return res.status(400).json({ error: 'Les relances ne sont pas activées pour cette campagne' });
+    }
+
+    // Récupérer les relances en attente
+    const pendingFollowUps = await queryAll(`
+      SELECT * FROM campaign_follow_ups
+      WHERE campaign_id = $1
+      AND status IN ('pending', 'scheduled')
+      ORDER BY follow_up_number ASC
+    `, [campaignId]);
+
+    if (pendingFollowUps.length === 0) {
+      return res.status(400).json({ error: 'Aucune relance en attente à démarrer' });
+    }
+
+    let totalEligible = 0;
+    let followUpsStarted = 0;
+
+    for (const followUp of pendingFollowUps) {
+      // Identifier les leads éligibles et les ajouter à la queue
+      let eligibleLeadsQuery;
+
+      if (followUp.target_audience === 'opened_not_clicked') {
+        eligibleLeadsQuery = `
+          SELECT DISTINCT l.id as lead_id, l.email
+          FROM leads l
+          JOIN email_queue eq ON eq.lead_id = l.id AND eq.campaign_id = $1
+          WHERE eq.status = 'sent'
+          AND l.unsubscribed = false
+          AND EXISTS (
+            SELECT 1 FROM email_tracking et
+            WHERE et.lead_id = l.id AND et.campaign_id = $1
+            AND et.event_type = 'open' AND et.follow_up_id IS NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM email_tracking et
+            WHERE et.lead_id = l.id AND et.campaign_id = $1
+            AND et.event_type = 'click' AND et.follow_up_id IS NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM follow_up_queue fq
+            WHERE fq.lead_id = l.id AND fq.follow_up_id = $2
+          )
+          AND eq.status != 'bounced'
+        `;
+      } else {
+        eligibleLeadsQuery = `
+          SELECT DISTINCT l.id as lead_id, l.email
+          FROM leads l
+          JOIN email_queue eq ON eq.lead_id = l.id AND eq.campaign_id = $1
+          WHERE eq.status = 'sent'
+          AND l.unsubscribed = false
+          AND NOT EXISTS (
+            SELECT 1 FROM email_tracking et
+            WHERE et.lead_id = l.id AND et.campaign_id = $1
+            AND et.event_type = 'open' AND et.follow_up_id IS NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM follow_up_queue fq
+            WHERE fq.lead_id = l.id AND fq.follow_up_id = $2
+          )
+          AND eq.status != 'bounced'
+        `;
+      }
+
+      const eligibleLeads = await queryAll(eligibleLeadsQuery, [campaignId, followUp.id]);
+
+      if (eligibleLeads.length > 0) {
+        // Insérer dans la queue
+        const values = eligibleLeads.map(lead =>
+          `('${followUp.id}', '${campaignId}', '${lead.lead_id}', '${tenantId}', '${lead.email}', 'pending', NOW())`
+        ).join(',\n');
+
+        await execute(`
+          INSERT INTO follow_up_queue
+          (follow_up_id, campaign_id, lead_id, tenant_id, recipient_email, status, created_at)
+          VALUES ${values}
+          ON CONFLICT (follow_up_id, lead_id) DO NOTHING
+        `);
+
+        totalEligible += eligibleLeads.length;
+      }
+
+      // Activer la relance
+      await execute(`
+        UPDATE campaign_follow_ups
+        SET status = 'active',
+            total_eligible = $1,
+            started_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $2
+      `, [eligibleLeads.length, followUp.id]);
+
+      followUpsStarted++;
+    }
+
+    // Mettre à jour le statut de la campagne
+    await execute(`
+      UPDATE campaigns
+      SET status = 'relances_en_cours', updated_at = NOW()
+      WHERE id = $1
+    `, [campaignId]);
+
+    log(`🚀 [API] Relances démarrées manuellement pour ${campaign.name}: ${totalEligible} leads éligibles`);
+
+    res.json({
+      success: true,
+      message: `${followUpsStarted} relance(s) démarrée(s) avec ${totalEligible} leads éligibles`,
+      total_eligible: totalEligible,
+      follow_ups_started: followUpsStarted
+    });
+
+  } catch (err) {
+    error('❌ [API] Erreur start-now:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== PAUSE/RESUME FOLLOW-UP ====================
 /**
  * POST /api/campaigns/:campaignId/follow-ups/:followUpId/pause

@@ -434,28 +434,192 @@ export default function CampaignDetails() {
             {!showFollowUpSection ? (
               <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
                 {followUpEnabled ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
-                        <Sparkles className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900">Relances activees</h3>
-                        <p className="text-sm text-gray-600">
-                          {followUpCount} relance(s) configuree(s) - Delai: {followUpDelayDays} jours
-                        </p>
-                        {followUpTemplates.length > 0 && (
-                          <p className="text-xs text-green-600 font-medium mt-1">
-                            {followUpTemplates.length} template(s) prets
+                  <div className="space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                          <Sparkles className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900">Relances activees</h3>
+                          <p className="text-sm text-gray-600">
+                            {followUpCount} relance(s) - Delai: {followUpDelayDays} jours
                           </p>
-                        )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await api.post(`/campaigns/${campaignId}/follow-ups/start-now`);
+                              if (res.data.success) {
+                                toast.success(res.data.message || 'Relances demarrees !');
+                                loadCampaignDetails();
+                              }
+                            } catch (err) {
+                              toast.error(err.response?.data?.error || 'Erreur');
+                            }
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 flex items-center gap-2"
+                        >
+                          <Play className="w-4 h-4" />
+                          Demarrer maintenant
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Desactiver toutes les relances ?')) {
+                              try {
+                                await api.delete(`/campaigns/${campaignId}/follow-ups`);
+                                toast.success('Relances desactivees');
+                                setFollowUpEnabled(false);
+                                setFollowUpTemplates([]);
+                                loadCampaignDetails();
+                              } catch (err) {
+                                toast.error('Erreur');
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200"
+                        >
+                          Desactiver
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-sm font-semibold">
-                        Actif
-                      </span>
-                    </div>
+
+                    {/* Dashboard des relances */}
+                    {followUpTemplates.length > 0 ? (
+                      <div className="grid gap-4 mt-4">
+                        {followUpTemplates.map((fu) => (
+                          <div key={fu.id} className={`bg-white rounded-xl p-4 border-2 ${
+                            fu.status === 'active' ? 'border-green-300' :
+                            fu.status === 'completed' ? 'border-blue-300' :
+                            fu.status === 'paused' ? 'border-yellow-300' :
+                            fu.status === 'cancelled' ? 'border-red-300' :
+                            'border-gray-200'
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                  fu.target_audience === 'opened_not_clicked'
+                                    ? 'bg-orange-100' : 'bg-red-100'
+                                }`}>
+                                  {fu.target_audience === 'opened_not_clicked'
+                                    ? <Eye className="w-5 h-5 text-orange-600" />
+                                    : <Mail className="w-5 h-5 text-red-600" />
+                                  }
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-gray-900">
+                                    Relance #{fu.follow_up_number}
+                                  </h4>
+                                  <p className="text-sm text-gray-600">
+                                    {fu.target_audience === 'opened_not_clicked'
+                                      ? 'Ont ouvert sans cliquer'
+                                      : 'N\'ont pas ouvert'
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {/* Stats */}
+                                <div className="text-right mr-4">
+                                  <p className="text-sm text-gray-600">
+                                    {fu.total_sent || 0} / {fu.total_eligible || '?'} envoyes
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    Delai: {fu.delay_days} jours
+                                  </p>
+                                </div>
+
+                                {/* Status badge */}
+                                <span className={`px-3 py-1 rounded-lg text-sm font-semibold ${
+                                  fu.status === 'active' ? 'bg-green-100 text-green-700' :
+                                  fu.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                  fu.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
+                                  fu.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                  fu.status === 'scheduled' ? 'bg-purple-100 text-purple-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {fu.status === 'active' ? '🟢 En cours' :
+                                   fu.status === 'completed' ? '✅ Termine' :
+                                   fu.status === 'paused' ? '⏸️ En pause' :
+                                   fu.status === 'cancelled' ? '❌ Annule' :
+                                   fu.status === 'scheduled' ? '📅 Planifie' :
+                                   '⏳ En attente'}
+                                </span>
+
+                                {/* Actions */}
+                                {fu.status === 'active' && (
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.post(`/campaigns/${campaignId}/follow-ups/${fu.id}/pause`);
+                                        toast.success('Relance mise en pause');
+                                        loadCampaignDetails();
+                                      } catch (err) {
+                                        toast.error('Erreur');
+                                      }
+                                    }}
+                                    className="p-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200"
+                                    title="Mettre en pause"
+                                  >
+                                    <Pause className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {fu.status === 'paused' && (
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.post(`/campaigns/${campaignId}/follow-ups/${fu.id}/resume`);
+                                        toast.success('Relance reprise');
+                                        loadCampaignDetails();
+                                      } catch (err) {
+                                        toast.error('Erreur');
+                                      }
+                                    }}
+                                    className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                                    title="Reprendre"
+                                  >
+                                    <Play className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {(fu.status === 'pending' || fu.status === 'active' || fu.status === 'paused') && (
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm('Annuler cette relance ?')) {
+                                        try {
+                                          await api.post(`/campaigns/${campaignId}/follow-ups/${fu.id}/cancel`);
+                                          toast.success('Relance annulee');
+                                          loadCampaignDetails();
+                                        } catch (err) {
+                                          toast.error('Erreur');
+                                        }
+                                      }
+                                    }}
+                                    className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
+                                    title="Annuler"
+                                  >
+                                    <StopCircle className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mt-4">
+                        <div className="flex items-center gap-3">
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                          <div>
+                            <p className="font-semibold text-yellow-800">Aucun template de relance configure</p>
+                            <p className="text-sm text-yellow-700">Cliquez sur "Configurer" pour generer les templates</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center">
