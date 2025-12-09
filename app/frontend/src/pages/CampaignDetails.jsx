@@ -247,12 +247,18 @@ export default function CampaignDetails() {
                 campaign.status === 'draft' ? 'bg-gray-100 text-gray-700' :
                 campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
                 campaign.status === 'completed' ? 'bg-purple-100 text-purple-700' :
+                campaign.status === 'relances_en_cours' ? 'bg-orange-100 text-orange-700' :
+                campaign.status === 'surveillance' ? 'bg-blue-100 text-blue-700' :
+                campaign.status === 'closed' ? 'bg-gray-100 text-gray-700' :
                 'bg-red-100 text-red-700'
               }`}>
                 {campaign.status === 'active' ? '🟢 En cours' :
                  campaign.status === 'draft' ? '⚪ Brouillon' :
                  campaign.status === 'paused' ? '🟡 En pause' :
-                 campaign.status === 'completed' ? '🟣 Terminée' : '🔴 Arrêtée'}
+                 campaign.status === 'completed' ? '🟣 Terminée' :
+                 campaign.status === 'relances_en_cours' ? '🔄 Relances en cours' :
+                 campaign.status === 'surveillance' ? '👁️ Surveillance' :
+                 campaign.status === 'closed' ? '🔒 Clôturée' : '🔴 Arrêtée'}
               </span>
 
               {campaign.status === 'active' && (
@@ -282,6 +288,18 @@ export default function CampaignDetails() {
                   title="Arrêter définitivement"
                 >
                   <StopCircle className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Bouton Activer les relances pour campagnes terminées sans relances */}
+              {(campaign.status === 'completed' || campaign.status === 'stopped') && !campaign.follow_ups_enabled && (
+                <button
+                  onClick={() => setShowFollowUpSection(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-semibold"
+                  title="Activer les relances pour cette campagne"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Activer les relances
                 </button>
               )}
             </div>

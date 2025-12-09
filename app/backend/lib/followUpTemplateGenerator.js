@@ -155,10 +155,30 @@ Pour les personnes qui N'ONT PAS ouvert l'email du tout.
 
 1. **HTML responsive** (max 600px width, table-based)
 2. **Inline CSS** pour compatibilité email
-3. **Variables dynamiques**: {{name}}, {{company}}, {{email}}
+3. **Variables dynamiques**: Utiliser {{contact_name}} qui sera remplacé par le nom du contact OU le nom de l'entreprise automatiquement
 4. **Même style visuel** que l'original (couleurs, police)
-5. **Optimisé anti-spam** (pas de MAJUSCULES excessives, pas de mots spam)
-6. **Inclure le même CTA/lien** que l'original si pertinent
+5. **Inclure le même CTA/lien** que l'original si pertinent
+
+## EXIGENCES ANTI-SPAM CRITIQUES (TRÈS IMPORTANT)
+
+1. **PAS de MAJUSCULES excessives** (éviter "URGENT", "GRATUIT", "OFFRE")
+2. **PAS de mots spam** : gratuit, urgent, offre exclusive, dernière chance, limité, gagnez, promotion
+3. **PAS de ponctuation excessive** (éviter "!!!", "???", "...")
+4. **PAS de couleurs agressives** (éviter rouge vif, orange fluo pour le texte)
+5. **Ratio texte/image équilibré** - privilégier le texte
+6. **Sujet naturel et conversationnel** - comme un email humain
+7. **Éviter les liens suspects** - garder le même domaine que l'original
+8. **Signature professionnelle** sobre
+
+## GESTION DES NOMS (CRITIQUE)
+
+- Certains contacts n'ont PAS de nom, seulement une entreprise
+- Utiliser {{contact_name}} qui affichera automatiquement:
+  - Le nom du contact s'il existe
+  - OU le nom de l'entreprise sinon
+  - OU rien si aucun des deux
+- EXEMPLE CORRECT: "Bonjour {{contact_name}}," qui devient "Bonjour Jean," ou "Bonjour Acme Corp," ou "Bonjour,"
+- NE JAMAIS écrire "Bonjour {{contact_name}} de {{company}}" car ce serait redondant
 
 ## EXIGENCES MARKETING
 
@@ -167,6 +187,7 @@ Pour les personnes qui N'ONT PAS ouvert l'email du tout.
 3. **Créer un sentiment d'opportunité** pas de pression agressive
 4. **Garder le même ton** (${templateAnalysis.tone})
 5. **Email plus court** que l'original (on relance, pas on répète)
+6. **Ton humain et naturel** - éviter le marketing agressif
 
 ## FORMAT DE RÉPONSE
 
@@ -286,8 +307,9 @@ ${feedback || 'Améliore le template selon les bonnes pratiques marketing'}
 ## EXIGENCES
 - Garde la structure HTML responsive (table-based, 600px max)
 - Inline CSS
-- Variables: {{name}}, {{company}}, {{email}}
-- Anti-spam optimisé
+- Variables: {{contact_name}} (sera remplacé par nom contact OU nom entreprise automatiquement)
+- Anti-spam optimisé: PAS de majuscules excessives, mots spam, ponctuation excessive
+- Ton naturel et humain
 - Prends en compte le feedback
 
 Réponds UNIQUEMENT avec un JSON:
