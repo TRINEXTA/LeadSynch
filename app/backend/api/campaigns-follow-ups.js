@@ -10,7 +10,8 @@ import { Router } from 'express';
 import { log, error, warn } from '../lib/logger.js';
 import db from '../config/db.js';
 import { z } from 'zod';
-import { authenticateToken } from '../middleware/auth.js';
+import authMiddleware from '../middleware/auth.js';
+const authenticateToken = authMiddleware;
 import {
   generateFollowUpTemplates,
   regenerateFollowUpTemplate,
