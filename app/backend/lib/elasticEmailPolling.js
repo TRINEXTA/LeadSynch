@@ -86,14 +86,13 @@ export class ElasticEmailPolling {
         // log(`[POLLING] Event déjà présent: ${eventType} lead ${leadId}`);
       }
 
-      // 2) Toujours upsert le pipeline sur "click" (même si l'event existait déjà)
+      // 2) Injecter dans pipeline sur "click" - DO NOTHING si déjà présent !
       if (eventType === 'click') {
         try {
           await execute(
             `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
              VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
-             ON CONFLICT (tenant_id, lead_id, campaign_id)
-             DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
+             ON CONFLICT (tenant_id, lead_id, campaign_id) DO NOTHING`,
             [tenantId, leadId, campaignId]
           );
         } catch (insertErr) {
@@ -102,15 +101,14 @@ export class ElasticEmailPolling {
             await execute(
               `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
                VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
-               ON CONFLICT (lead_id, campaign_id)
-               DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
+               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
               [tenantId, leadId, campaignId]
             );
           } else {
             throw insertErr;
           }
         }
-        log(`🧩 [POLLING] Lead injecté/MAJ dans pipeline (leads_click): ${leadId}`);
+        log(`🧩 [POLLING] Lead injecté dans pipeline (leads_click): ${leadId}`);
       }
     } catch (error) {
       error('❌ [POLLING] Erreur recordEvent:', error.message);
@@ -325,6 +323,7 @@ export class ElasticEmailPolling {
   }
 
   // Synchronise automatiquement les clics de email_tracking vers pipeline_leads
+  // IMPORTANT: N'écrase JAMAIS les stages existants - INSERT ONLY si pas déjà présent
   async syncClicksToPipeline() {
     try {
       log('🔄 [POLLING] Synchronisation des clics vers pipeline...');
@@ -350,11 +349,11 @@ export class ElasticEmailPolling {
 
       for (const click of missingClicks) {
         try {
+          // DO NOTHING sur conflit - ne jamais écraser un stage existant !
           await execute(
             `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
              VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
-             ON CONFLICT (tenant_id, lead_id, campaign_id)
-             DO UPDATE SET stage = 'leads_click', updated_at = NOW()`,
+             ON CONFLICT (tenant_id, lead_id, campaign_id) DO NOTHING`,
             [click.tenant_id, click.lead_id, click.campaign_id]
           );
         } catch (insertErr) {
@@ -363,8 +362,7 @@ export class ElasticEmailPolling {
             await execute(
               `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
                VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
-               ON CONFLICT (lead_id, campaign_id)
-               DO UPDATE SET stage = 'leads_click', updated_at = NOW()`,
+               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
               [click.tenant_id, click.lead_id, click.campaign_id]
             );
           }

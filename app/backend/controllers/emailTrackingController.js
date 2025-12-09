@@ -75,16 +75,15 @@ export const trackClick = async (req, res) => {
           ['contacted', lead_id]
         );
 
-        // 3) upsert pipeline (avec tenant_id + stage forcé)
+        // 3) Injecter dans pipeline - DO NOTHING si déjà présent !
         await query(
           `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
            VALUES (gen_random_uuid(), $1, $2::uuid, $3::uuid, 'leads_click', NOW(), NOW())
-           ON CONFLICT (lead_id, campaign_id) DO UPDATE
-           SET stage = 'leads_click', updated_at = NOW()`,
+           ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
           [lead.tenant_id, lead_id, campaign_id]
         );
 
-        log('🧩 [TRACK] Lead injecté/MAJ dans pipeline (leads_click):', lead_id);
+        log('🧩 [TRACK] Lead injecté dans pipeline (leads_click):', lead_id);
       }
     }
 
