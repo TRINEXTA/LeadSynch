@@ -48,10 +48,10 @@ const processFollowUpQueue = async () => {
 
     // 2. Récupérer les campagnes avec relances activées (y compris terminées pour relances tardives)
     const campaignsWithFollowUps = await queryAll(`
-      SELECT DISTINCT c.id, c.name, c.tenant_id, c.subject, c.status,
+      SELECT c.id, c.name, c.tenant_id, c.subject, c.status,
              c.follow_ups_enabled, c.follow_up_delay_days,
              c.send_time_start, c.send_time_end, c.send_days,
-             c.track_clicks
+             c.track_clicks, c.created_at
       FROM campaigns c
       WHERE c.follow_ups_enabled = true
       AND c.status NOT IN ('archived', 'closed')
