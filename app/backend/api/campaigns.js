@@ -108,9 +108,9 @@ router.get('/', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, campaigns });
 
-  } catch (error) {
-    error('❌ Erreur GET campaigns:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET campaigns:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -181,9 +181,9 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, campaigns });
 
-  } catch (error) {
-    error('❌ Erreur my-campaigns:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur my-campaigns:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -212,9 +212,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     return res.json({ success: true, campaign });
     
-  } catch (error) {
-    error('❌ Erreur GET campaign:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET campaign:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -228,7 +228,7 @@ router.post('/', authenticateToken, async (req, res) => {
     let validatedData;
     try {
       validatedData = createCampaignSchema.parse(req.body);
-    } catch (error) {
+    } catch (err) {
       return res.status(400).json({
         error: 'Données invalides',
         details: error.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
@@ -362,9 +362,9 @@ router.post('/', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur création campagne:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur création campagne:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -532,9 +532,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur update:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur update:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -582,9 +582,9 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
     log('🟢 Campagne démarrée:', campaignId);
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur start:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur start:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -607,9 +607,9 @@ router.post('/:id/pause', authenticateToken, async (req, res) => {
     log('⏸️ Campagne mise en pause:', campaignId);
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur pause:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur pause:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -632,9 +632,9 @@ router.post('/:id/resume', authenticateToken, async (req, res) => {
     log('▶️ Campagne reprise:', campaignId);
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur resume:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur resume:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -657,9 +657,9 @@ router.post('/:id/stop', authenticateToken, async (req, res) => {
     log('⏹️ Campagne arrêtée:', campaignId);
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur stop:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur stop:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -682,9 +682,9 @@ router.post('/:id/archive', authenticateToken, async (req, res) => {
     log('📦 Campagne archivée:', campaignId);
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur archive:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur archive:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -707,9 +707,9 @@ router.post('/:id/unarchive', authenticateToken, async (req, res) => {
     log('📂 Campagne désarchivée:', campaignId);
     return res.json({ success: true, campaign });
 
-  } catch (error) {
-    error('❌ Erreur unarchive:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur unarchive:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 // ==================== RELAUNCH CAMPAIGN ====================
@@ -790,9 +790,9 @@ router.post('/:id/relaunch', authenticateToken, async (req, res) => {
       excluded_count: excludedIds.length
     });
     
-  } catch (error) {
-    error('❌ Erreur relance:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur relance:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -835,9 +835,9 @@ router.post('/:id/duplicate', authenticateToken, async (req, res) => {
     
     return res.json({ success: true, campaign: newCampaign });
     
-  } catch (error) {
-    error('❌ Erreur duplication:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur duplication:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -862,9 +862,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     
     return res.json({ success: true, message: 'Campagne supprimée' });
     
-  } catch (error) {
-    error('❌ Erreur suppression:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur suppression:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -908,9 +908,9 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
           templateHtml: template.html_body
         });
         results.success.push(recipient);
-      } catch (error) {
+      } catch (err) {
         error(`❌ Erreur envoi à ${recipient}:`, error);
-        results.failed.push({ email: recipient, error: error.message });
+        results.failed.push({ email: recipient, error: err.message });
       }
     }
     
@@ -922,9 +922,9 @@ router.post('/test-emails', authenticateToken, async (req, res) => {
       results
     });
     
-  } catch (error) {
-    error('❌ Erreur envoi test:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur envoi test:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -942,9 +942,9 @@ router.post('/:id/force-sync', authenticateToken, async (req, res) => {
     
     return res.json({ success: true, message: 'Synchronisation forcée lancée' });
     
-  } catch (error) {
-    error('❌ Erreur force sync:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur force sync:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1008,9 +1008,9 @@ router.get('/:id/phoning-stats', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, stats });
 
-  } catch (error) {
-    error('❌ Erreur phoning-stats:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur phoning-stats:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1141,9 +1141,9 @@ router.get('/:id/commercials', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, commercials });
 
-  } catch (error) {
-    error('❌ Erreur commercials:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur commercials:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1274,9 +1274,9 @@ router.post('/:id/transfer-leads', authenticateToken, async (req, res) => {
       }
     });
 
-  } catch (error) {
-    error('❌ Erreur transfer-leads:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur transfer-leads:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1424,9 +1424,9 @@ router.post('/:id/distribute-leads', authenticateToken, async (req, res) => {
       distribution: results
     });
 
-  } catch (error) {
-    error('❌ Erreur distribute-leads:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur distribute-leads:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1470,9 +1470,9 @@ router.get('/:id/available-users', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, users });
 
-  } catch (error) {
-    error('❌ Erreur available-users:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur available-users:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1609,9 +1609,9 @@ router.patch('/:id/team', authenticateToken, async (req, res) => {
       team_size_after: newUsers.length
     });
 
-  } catch (error) {
-    error('❌ Erreur gestion équipe:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur gestion équipe:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1646,9 +1646,9 @@ router.get('/:id/pipeline-stats', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, pipeline });
 
-  } catch (error) {
-    error('❌ Erreur pipeline-stats:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur pipeline-stats:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
