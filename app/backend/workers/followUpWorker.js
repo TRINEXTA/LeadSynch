@@ -32,25 +32,29 @@ const execute = async (query, params = []) => {
 };
 
 // ==================== CONFIGURATION ====================
-const WORKER_INTERVAL_MINUTES = 30; // Tourne toutes les 30 minutes
-const EMAILS_PER_BATCH = 50;        // Emails par vague
-const BATCH_SIZE = 10;              // Taille des sous-batches pour l'envoi
-const BATCH_DELAY_MS = 500;         // Délai entre sous-batches
+const WORKER_INTERVAL_MINUTES = 10; // Tourne toutes les 10 minutes (même règle que emailWorker)
+const EMAILS_PER_BATCH = 50;         // 50 emails max par exécution
+const BATCH_SIZE = 10;               // Taille des sous-batches pour l'envoi
+const BATCH_DELAY_MS = 500;          // Délai entre sous-batches
+const SURVEILLANCE_DAYS = 15;        // Jours de surveillance avant clôture automatique
 
 // ==================== PROCESS FOLLOW-UP QUEUE ====================
 const processFollowUpQueue = async () => {
   try {
     log('🔄 [FOLLOW-UP WORKER] Traitement des relances...');
 
-    // Récupérer les campagnes avec relances activées (sauf archivées)
+    // 1. Vérifier les campagnes en surveillance pour clôture automatique
+    await checkSurveillanceCampaigns();
+
+    // 2. Récupérer les campagnes avec relances activées (y compris terminées pour relances tardives)
     const campaignsWithFollowUps = await queryAll(`
-      SELECT DISTINCT c.id, c.name, c.tenant_id, c.subject,
+      SELECT DISTINCT c.id, c.name, c.tenant_id, c.subject, c.status,
              c.follow_ups_enabled, c.follow_up_delay_days,
              c.send_time_start, c.send_time_end, c.send_days,
              c.track_clicks
       FROM campaigns c
       WHERE c.follow_ups_enabled = true
-      AND c.status != 'archived'
+      AND c.status NOT IN ('archived', 'closed')
       AND c.type = 'email'
       ORDER BY c.created_at ASC
     `);
@@ -73,10 +77,56 @@ const processFollowUpQueue = async () => {
   }
 };
 
+// ==================== CHECK SURVEILLANCE CAMPAIGNS ====================
+const checkSurveillanceCampaigns = async () => {
+  try {
+    // Trouver les campagnes en surveillance depuis plus de 15 jours
+    const campaignsToClose = await queryAll(`
+      SELECT id, name, surveillance_started_at
+      FROM campaigns
+      WHERE status = 'surveillance'
+      AND surveillance_started_at IS NOT NULL
+      AND surveillance_started_at < NOW() - INTERVAL '${SURVEILLANCE_DAYS} days'
+    `);
+
+    if (campaignsToClose.length === 0) {
+      return;
+    }
+
+    log(`🔒 [FOLLOW-UP WORKER] ${campaignsToClose.length} campagne(s) à clôturer après surveillance`);
+
+    for (const campaign of campaignsToClose) {
+      await execute(`
+        UPDATE campaigns
+        SET status = 'closed',
+            closed_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+      `, [campaign.id]);
+
+      log(`✅ [FOLLOW-UP WORKER] Campagne "${campaign.name}" clôturée automatiquement`);
+    }
+
+  } catch (err) {
+    error('❌ [FOLLOW-UP WORKER] Erreur vérification surveillance:', err);
+  }
+};
+
 // ==================== PROCESS ONE CAMPAIGN'S FOLLOW-UPS ====================
 const processCampaignFollowUps = async (campaign) => {
   try {
     log(`\n🔍 [FOLLOW-UP WORKER] Traitement relances: ${campaign.name}`);
+
+    // Passer en "relances_en_cours" si pas déjà fait
+    if (campaign.status !== 'relances_en_cours' && campaign.status !== 'surveillance') {
+      await execute(`
+        UPDATE campaigns
+        SET status = 'relances_en_cours',
+            updated_at = NOW()
+        WHERE id = $1
+      `, [campaign.id]);
+      log(`📌 [FOLLOW-UP WORKER] Statut "${campaign.name}" → relances_en_cours`);
+    }
 
     // Vérifier les horaires et jours (même logique que emailWorker)
     const now = new Date();
@@ -125,7 +175,29 @@ const processCampaignFollowUps = async (campaign) => {
     `, [campaign.id]);
 
     if (followUps.length === 0) {
-      log(`ℹ️ [FOLLOW-UP] "${campaign.name}": Aucune relance configurée ou toutes terminées`);
+      // Vérifier si toutes les relances sont vraiment terminées
+      const allFollowUps = await queryAll(`
+        SELECT * FROM campaign_follow_ups
+        WHERE campaign_id = $1
+      `, [campaign.id]);
+
+      if (allFollowUps.length > 0) {
+        // Il y a des relances mais toutes sont terminées -> passer en surveillance
+        const allCompleted = allFollowUps.every(fu => fu.status === 'completed' || fu.status === 'cancelled');
+
+        if (allCompleted && campaign.status !== 'surveillance') {
+          await execute(`
+            UPDATE campaigns
+            SET status = 'surveillance',
+                surveillance_started_at = NOW(),
+                updated_at = NOW()
+            WHERE id = $1
+          `, [campaign.id]);
+          log(`👁️ [FOLLOW-UP WORKER] Campagne "${campaign.name}" → surveillance (${SURVEILLANCE_DAYS} jours)`);
+        }
+      }
+
+      log(`ℹ️ [FOLLOW-UP] "${campaign.name}": Toutes les relances terminées`);
       return;
     }
 
@@ -373,25 +445,44 @@ const sendFollowUpEmails = async (campaign, followUp, emailsToSend) => {
   const successIds = [];
   const failedEmails = [];
 
-  // Personnaliser le template
+  // Personnaliser le template avec fallback intelligent
   const personalizeTemplate = (htmlBody, emailData) => {
     let result = htmlBody;
 
-    const nameVariablePattern = /\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|name|nom|NOM)\}\}/gi;
-    const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s+\{\{(PRENOM|prenom|Prenom|firstname|name|nom)\}\}\s*([,!]?)/gi;
+    // Déterminer le nom à utiliser: contact_name ou company
+    const displayName = (emailData.contact_name && emailData.contact_name.trim())
+      ? emailData.contact_name.trim()
+      : (emailData.company && emailData.company.trim())
+        ? emailData.company.trim()
+        : null;
 
-    result = result.replace(greetingPattern, (match, greeting, variable, punctuation) => {
-      if (emailData.contact_name && emailData.contact_name.trim()) {
-        return `${greeting} ${emailData.contact_name}${punctuation}`;
+    // Pattern pour les salutations avec variable de nom
+    const greetingPattern = /\b(Bonjour|Bonsoir|Cher|Chère|Hello|Hi|Salut)\s*\{\{[^}]+\}\}\s*([,!]?)/gi;
+
+    // Remplacer les salutations
+    result = result.replace(greetingPattern, (match, greeting, punctuation) => {
+      if (displayName) {
+        return `${greeting} ${displayName}${punctuation}`;
       }
+      // Pas de nom ni d'entreprise: juste "Bonjour,"
       return `${greeting}${punctuation}`;
     });
 
-    result = result.replace(nameVariablePattern, emailData.contact_name || '');
+    // Pattern pour toutes les variables de nom
+    const nameVariablePattern = /\{\{(PRENOM|prenom|Prenom|firstname|first_name|firstName|contact_name|contact_name_or_company|name|nom|NOM)\}\}/gi;
+
+    // Remplacer les variables de nom
+    result = result.replace(nameVariablePattern, displayName || '');
+
+    // Remplacer les autres variables
     result = result
-      .replace(/\{\{(company|COMPANY|company_name|COMPANY_NAME|entreprise|ENTREPRISE)\}\}/gi, emailData.company || 'Entreprise')
+      .replace(/\{\{(company|COMPANY|company_name|COMPANY_NAME|entreprise|ENTREPRISE)\}\}/gi, emailData.company || '')
       .replace(/\{\{(lead_email|email|EMAIL|mail|MAIL)\}\}/gi, emailData.email)
-      .replace(/  +/g, ' ');
+      // Nettoyer les espaces doubles et les virgules orphelines
+      .replace(/,\s*,/g, ',')
+      .replace(/\s+,/g, ',')
+      .replace(/  +/g, ' ')
+      .replace(/\s+\./g, '.');
 
     // Ajouter le pixel de tracking pour cette relance
     if (campaign.track_clicks) {
@@ -483,15 +574,15 @@ const updateFollowUpStats = async (followUp, sentCount, failedCount) => {
 const startFollowUpWorker = () => {
   log('🚀 [FOLLOW-UP WORKER] Démarrage du worker de relances...');
 
-  // Premier traitement après 5 minutes (laisser le temps au worker principal)
+  // Premier traitement après 2 minutes (laisser le temps au worker principal)
   setTimeout(() => {
     processFollowUpQueue();
-  }, 5 * 60 * 1000);
+  }, 2 * 60 * 1000);
 
-  // Puis toutes les 30 minutes
+  // Puis toutes les 10 minutes (même règle que emailWorker pour anti-blacklist)
   setInterval(processFollowUpQueue, WORKER_INTERVAL_MINUTES * 60 * 1000);
 
-  log(`✅ [FOLLOW-UP WORKER] Worker démarré (intervalle: ${WORKER_INTERVAL_MINUTES} minutes)`);
+  log(`✅ [FOLLOW-UP WORKER] Worker démarré (intervalle: ${WORKER_INTERVAL_MINUTES} minutes, max ${EMAILS_PER_BATCH} emails/batch)`);
 };
 
 export default startFollowUpWorker;
