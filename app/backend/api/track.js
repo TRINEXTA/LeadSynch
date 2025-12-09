@@ -157,12 +157,30 @@ router.get("/click", async (req, res) => {
       ON CONFLICT DO NOTHING
     `, [lead_id, campaign_id, lead.tenant_id, follow_up_id || null]);
 
-    // 🔄 Envoie le lead dans le pipeline commercial
-    await execute(`
-      INSERT INTO pipeline_leads (lead_id, campaign_id, stage, created_at)
-      VALUES ($1, $2, 'leads_click', NOW())
-      ON CONFLICT (lead_id, campaign_id) DO UPDATE SET stage = 'leads_click', updated_at = NOW()
-    `, [lead_id, campaign_id]);
+    // 🔄 Envoie le lead dans le pipeline commercial (avec tenant_id obligatoire)
+    // Essaye d'abord avec la nouvelle contrainte (migration 011), sinon fallback sur l'ancienne
+    try {
+      await execute(`
+        INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+        VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+        ON CONFLICT (tenant_id, lead_id, campaign_id)
+        DO UPDATE SET stage = 'leads_click', updated_at = NOW()
+      `, [lead.tenant_id, lead_id, campaign_id]);
+    } catch (insertErr) {
+      // Fallback: ancienne contrainte (lead_id, campaign_id) si migration non appliquée
+      if (insertErr.message?.includes('constraint')) {
+        await execute(`
+          INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+          VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+          ON CONFLICT (lead_id, campaign_id)
+          DO UPDATE SET stage = 'leads_click', updated_at = NOW()
+        `, [lead.tenant_id, lead_id, campaign_id]);
+      } else {
+        throw insertErr;
+      }
+    }
+
+    log('🧩 [TRACK] Lead injecté dans pipeline (leads_click):', lead_id);
 
     // Si c'est une relance, mettre à jour les stats
     if (follow_up_id) {
