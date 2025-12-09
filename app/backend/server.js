@@ -76,13 +76,22 @@ app.listen(PORT, '0.0.0.0', () => {
 
 // ========== BACKGROUND WORKERS ==========
 async function startBackgroundWorkers() {
-  // Email worker
+  // Email worker (principal)
   try {
     const { default: startEmailWorker } = await import('./workers/emailWorker.js');
     log('📧 [EMAIL WORKER] Démarrage');
     startEmailWorker();
   } catch (err) {
     error('❌ Erreur email worker:', err);
+  }
+
+  // Follow-up worker (relances automatiques)
+  try {
+    const { default: startFollowUpWorker } = await import('./workers/followUpWorker.js');
+    log('📬 [FOLLOW-UP WORKER] Démarrage');
+    startFollowUpWorker();
+  } catch (err) {
+    error('❌ Erreur follow-up worker:', err);
   }
 
   // Elastic Email polling

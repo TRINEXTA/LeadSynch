@@ -25,12 +25,19 @@ async function handler(req, res) {
       return res.status(404).json({ error: 'Campagne introuvable' });
     }
     
+    // IMPORTANT: Exclure les leads désinscrits pour conformité RGPD
     const leads = await queryAll(
       `SELECT cl.*, l.email, l.company_name, l.contact_name
        FROM campaign_leads cl
        JOIN leads l ON cl.lead_id = l.id
-       WHERE cl.campaign_id = $1 AND cl.status = 'pending'`,
-      [campaign_id]
+       WHERE cl.campaign_id = $1
+       AND cl.status = 'pending'
+       AND (l.unsubscribed = false OR l.unsubscribed IS NULL)
+       AND NOT EXISTS (
+         SELECT 1 FROM email_unsubscribes eu
+         WHERE eu.email = l.email AND eu.tenant_id = $2
+       )`,
+      [campaign_id, tenant_id]
     );
     
     if (leads.length === 0) {

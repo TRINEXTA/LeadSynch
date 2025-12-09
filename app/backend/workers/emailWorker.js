@@ -167,13 +167,18 @@ const processCampaign = async (campaign) => {
 
     log(`✅ [EMAIL WORKER] Template trouvé: ${template.name}`);
 
-    // Récupérer les emails en attente
+    // Récupérer les emails en attente (EXCLURE les désinscrits - RGPD)
     const emailsToSend = await queryAll(
       `SELECT eq.*, l.email, l.company, l.contact_name
        FROM email_queue eq
        JOIN leads l ON eq.lead_id = l.id
-       WHERE eq.campaign_id = $1 
+       WHERE eq.campaign_id = $1
        AND eq.status = 'pending'
+       AND (l.unsubscribed = false OR l.unsubscribed IS NULL)
+       AND NOT EXISTS (
+         SELECT 1 FROM email_unsubscribes eu
+         WHERE eu.email = l.email AND eu.tenant_id = eq.tenant_id
+       )
        ORDER BY eq.created_at ASC
        LIMIT $2`,
       [campaign.id, campaign.emails_per_cycle || 50]
@@ -335,16 +340,21 @@ const processCampaign = async (campaign) => {
 };
 
 // ==================== START WORKER ====================
+// IMPORTANT: Intervalle de 10 minutes minimum pour éviter le blacklistage du domaine
+// Le worker vérifie les campagnes actives et envoie les emails par vagues
+// Chaque campagne a son propre cycle_interval_minutes (défaut: 10 min)
+const WORKER_INTERVAL_MINUTES = 10;
+
 const startEmailWorker = () => {
   log('🚀 [EMAIL WORKER] Démarrage du worker d\'emails...');
-  
-  // Traiter immédiatement
+
+  // Traiter immédiatement au démarrage
   processEmailQueue();
-  
-  // Puis toutes les 2 minutes
-  setInterval(processEmailQueue, 2 * 60 * 1000);
-  
-  log('✅ [EMAIL WORKER] Worker démarré (intervalle: 2 minutes)');
+
+  // Puis toutes les 10 minutes (anti-spam protection)
+  setInterval(processEmailQueue, WORKER_INTERVAL_MINUTES * 60 * 1000);
+
+  log(`✅ [EMAIL WORKER] Worker démarré (intervalle: ${WORKER_INTERVAL_MINUTES} minutes)`);
 };
 
 export default startEmailWorker;
