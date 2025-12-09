@@ -1,10 +1,11 @@
 import { log, error, warn } from "../lib/logger.js";
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Phone, MessageSquare, Send, ArrowRight, ArrowLeft, Database, Users, Calendar, Settings, Paperclip, X, Eye, TestTube, Check, Target, Clock, Zap, AlertCircle, Plus, Edit } from 'lucide-react';
+import { Mail, Phone, MessageSquare, Send, ArrowRight, ArrowLeft, Database, Users, Calendar, Settings, Paperclip, X, Eye, TestTube, Check, Target, Clock, Zap, AlertCircle, Plus, Edit, RefreshCw } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
+import FollowUpConfig from '../components/campaigns/FollowUpConfig';
 
 const CAMPAIGN_TYPES = [
   { id: 'email', name: 'Campagne Email', icon: Mail, color: 'from-blue-600 to-cyan-600', description: 'Envoi emails automatises' },
@@ -40,7 +41,14 @@ export default function CampaignsManager() {
   const [testEmails, setTestEmails] = useState(['']);
   const [estimatedDuration, setEstimatedDuration] = useState(null);
   const [showTemplateHelp, setShowTemplateHelp] = useState(false);
-  
+
+  // Follow-up configuration state
+  const [followUpEnabled, setFollowUpEnabled] = useState(false);
+  const [followUpCount, setFollowUpCount] = useState(1);
+  const [followUpDelayDays, setFollowUpDelayDays] = useState(3);
+  const [followUpTemplates, setFollowUpTemplates] = useState([]);
+  const [generatingTemplates, setGeneratingTemplates] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     type: '',
@@ -372,7 +380,12 @@ const calculateLeadsCount = async () => {
       // Transform empty strings to null (Zod validation requirement)
       link: formData.link === '' ? null : formData.link,
       start_date: formData.start_date === '' ? null : formData.start_date,
-      template_id: formData.template_id === '' ? null : formData.template_id
+      template_id: formData.template_id === '' ? null : formData.template_id,
+      // Follow-up configuration
+      follow_ups_enabled: followUpEnabled,
+      follow_ups_count: followUpCount,
+      follow_up_delay_days: followUpDelayDays,
+      follow_up_templates: followUpTemplates
     };
 
     const promise = api.post('/campaigns', campaignData)
@@ -396,7 +409,12 @@ const calculateLeadsCount = async () => {
       // Transform empty strings to null (Zod validation requirement)
       link: formData.link === '' ? null : formData.link,
       start_date: formData.start_date === '' ? null : formData.start_date,
-      template_id: formData.template_id === '' ? null : formData.template_id
+      template_id: formData.template_id === '' ? null : formData.template_id,
+      // Follow-up configuration
+      follow_ups_enabled: followUpEnabled,
+      follow_ups_count: followUpCount,
+      follow_up_delay_days: followUpDelayDays,
+      follow_up_templates: followUpTemplates
     };
 
     let promise;
@@ -420,7 +438,7 @@ const calculateLeadsCount = async () => {
   };
 
   const getTotalSteps = () => {
-    if (campaignType?.id === 'email') return 5;
+    if (campaignType?.id === 'email') return 6; // +1 for follow-ups step
     if (campaignType?.id === 'phoning') return 4;
     return 4;
   };
@@ -430,14 +448,67 @@ const calculateLeadsCount = async () => {
     if (step === 1) return formData.name && formData.goal_description;
     if (step === 2) return selectedDatabases.length > 0;
     if (step === 3 && campaignType?.id === 'email') return formData.template_id;
-    if (step === 4 || (step === 3 && campaignType?.id !== 'email')) return formData.assigned_users.length > 0;
+    if (step === 4 && campaignType?.id === 'email') return formData.assigned_users.length > 0;
+    if (step === 3 && campaignType?.id !== 'email') return formData.assigned_users.length > 0;
+    if (step === 5 && campaignType?.id === 'email') return true; // Planification always OK
+    if (step === 6 && campaignType?.id === 'email') {
+      // Follow-ups: if enabled, must have templates generated
+      if (followUpEnabled && followUpTemplates.length === 0) return false;
+      return true;
+    }
     return true;
+  };
+
+  // Generate follow-up templates with Asefi
+  const handleGenerateFollowUpTemplates = async () => {
+    if (!formData.template_id) {
+      toast.error('Veuillez d\'abord sélectionner un template principal');
+      return;
+    }
+
+    setGeneratingTemplates(true);
+    try {
+      const response = await api.post(`/campaigns/0/follow-ups/generate-templates`, {
+        template_id: formData.template_id,
+        follow_up_count: followUpCount,
+        campaign_name: formData.name,
+        campaign_objective: formData.objective,
+        goal_description: formData.goal_description
+      });
+
+      if (response.data.success && response.data.templates) {
+        setFollowUpTemplates(response.data.templates);
+        toast.success(`${response.data.templates.length} template(s) de relance générés par Asefi !`);
+      } else {
+        throw new Error(response.data.error || 'Erreur génération templates');
+      }
+    } catch (err) {
+      error('Erreur génération templates follow-up:', err);
+      toast.error(`Erreur: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setGeneratingTemplates(false);
+    }
+  };
+
+  // Update a follow-up template
+  const handleUpdateFollowUpTemplate = (index, field, value) => {
+    const newTemplates = [...followUpTemplates];
+    newTemplates[index] = {
+      ...newTemplates[index],
+      [field]: value
+    };
+    setFollowUpTemplates(newTemplates);
   };
 
   const handleBackToTypeSelection = () => {
     toast('Changement de type - données réinitialisées', { icon: '⚠️' });
     setStep(0);
     setCampaignType(null);
+    // Reset follow-up state
+    setFollowUpEnabled(false);
+    setFollowUpCount(1);
+    setFollowUpDelayDays(3);
+    setFollowUpTemplates([]);
     setFormData({
       name: '',
       type: '',
@@ -1047,6 +1118,46 @@ const calculateLeadsCount = async () => {
                   >
                     Envoyer les tests
                   </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STEP 6: Follow-ups / Relances (EMAIL uniquement) */}
+          {step === 6 && campaignType.id === 'email' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <RefreshCw className="w-8 h-8 text-purple-600" />
+                Configuration des relances automatiques
+              </h2>
+
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-6">
+                <p className="text-gray-700 mb-4">
+                  Augmentez vos taux de reponse en configurant des relances automatiques pour les destinataires
+                  qui n'ont pas reagi a votre premier email.
+                </p>
+
+                <FollowUpConfig
+                  enabled={followUpEnabled}
+                  onEnabledChange={setFollowUpEnabled}
+                  followUpCount={followUpCount}
+                  onFollowUpCountChange={setFollowUpCount}
+                  delayDays={followUpDelayDays}
+                  onDelayDaysChange={setFollowUpDelayDays}
+                  templates={followUpTemplates}
+                  onTemplatesChange={setFollowUpTemplates}
+                  onGenerateTemplates={handleGenerateFollowUpTemplates}
+                  generatingTemplates={generatingTemplates}
+                  campaignId={null}
+                  hasTemplate={!!formData.template_id}
+                />
+              </div>
+
+              {!followUpEnabled && (
+                <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center">
+                  <p className="text-gray-600">
+                    Les relances sont desactivees. Vous pouvez les activer a tout moment, meme apres le demarrage de la campagne.
+                  </p>
                 </div>
               )}
             </div>

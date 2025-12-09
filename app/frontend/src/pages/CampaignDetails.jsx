@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Users, Eye, MousePointer, Clock, Calendar, TrendingUp,
-  UserCheck, Edit, Trash2, Play, Pause, StopCircle, AlertCircle
+  UserCheck, Edit, Trash2, Play, Pause, StopCircle, AlertCircle, RefreshCw, Sparkles
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import FollowUpConfig from '../components/campaigns/FollowUpConfig';
+import ModifyCampaignModal from '../components/campaigns/ModifyCampaignModal';
 
 export default function CampaignDetails() {
   const navigate = useNavigate();
@@ -20,6 +22,17 @@ export default function CampaignDetails() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Follow-up state
+  const [followUpEnabled, setFollowUpEnabled] = useState(false);
+  const [followUpCount, setFollowUpCount] = useState(1);
+  const [followUpDelayDays, setFollowUpDelayDays] = useState(3);
+  const [followUpTemplates, setFollowUpTemplates] = useState([]);
+  const [showFollowUpSection, setShowFollowUpSection] = useState(false);
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
+
+  // Modify campaign modal
+  const [showModifyModal, setShowModifyModal] = useState(false);
+
   useEffect(() => {
     if (campaignId) {
       loadCampaignDetails();
@@ -32,7 +45,13 @@ export default function CampaignDetails() {
 
       // Charger la campagne d'abord (obligatoire)
       const campaignRes = await api.get(`/campaigns/${campaignId}`);
-      setCampaign(campaignRes.data.campaign);
+      const campaignData = campaignRes.data.campaign;
+      setCampaign(campaignData);
+
+      // Initialiser les états follow-up depuis la campagne
+      setFollowUpEnabled(campaignData.follow_ups_enabled || false);
+      setFollowUpCount(campaignData.follow_ups_count || 1);
+      setFollowUpDelayDays(campaignData.follow_up_delay_days || 3);
 
       // Charger stats et commercials séparément (optionnel)
       try {
@@ -51,8 +70,19 @@ export default function CampaignDetails() {
         setCommercials([]);
       }
 
-    } catch (error) {
-      error('Erreur:', error);
+      // Charger les follow-ups existants si activés
+      if (campaignData.follow_ups_enabled) {
+        try {
+          const followUpsRes = await api.get(`/campaigns/${campaignId}/follow-ups`);
+          setFollowUpTemplates(followUpsRes.data.follow_ups || []);
+        } catch (e) {
+          error('Erreur follow-ups:', e);
+          setFollowUpTemplates([]);
+        }
+      }
+
+    } catch (err) {
+      error('Erreur:', err);
       toast.error('Erreur chargement campagne');
     } finally {
       setLoading(false);
@@ -89,6 +119,44 @@ export default function CampaignDetails() {
       success: `Campagne ${statusText}`,
       error: 'Erreur changement statut',
     });
+  };
+
+  // Sauvegarder la configuration des follow-ups
+  const handleSaveFollowUpConfig = async () => {
+    setSavingFollowUp(true);
+    try {
+      await api.post(`/campaigns/${campaignId}/follow-ups/enable`, {
+        enabled: followUpEnabled,
+        follow_up_count: followUpCount,
+        delay_days: followUpDelayDays
+      });
+
+      toast.success('Configuration des relances sauvegardée');
+      loadCampaignDetails();
+    } catch (err) {
+      error('Erreur sauvegarde follow-up:', err);
+      toast.error(err.response?.data?.error || 'Erreur lors de la sauvegarde');
+    } finally {
+      setSavingFollowUp(false);
+    }
+  };
+
+  // Générer les templates de follow-up avec Asefi
+  const handleGenerateFollowUpTemplates = async () => {
+    setSavingFollowUp(true);
+    try {
+      const response = await api.post(`/campaigns/${campaignId}/follow-ups/generate-templates`);
+
+      if (response.data.success) {
+        setFollowUpTemplates(response.data.follow_ups || response.data.templates || []);
+        toast.success('Templates de relance générés par Asefi !');
+      }
+    } catch (err) {
+      error('Erreur génération templates:', err);
+      toast.error(err.response?.data?.error || 'Erreur lors de la génération');
+    } finally {
+      setSavingFollowUp(false);
+    }
   };
 
   if (loading) {
@@ -135,11 +203,18 @@ export default function CampaignDetails() {
 
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowModifyModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+            >
+              <Edit className="w-5 h-5" />
+              Modifier
+            </button>
+            <button
               onClick={handleEditCampaign}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
             >
               <Edit className="w-5 h-5" />
-              Modifier
+              Edition complete
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
@@ -322,6 +397,107 @@ export default function CampaignDetails() {
           )}
         </div>
 
+        {/* Section Relances Automatiques */}
+        {campaign.type === 'email' && campaign.status !== 'archived' && (
+          <div className="bg-white rounded-2xl shadow-xl p-6 mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                <RefreshCw className="w-7 h-7 text-purple-600" />
+                Relances automatiques
+              </h2>
+              <button
+                onClick={() => setShowFollowUpSection(!showFollowUpSection)}
+                className="text-purple-600 hover:text-purple-700 font-semibold"
+              >
+                {showFollowUpSection ? 'Reduire' : 'Configurer'}
+              </button>
+            </div>
+
+            {!showFollowUpSection ? (
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
+                {followUpEnabled ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                        <Sparkles className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">Relances activees</h3>
+                        <p className="text-sm text-gray-600">
+                          {followUpCount} relance(s) configuree(s) - Delai: {followUpDelayDays} jours
+                        </p>
+                        {followUpTemplates.length > 0 && (
+                          <p className="text-xs text-green-600 font-medium mt-1">
+                            {followUpTemplates.length} template(s) prets
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-sm font-semibold">
+                        Actif
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <RefreshCw className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <h3 className="font-bold text-gray-900 mb-2">Relances non configurees</h3>
+                    <p className="text-gray-600 mb-4">
+                      Activez les relances pour augmenter vos taux de reponse
+                    </p>
+                    <button
+                      onClick={() => setShowFollowUpSection(true)}
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700"
+                    >
+                      Configurer les relances
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <FollowUpConfig
+                  campaignId={campaignId}
+                  enabled={followUpEnabled}
+                  onEnabledChange={setFollowUpEnabled}
+                  followUpCount={followUpCount}
+                  onFollowUpCountChange={setFollowUpCount}
+                  delayDays={followUpDelayDays}
+                  onDelayDaysChange={setFollowUpDelayDays}
+                  templates={followUpTemplates}
+                  onTemplatesChange={setFollowUpTemplates}
+                  isNewCampaign={false}
+                  hasTemplate={!!campaign.template_id}
+                />
+
+                <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowFollowUpSection(false)}
+                    className="px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleSaveFollowUpConfig}
+                    disabled={savingFollowUp}
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {savingFollowUp ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        Sauvegarde...
+                      </>
+                    ) : (
+                      'Sauvegarder'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Modal Confirmation Suppression */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -357,6 +533,14 @@ export default function CampaignDetails() {
             </div>
           </div>
         )}
+
+        {/* Modal Modification Campagne */}
+        <ModifyCampaignModal
+          isOpen={showModifyModal}
+          onClose={() => setShowModifyModal(false)}
+          campaignId={campaignId}
+          onCampaignUpdated={loadCampaignDetails}
+        />
       </div>
     </div>
   );
