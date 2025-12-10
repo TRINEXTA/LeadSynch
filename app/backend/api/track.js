@@ -158,7 +158,11 @@ router.get("/click", async (req, res) => {
     `, [lead_id, campaign_id, lead.tenant_id, follow_up_id || null]);
 
     // 🔄 Envoie le lead dans le pipeline commercial (avec tenant_id obligatoire)
-    // IMPORTANT: DO NOTHING sur conflit - ne jamais écraser un stage existant !
+    // IMPORTANT - INTÉGRITÉ PIPELINE RELANCES:
+    // - Les clics issus des RELANCES (follow_up_id présent) utilisent le MÊME campaign_id
+    // - Cela garantit que le lead est réintégré dans la campagne ORIGINALE
+    // - PAS de création de nouvelle campagne parallèle
+    // - ON CONFLICT DO NOTHING: ne jamais écraser un stage existant (préserve progression)
     try {
       await execute(`
         INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)

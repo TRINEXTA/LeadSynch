@@ -87,6 +87,10 @@ export class ElasticEmailPolling {
       }
 
       // 2) Injecter dans pipeline sur "click" - DO NOTHING si déjà présent !
+      // IMPORTANT - INTÉGRITÉ PIPELINE RELANCES:
+      // - Les clics détectés via polling utilisent le campaign_id ORIGINAL
+      // - Garantit la réintégration dans la campagne d'origine (pas de doublon)
+      // - ON CONFLICT DO NOTHING: préserve les stages existants
       if (eventType === 'click') {
         try {
           await execute(

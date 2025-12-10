@@ -141,15 +141,29 @@ Pour les personnes qui ont OUVERT l'email mais n'ont PAS cliqué sur le lien.
 - Mais quelque chose les a empêchés d'agir
 - Rappelle-leur le bénéfice principal
 - Reformule l'offre de manière différente
-- Le délai depuis l'envoi: ${delayDays} jours` : ''}
+- Le délai depuis l'envoi: ${delayDays} jours
+- Ton: Bienveillant, rappel amical "Suite à notre précédent message..."` : ''}
 
-${followUpCount === 2 ? `### RELANCE 2 - "PAS OUVERT DU TOUT"
+${followUpCount === 2 ? `### RELANCE 2 - "PAS OUVERT DU TOUT" (MESSAGE DE RAPPEL CLAIR)
 Pour les personnes qui N'ONT PAS ouvert l'email du tout.
-- Le sujet n'a pas capté leur attention
-- Nouveau sujet plus accrocheur/intrigant
-- Email plus court et direct
-- Créer de la curiosité ou de l'urgence
-- Le délai depuis l'envoi: ${delayDays * 2} jours` : ''}
+OBJECTIF: Capter leur attention avec un sujet complètement différent
+
+STRUCTURE OBLIGATOIRE DU MESSAGE:
+1. Sujet: Nouveau, intrigant, ne doit PAS ressembler au premier (ex: question, curiosité)
+2. Accroche: Mentionner clairement que c'est un rappel car le premier message n'a pas été ouvert
+   - Exemple: "Je me permets de vous recontacter car mon précédent message est peut-être passé inaperçu..."
+   - Exemple: "Votre boîte mail étant sûrement très sollicitée, je souhaitais m'assurer que vous aviez bien reçu notre proposition..."
+3. Rappel concis: Résumer en 2-3 lignes la proposition principale
+4. CTA clair: Bouton/lien d'action avec bénéfice explicite
+5. Ton: Compréhensif et non intrusif, pas de pression
+
+INTERDICTIONS:
+- Ne PAS copier le premier email
+- Ne PAS utiliser le même sujet ou une variante proche
+- Ne PAS utiliser de tons culpabilisants ("Vous n'avez pas ouvert...")
+- Ne PAS être trop insistant ou agressif
+
+Le délai depuis l'envoi: ${delayDays} jours (les deux relances peuvent démarrer en parallèle)` : ''}
 
 ## EXIGENCES TECHNIQUES
 
