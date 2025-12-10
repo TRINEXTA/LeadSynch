@@ -110,8 +110,8 @@ export class ElasticEmailPolling {
         }
         log(`🧩 [POLLING] Lead injecté dans pipeline (leads_click): ${leadId}`);
       }
-    } catch (error) {
-      error('❌ [POLLING] Erreur recordEvent:', error.message);
+    } catch (err) {
+      error('❌ [POLLING] Erreur recordEvent:', err.message);
     }
   }
 
@@ -147,9 +147,9 @@ export class ElasticEmailPolling {
 
       log(`✅ [POLLING] ${emails.length} emails vérifiés`);
       return { success: true, leadsChecked: emails.length };
-    } catch (error) {
-      error('❌ [POLLING] Erreur syncCampaignStats:', error);
-      return { success: false, error: error.message };
+    } catch (err) {
+      error('❌ [POLLING] Erreur syncCampaignStats:', err);
+      return { success: false, error: err.message };
     }
   }
 
@@ -272,9 +272,9 @@ export class ElasticEmailPolling {
 
       log('\n✅ [POLLING] Synchronisation globale terminée\n');
       return { success: true, campaignsProcessed: campaigns.length };
-    } catch (error) {
-      error('❌ [POLLING] Erreur syncAllActiveCampaigns:', error);
-      return { success: false, error: error.message };
+    } catch (err) {
+      error('❌ [POLLING] Erreur syncAllActiveCampaigns:', err);
+      return { success: false, error: err.message };
     }
   }
 
@@ -317,8 +317,8 @@ export class ElasticEmailPolling {
       }
 
       log('✅ [POLLING] Compteurs mis à jour');
-    } catch (error) {
-      error('❌ [POLLING] Erreur updateCampaignCounters:', error);
+    } catch (err) {
+      error('❌ [POLLING] Erreur updateCampaignCounters:', err);
     }
   }
 
@@ -329,9 +329,11 @@ export class ElasticEmailPolling {
       log('🔄 [POLLING] Synchronisation des clics vers pipeline...');
 
       // Récupérer les clics qui ne sont pas encore dans pipeline_leads
+      // JOIN avec campaigns pour éviter les foreign key errors
       const { rows: missingClicks } = await query(`
         SELECT DISTINCT et.lead_id, et.campaign_id, et.tenant_id
         FROM email_tracking et
+        JOIN campaigns c ON c.id = et.campaign_id
         WHERE et.event_type = 'click'
           AND NOT EXISTS (
             SELECT 1 FROM pipeline_leads pl
@@ -347,29 +349,34 @@ export class ElasticEmailPolling {
 
       log(`📥 [POLLING] ${missingClicks.length} clics à injecter dans le pipeline`);
 
+      let inserted = 0;
       for (const click of missingClicks) {
         try {
-          // DO NOTHING sur conflit - ne jamais écraser un stage existant !
+          // Essayer d'abord avec la nouvelle contrainte
           await execute(
             `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
              VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
              ON CONFLICT (tenant_id, lead_id, campaign_id) DO NOTHING`,
             [click.tenant_id, click.lead_id, click.campaign_id]
           );
+          inserted++;
         } catch (insertErr) {
           // Fallback ancienne contrainte
-          if (insertErr.message?.includes('constraint')) {
+          try {
             await execute(
               `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
                VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
                ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
               [click.tenant_id, click.lead_id, click.campaign_id]
             );
+            inserted++;
+          } catch (fallbackErr) {
+            warn(`⚠️ [POLLING] Impossible d'injecter le lead ${click.lead_id}: ${fallbackErr.message}`);
           }
         }
       }
 
-      log(`✅ [POLLING] ${missingClicks.length} clics injectés dans le pipeline`);
+      log(`✅ [POLLING] ${inserted}/${missingClicks.length} clics injectés dans le pipeline`);
     } catch (err) {
       error('❌ [POLLING] Erreur syncClicksToPipeline:', err.message);
     }
