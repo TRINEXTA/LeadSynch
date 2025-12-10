@@ -185,9 +185,15 @@ router.post('/:campaignId/follow-ups/enable', authenticateToken, async (req, res
  * POST /api/campaigns/:campaignId/follow-ups/generate-templates
  * Génère les templates de relance avec Asefi
  *
+ * NOUVEAU: Support des modes indépendants
+ * - target_audience: 'opened_not_clicked' | 'not_opened' (optionnel)
+ *   Si spécifié, génère uniquement ce type de relance
+ *   Si non spécifié, génère selon follow_up_count (ancien comportement)
+ *
  * Pour nouvelles campagnes (campaignId=0), utilise les données du body:
  * - template_id: ID du template principal
- * - follow_up_count: Nombre de relances (1 ou 2)
+ * - follow_up_count: Nombre de relances (1 ou 2) - ancien mode
+ * - target_audience: Type de relance à générer - nouveau mode
  * - campaign_name, campaign_objective, goal_description
  */
 router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, async (req, res) => {
@@ -198,6 +204,9 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
     if (!tenantId) {
       return res.status(401).json({ error: 'Non authentifié' });
     }
+
+    // NOUVEAU: target_audience pour génération d'un seul mode
+    const { target_audience, delay_days: bodyDelayDays } = req.body;
 
     // CAS 1: Nouvelle campagne (campaignId = 0 ou "0")
     if (campaignId === '0' || campaignId === 0) {
@@ -221,36 +230,42 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
 
       log(`🤖 [API] Génération templates relance pour nouvelle campagne...`);
 
+      // Déterminer combien de templates générer
+      // Si target_audience est spécifié, générer uniquement ce type
+      const generateBoth = !target_audience;
+      const effectiveCount = target_audience ? (target_audience === 'not_opened' ? 2 : 1) : follow_up_count;
+
       // Générer avec Asefi
       const result = await generateFollowUpTemplates({
         originalSubject: template.subject,
         originalHtml: template.html_body,
         campaignObjective: campaign_objective || goal_description || 'Prospection commerciale',
         companyName: template.company_name || 'Notre entreprise',
-        followUpCount: follow_up_count,
-        delayDays: 3
+        followUpCount: effectiveCount,
+        delayDays: bodyDelayDays || 3
       });
 
       // Retourner les templates générés (sans les sauvegarder en DB car pas encore de campagne)
       const templates = [];
 
-      if (result.templates.opened_not_clicked) {
+      // NOUVEAU: Filtrer selon target_audience si spécifié
+      if (result.templates.opened_not_clicked && (!target_audience || target_audience === 'opened_not_clicked')) {
         templates.push({
           follow_up_number: 1,
           target_audience: 'opened_not_clicked',
           subject: result.templates.opened_not_clicked.subject,
           html_content: result.templates.opened_not_clicked.html,
-          delay_days: 3
+          delay_days: bodyDelayDays || 3
         });
       }
 
-      if (follow_up_count === 2 && result.templates.not_opened) {
+      if (result.templates.not_opened && (!target_audience || target_audience === 'not_opened')) {
         templates.push({
           follow_up_number: 2,
           target_audience: 'not_opened',
           subject: result.templates.not_opened.subject,
           html_content: result.templates.not_opened.html,
-          delay_days: 6
+          delay_days: bodyDelayDays || 3
         });
       }
 
@@ -259,6 +274,7 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
       return res.json({
         success: true,
         templates,
+        follow_ups: templates, // Alias pour compatibilité
         message: `${templates.length} template(s) de relance générés`
       });
     }
@@ -278,9 +294,14 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
     }
 
     // Récupérer les paramètres du body ou de la campagne
-    const { follow_up_count, delay_days } = req.body;
-    const followUpCount = follow_up_count || campaign.follow_ups_count || 1;
-    const delayDays = delay_days || campaign.follow_up_delay_days || 3;
+    const { follow_up_count } = req.body;
+    const delayDays = bodyDelayDays || campaign.follow_up_delay_days || 3;
+
+    // NOUVEAU: Si target_audience spécifié, générer uniquement ce type
+    const generateBoth = !target_audience;
+    const effectiveCount = target_audience
+      ? (target_audience === 'not_opened' ? 2 : 1)
+      : (follow_up_count || campaign.follow_ups_count || 1);
 
     // Si les relances ne sont pas activées, les activer automatiquement
     if (!campaign.follow_ups_enabled) {
@@ -292,14 +313,14 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
             follow_up_delay_days = $2,
             updated_at = NOW()
         WHERE id = $3
-      `, [followUpCount, delayDays, campaignId]);
+      `, [Math.max(effectiveCount, campaign.follow_ups_count || 1), delayDays, campaignId]);
     }
 
     if (!campaign.html_body) {
       return res.status(400).json({ error: 'Aucun template associé à cette campagne' });
     }
 
-    log(`🤖 [API] Génération templates relance pour "${campaign.name}"...`);
+    log(`🤖 [API] Génération templates relance pour "${campaign.name}" (mode: ${target_audience || 'tous'})...`);
 
     // Générer avec Asefi
     const result = await generateFollowUpTemplates({
@@ -307,28 +328,29 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
       originalHtml: campaign.html_body,
       campaignObjective: campaign.objective || campaign.description,
       companyName: campaign.company_name || 'Notre entreprise',
-      followUpCount: followUpCount,
+      followUpCount: effectiveCount,
       delayDays: delayDays
     });
 
     // Créer les entrées dans campaign_follow_ups
     const followUpsToCreate = [];
 
-    // Relance 1: opened_not_clicked
-    if (result.templates.opened_not_clicked) {
+    // NOUVEAU: Filtrer selon target_audience si spécifié
+    if (result.templates.opened_not_clicked && (!target_audience || target_audience === 'opened_not_clicked')) {
       followUpsToCreate.push({
         follow_up_number: 1,
         target_audience: 'opened_not_clicked',
-        template: result.templates.opened_not_clicked
+        template: result.templates.opened_not_clicked,
+        delay_days: delayDays
       });
     }
 
-    // Relance 2: not_opened (si demandé)
-    if (followUpCount === 2 && result.templates.not_opened) {
+    if (result.templates.not_opened && (!target_audience || target_audience === 'not_opened')) {
       followUpsToCreate.push({
         follow_up_number: 2,
         target_audience: 'not_opened',
-        template: result.templates.not_opened
+        template: result.templates.not_opened,
+        delay_days: delayDays
       });
     }
 
@@ -344,6 +366,8 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
         DO UPDATE SET
           subject = EXCLUDED.subject,
           html_content = EXCLUDED.html_content,
+          target_audience = EXCLUDED.target_audience,
+          delay_days = EXCLUDED.delay_days,
           updated_at = NOW()
         RETURNING *
       `, [
@@ -351,7 +375,7 @@ router.post('/:campaignId/follow-ups/generate-templates', authenticateToken, asy
         tenantId,
         fu.follow_up_number,
         fu.target_audience,
-        campaign.follow_up_delay_days * fu.follow_up_number,
+        fu.delay_days,
         fu.template.subject,
         fu.template.html
       ]);
