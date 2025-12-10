@@ -43,8 +43,8 @@ const processEmailQueue = async () => {
 
     log('✅ [EMAIL WORKER] Traitement terminé');
 
-  } catch (error) {
-    error('❌ [EMAIL WORKER] Erreur:', error);
+  } catch (err) {
+    error('❌ [EMAIL WORKER] Erreur:', err);
   }
 };
 
@@ -334,8 +334,8 @@ const processCampaign = async (campaign) => {
     log(`📊 [EMAIL WORKER] Campagne "${campaign.name}": ${successCount} envoyés, ${failCount} échecs`);
     log(`📊 [EMAIL WORKER] Stats totales: ${stats.sent} envoyés, ${stats.failed} échecs, ${stats.pending} en attente`);
 
-  } catch (error) {
-    error(`❌ [EMAIL WORKER] Erreur traitement campagne ${campaign.name}:`, error);
+  } catch (err) {
+    error(`❌ [EMAIL WORKER] Erreur traitement campagne ${campaign.name}:`, err);
   }
 };
 
