@@ -887,46 +887,78 @@ router.post('/:campaignId/follow-ups/start-now', authenticateToken, async (req, 
 
     for (const followUp of pendingFollowUps) {
       // Identifier les leads éligibles et les ajouter à la queue
+      // LOGIQUE MISE À JOUR: Les deux types de relances fonctionnent indépendamment
       let eligibleLeadsQuery;
 
       if (followUp.target_audience === 'opened_not_clicked') {
+        // Leads qui ont ouvert (principal OU relance) mais JAMAIS cliqué
         eligibleLeadsQuery = `
           SELECT DISTINCT l.id as lead_id, l.email
           FROM leads l
           JOIN email_queue eq ON eq.lead_id = l.id AND eq.campaign_id = $1
           WHERE eq.status = 'sent'
           AND l.unsubscribed = false
+          -- A ouvert (l'email principal OU une relance de cette campagne)
           AND EXISTS (
             SELECT 1 FROM email_tracking et
             WHERE et.lead_id = l.id AND et.campaign_id = $1
-            AND et.event_type = 'open' AND et.follow_up_id IS NULL
+            AND et.event_type = 'open'
           )
+          -- Mais n'a JAMAIS cliqué (ni principal ni relance)
           AND NOT EXISTS (
             SELECT 1 FROM email_tracking et
             WHERE et.lead_id = l.id AND et.campaign_id = $1
-            AND et.event_type = 'click' AND et.follow_up_id IS NULL
+            AND et.event_type = 'click'
           )
+          -- Pas déjà dans cette queue de relance
           AND NOT EXISTS (
             SELECT 1 FROM follow_up_queue fq
             WHERE fq.lead_id = l.id AND fq.follow_up_id = $2
+          )
+          -- Pas déjà dans une autre relance opened_not_clicked de cette campagne
+          AND NOT EXISTS (
+            SELECT 1 FROM follow_up_queue fq
+            JOIN campaign_follow_ups cfu ON fq.follow_up_id = cfu.id
+            WHERE fq.lead_id = l.id
+            AND cfu.campaign_id = $1
+            AND cfu.target_audience = 'opened_not_clicked'
+            AND fq.status IN ('sent', 'pending')
           )
           AND eq.status != 'bounced'
         `;
       } else {
+        // Leads qui n'ont JAMAIS ouvert AUCUN email de cette campagne
         eligibleLeadsQuery = `
           SELECT DISTINCT l.id as lead_id, l.email
           FROM leads l
           JOIN email_queue eq ON eq.lead_id = l.id AND eq.campaign_id = $1
           WHERE eq.status = 'sent'
           AND l.unsubscribed = false
+          -- N'a JAMAIS ouvert aucun email de cette campagne (principal OU relance)
           AND NOT EXISTS (
             SELECT 1 FROM email_tracking et
             WHERE et.lead_id = l.id AND et.campaign_id = $1
-            AND et.event_type = 'open' AND et.follow_up_id IS NULL
+            AND et.event_type = 'open'
           )
+          -- N'a JAMAIS cliqué non plus
+          AND NOT EXISTS (
+            SELECT 1 FROM email_tracking et
+            WHERE et.lead_id = l.id AND et.campaign_id = $1
+            AND et.event_type = 'click'
+          )
+          -- Pas déjà dans cette queue de relance
           AND NOT EXISTS (
             SELECT 1 FROM follow_up_queue fq
             WHERE fq.lead_id = l.id AND fq.follow_up_id = $2
+          )
+          -- Pas déjà dans une autre relance not_opened de cette campagne (une seule fois par contact)
+          AND NOT EXISTS (
+            SELECT 1 FROM follow_up_queue fq
+            JOIN campaign_follow_ups cfu ON fq.follow_up_id = cfu.id
+            WHERE fq.lead_id = l.id
+            AND cfu.campaign_id = $1
+            AND cfu.target_audience = 'not_opened'
+            AND fq.status IN ('sent', 'pending')
           )
           AND eq.status != 'bounced'
         `;
