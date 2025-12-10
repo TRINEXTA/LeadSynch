@@ -29,6 +29,15 @@ export default function CampaignDetails() {
   const [followUpTemplates, setFollowUpTemplates] = useState([]);
   const [showFollowUpSection, setShowFollowUpSection] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
+  // NEW: Independent mode configuration for relances
+  const [enabledModes, setEnabledModes] = useState({
+    opened_not_clicked: false,
+    not_opened: false
+  });
+  const [delayByMode, setDelayByMode] = useState({
+    opened_not_clicked: 3,
+    not_opened: 3
+  });
 
   // Modify campaign modal
   const [showModifyModal, setShowModifyModal] = useState(false);
@@ -52,6 +61,13 @@ export default function CampaignDetails() {
       setFollowUpEnabled(campaignData.follow_ups_enabled || false);
       setFollowUpCount(campaignData.follow_ups_count || 1);
       setFollowUpDelayDays(campaignData.follow_up_delay_days || 3);
+      // NEW: Initialize independent mode configuration
+      if (campaignData.enabled_modes) {
+        setEnabledModes(campaignData.enabled_modes);
+      }
+      if (campaignData.delay_by_mode) {
+        setDelayByMode(campaignData.delay_by_mode);
+      }
 
       // Charger stats et commercials séparément (optionnel)
       try {
@@ -130,7 +146,10 @@ export default function CampaignDetails() {
         const response = await api.post(`/campaigns/${campaignId}/follow-ups/save-templates`, {
           templates: followUpTemplates,
           follow_up_count: followUpCount,
-          delay_days: followUpDelayDays
+          delay_days: followUpDelayDays,
+          // NEW: Independent mode configuration
+          enabled_modes: enabledModes,
+          delay_by_mode: delayByMode
         });
 
         if (response.data.success) {
@@ -142,7 +161,10 @@ export default function CampaignDetails() {
         await api.post(`/campaigns/${campaignId}/follow-ups/enable`, {
           enabled: followUpEnabled,
           follow_up_count: followUpCount,
-          delay_days: followUpDelayDays
+          delay_days: followUpDelayDays,
+          // NEW: Independent mode configuration
+          enabled_modes: enabledModes,
+          delay_by_mode: delayByMode
         });
         toast.success('Configuration des relances sauvegardée');
       }
@@ -807,6 +829,10 @@ export default function CampaignDetails() {
                   onTemplatesChange={setFollowUpTemplates}
                   isNewCampaign={false}
                   hasTemplate={!!campaign.template_id}
+                  enabledModes={enabledModes}
+                  onEnabledModesChange={setEnabledModes}
+                  delayByMode={delayByMode}
+                  onDelayByModeChange={setDelayByMode}
                 />
 
                 <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
