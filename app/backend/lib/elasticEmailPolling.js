@@ -86,16 +86,29 @@ export class ElasticEmailPolling {
         // log(`[POLLING] Event déjà présent: ${eventType} lead ${leadId}`);
       }
 
-      // 2) Toujours upsert le pipeline sur "click" (même si l'event existait déjà)
+      // 2) Injecter dans pipeline sur "click" - DO NOTHING si déjà présent !
       if (eventType === 'click') {
-        await execute(
-          `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
-           ON CONFLICT (lead_id, campaign_id)
-           DO UPDATE SET stage = EXCLUDED.stage, updated_at = NOW()`,
-          [tenantId, leadId, campaignId]
-        );
-        log(`🧩 [POLLING] Lead injecté/MAJ dans pipeline (leads_click): ${leadId}`);
+        try {
+          await execute(
+            `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+             ON CONFLICT (tenant_id, lead_id, campaign_id) DO NOTHING`,
+            [tenantId, leadId, campaignId]
+          );
+        } catch (insertErr) {
+          // Fallback: ancienne contrainte (lead_id, campaign_id)
+          if (insertErr.message?.includes('constraint')) {
+            await execute(
+              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+              [tenantId, leadId, campaignId]
+            );
+          } else {
+            throw insertErr;
+          }
+        }
+        log(`🧩 [POLLING] Lead injecté dans pipeline (leads_click): ${leadId}`);
       }
     } catch (error) {
       error('❌ [POLLING] Erreur recordEvent:', error.message);
@@ -240,7 +253,7 @@ export class ElasticEmailPolling {
       const { rows: campaigns } = await query(
         `SELECT id, name, status
            FROM campaigns
-          WHERE status IN ('active', 'tracking')
+          WHERE status IN ('active', 'tracking', 'relances_en_cours', 'surveillance', 'completed', 'paused')
             AND type = 'email'
             AND created_at > NOW() - INTERVAL '30 days'
           ORDER BY created_at DESC`
@@ -255,6 +268,7 @@ export class ElasticEmailPolling {
       }
 
       await this.updateCampaignCounters();
+      await this.syncClicksToPipeline();
 
       log('\n✅ [POLLING] Synchronisation globale terminée\n');
       return { success: true, campaignsProcessed: campaigns.length };
@@ -271,7 +285,7 @@ export class ElasticEmailPolling {
       const { rows: campaigns } = await query(
         `SELECT id
            FROM campaigns
-          WHERE status IN ('active', 'tracking')
+          WHERE status IN ('active', 'tracking', 'relances_en_cours', 'surveillance', 'completed', 'paused')
             AND type = 'email'`
       );
 
@@ -305,6 +319,59 @@ export class ElasticEmailPolling {
       log('✅ [POLLING] Compteurs mis à jour');
     } catch (error) {
       error('❌ [POLLING] Erreur updateCampaignCounters:', error);
+    }
+  }
+
+  // Synchronise automatiquement les clics de email_tracking vers pipeline_leads
+  // IMPORTANT: N'écrase JAMAIS les stages existants - INSERT ONLY si pas déjà présent
+  async syncClicksToPipeline() {
+    try {
+      log('🔄 [POLLING] Synchronisation des clics vers pipeline...');
+
+      // Récupérer les clics qui ne sont pas encore dans pipeline_leads
+      const { rows: missingClicks } = await query(`
+        SELECT DISTINCT et.lead_id, et.campaign_id, et.tenant_id
+        FROM email_tracking et
+        WHERE et.event_type = 'click'
+          AND NOT EXISTS (
+            SELECT 1 FROM pipeline_leads pl
+            WHERE pl.lead_id = et.lead_id
+              AND pl.campaign_id = et.campaign_id
+          )
+      `);
+
+      if (missingClicks.length === 0) {
+        log('✅ [POLLING] Tous les clics sont déjà dans le pipeline');
+        return;
+      }
+
+      log(`📥 [POLLING] ${missingClicks.length} clics à injecter dans le pipeline`);
+
+      for (const click of missingClicks) {
+        try {
+          // DO NOTHING sur conflit - ne jamais écraser un stage existant !
+          await execute(
+            `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+             ON CONFLICT (tenant_id, lead_id, campaign_id) DO NOTHING`,
+            [click.tenant_id, click.lead_id, click.campaign_id]
+          );
+        } catch (insertErr) {
+          // Fallback ancienne contrainte
+          if (insertErr.message?.includes('constraint')) {
+            await execute(
+              `INSERT INTO pipeline_leads (id, tenant_id, lead_id, campaign_id, stage, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'leads_click', NOW(), NOW())
+               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+              [click.tenant_id, click.lead_id, click.campaign_id]
+            );
+          }
+        }
+      }
+
+      log(`✅ [POLLING] ${missingClicks.length} clics injectés dans le pipeline`);
+    } catch (err) {
+      error('❌ [POLLING] Erreur syncClicksToPipeline:', err.message);
     }
   }
 }
