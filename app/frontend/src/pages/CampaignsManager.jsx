@@ -48,6 +48,15 @@ export default function CampaignsManager() {
   const [followUpDelayDays, setFollowUpDelayDays] = useState(3);
   const [followUpTemplates, setFollowUpTemplates] = useState([]);
   const [generatingTemplates, setGeneratingTemplates] = useState(false);
+  // NEW: Independent mode configuration for relances
+  const [enabledModes, setEnabledModes] = useState({
+    opened_not_clicked: false,
+    not_opened: false
+  });
+  const [delayByMode, setDelayByMode] = useState({
+    opened_not_clicked: 3,
+    not_opened: 3
+  });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -385,7 +394,10 @@ const calculateLeadsCount = async () => {
       follow_ups_enabled: followUpEnabled,
       follow_ups_count: followUpCount,
       follow_up_delay_days: followUpDelayDays,
-      follow_up_templates: followUpTemplates
+      follow_up_templates: followUpTemplates,
+      // NEW: Independent mode configuration
+      enabled_modes: enabledModes,
+      delay_by_mode: delayByMode
     };
 
     const promise = api.post('/campaigns', campaignData)
@@ -414,7 +426,10 @@ const calculateLeadsCount = async () => {
       follow_ups_enabled: followUpEnabled,
       follow_ups_count: followUpCount,
       follow_up_delay_days: followUpDelayDays,
-      follow_up_templates: followUpTemplates
+      follow_up_templates: followUpTemplates,
+      // NEW: Independent mode configuration
+      enabled_modes: enabledModes,
+      delay_by_mode: delayByMode
     };
 
     let promise;
@@ -1150,6 +1165,10 @@ const calculateLeadsCount = async () => {
                   generatingTemplates={generatingTemplates}
                   campaignId={null}
                   hasTemplate={!!formData.template_id}
+                  enabledModes={enabledModes}
+                  onEnabledModesChange={setEnabledModes}
+                  delayByMode={delayByMode}
+                  onDelayByModeChange={setDelayByMode}
                 />
               </div>
 
