@@ -105,6 +105,11 @@ const SuperAdminTenantDetails = lazy(() => import('./pages/SuperAdminTenantDetai
 const SuperAdminSubscriptions = lazy(() => import('./pages/SuperAdminSubscriptions'));
 const SuperAdminInvoices = lazy(() => import('./pages/SuperAdminInvoices'));
 
+// Profil et espace personnel
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const MyCommissions = lazy(() => import('./pages/MyCommissions'));
+const Planning = lazy(() => import('./pages/Planning'));
+
 // Composant de chargement élégant
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -222,6 +227,11 @@ function App() {
               <Route path="/billing" element={<Billing />} />
               <Route path="/lead-credits" element={<LeadCredits />} />
               <Route path="/services" element={<Services />} />
+
+              {/* Routes Profil et espace personnel */}
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/my-commissions" element={<MyCommissions />} />
+              <Route path="/planning" element={<Planning />} />
 
               {/* Routes Super-Admin TRINEXTA */}
               <Route path="/super-admin" element={<SuperAdminDashboard />} />

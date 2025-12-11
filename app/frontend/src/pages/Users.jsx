@@ -4,7 +4,19 @@ import toast from 'react-hot-toast';
 import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key, Settings, Check } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { PERMISSIONS, PERMISSION_LABELS, PERMISSION_CATEGORIES, DEFAULT_MANAGER_PERMISSIONS } from '../lib/permissions';
+import {
+  PERMISSIONS,
+  PERMISSION_LABELS,
+  PERMISSION_CATEGORIES,
+  DEFAULT_MANAGER_PERMISSIONS,
+  HIERARCHICAL_LEVELS,
+  HIERARCHY_CONFIG,
+  HIERARCHY_DEFAULT_PERMISSIONS,
+  COMMISSION_TYPES,
+  COMMISSION_TYPE_LABELS,
+  getHierarchyLabel,
+  getHierarchyConfig
+} from '../lib/permissions';
 
 const ROLES = [
   { value: 'admin', label: 'Administrateur', color: 'bg-red-100 text-red-700', icon: Shield },
@@ -30,7 +42,13 @@ export default function Users() {
     role: 'commercial',
     phone: '',
     team_id: '',
-    permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
+    permissions: { ...DEFAULT_MANAGER_PERMISSIONS },
+    // Nouveaux champs hiérarchie et commissions
+    hierarchical_level: '',
+    commission_rate: 0,
+    team_commission_rate: 0,
+    commission_type: 'percentage',
+    base_salary: ''
   });
 
   const isAdmin = currentUser?.role === 'admin';
@@ -87,6 +105,20 @@ export default function Users() {
       // Ajouter les permissions pour les managers
       if (formData.role === 'manager') {
         dataToSend.permissions = formData.permissions || DEFAULT_MANAGER_PERMISSIONS;
+        // Ajouter le niveau hiérarchique si défini
+        if (formData.hierarchical_level) {
+          dataToSend.hierarchical_level = formData.hierarchical_level;
+        }
+      }
+
+      // Ajouter les données de commission (pour managers et commerciaux)
+      if (['manager', 'commercial'].includes(formData.role)) {
+        dataToSend.commission_rate = parseFloat(formData.commission_rate) || 0;
+        dataToSend.team_commission_rate = parseFloat(formData.team_commission_rate) || 0;
+        dataToSend.commission_type = formData.commission_type || 'percentage';
+        if (formData.base_salary) {
+          dataToSend.base_salary = parseFloat(formData.base_salary);
+        }
       }
 
       if (editingUser) {
@@ -108,7 +140,12 @@ export default function Users() {
         role: 'commercial',
         phone: '',
         team_id: '',
-        permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
+        permissions: { ...DEFAULT_MANAGER_PERMISSIONS },
+        hierarchical_level: '',
+        commission_rate: 0,
+        team_commission_rate: 0,
+        commission_type: 'percentage',
+        base_salary: ''
       });
       loadUsers();
     } catch (err) {
@@ -167,7 +204,13 @@ export default function Users() {
       phone: user.phone || '',
       team_id: user.team_id || '',
       // Charger les permissions existantes ou les permissions par défaut
-      permissions: user.permissions || { ...DEFAULT_MANAGER_PERMISSIONS }
+      permissions: user.permissions || { ...DEFAULT_MANAGER_PERMISSIONS },
+      // Charger les données de hiérarchie et commission
+      hierarchical_level: user.hierarchical_level || '',
+      commission_rate: user.commission_rate || 0,
+      team_commission_rate: user.team_commission_rate || 0,
+      commission_type: user.commission_type || 'percentage',
+      base_salary: user.base_salary || ''
     });
     setShowModal(true);
   };
@@ -243,7 +286,12 @@ export default function Users() {
                   role: 'commercial',
                   phone: '',
                   team_id: '',
-                  permissions: { ...DEFAULT_MANAGER_PERMISSIONS }
+                  permissions: { ...DEFAULT_MANAGER_PERMISSIONS },
+                  hierarchical_level: '',
+                  commission_rate: 0,
+                  team_commission_rate: 0,
+                  commission_type: 'percentage',
+                  base_salary: ''
                 });
                 setShowModal(true);
               }}
@@ -581,6 +629,121 @@ export default function Users() {
                   ))}
                 </select>
               </div>
+
+              {/* Niveau hiérarchique - Visible seulement pour les managers */}
+              {formData.role === 'manager' && (isAdmin || isSuperAdmin) && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Niveau hiérarchique
+                  </label>
+                  <select
+                    value={formData.hierarchical_level}
+                    onChange={(e) => {
+                      const level = e.target.value;
+                      setFormData({
+                        ...formData,
+                        hierarchical_level: level,
+                        // Appliquer les permissions par défaut du niveau si sélectionné
+                        permissions: level && HIERARCHY_DEFAULT_PERMISSIONS[level]
+                          ? { ...HIERARCHY_DEFAULT_PERMISSIONS[level] }
+                          : { ...DEFAULT_MANAGER_PERMISSIONS }
+                      });
+                    }}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none bg-white"
+                  >
+                    <option value="">Manager standard</option>
+                    {Object.entries(HIERARCHY_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                  {formData.hierarchical_level && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {HIERARCHY_CONFIG[formData.hierarchical_level]?.description}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Section Commission - Visible pour managers et commerciaux */}
+              {['manager', 'commercial'].includes(formData.role) && (isAdmin || isSuperAdmin) && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Settings className="w-5 h-5 text-green-600" />
+                    <h3 className="text-lg font-bold text-green-900">Rémunération & Commission</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Type de commission */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Type de commission
+                      </label>
+                      <select
+                        value={formData.commission_type}
+                        onChange={(e) => setFormData({...formData, commission_type: e.target.value})}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none bg-white text-sm"
+                      >
+                        {Object.entries(COMMISSION_TYPE_LABELS).map(([key, label]) => (
+                          <option key={key} value={key}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Taux de commission personnel */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Commission personnelle (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="100"
+                        value={formData.commission_rate}
+                        onChange={(e) => setFormData({...formData, commission_rate: e.target.value})}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none text-sm"
+                        placeholder="0"
+                      />
+                    </div>
+
+                    {/* Taux sur équipe - seulement pour managers */}
+                    {formData.role === 'manager' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Commission équipe (%)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="100"
+                          value={formData.team_commission_rate}
+                          onChange={(e) => setFormData({...formData, team_commission_rate: e.target.value})}
+                          className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none text-sm"
+                          placeholder="0"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">% sur les ventes de son équipe</p>
+                      </div>
+                    )}
+
+                    {/* Salaire fixe */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Salaire fixe (€)
+                      </label>
+                      <input
+                        type="number"
+                        step="100"
+                        min="0"
+                        value={formData.base_salary}
+                        onChange={(e) => setFormData({...formData, base_salary: e.target.value})}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none text-sm"
+                        placeholder="Optionnel"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Section Permissions - Visible seulement pour les managers */}
               {formData.role === 'manager' && (isAdmin || isSuperAdmin) && (

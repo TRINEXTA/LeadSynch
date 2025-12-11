@@ -13,7 +13,13 @@ const createUserSchema = z.object({
   role: z.enum(['admin', 'manager', 'user', 'commercial']).default('user'),
   phone: z.string().optional(),
   team_id: z.string().optional().nullable(),
-  permissions: z.record(z.boolean()).optional() // Permissions pour les managers
+  permissions: z.record(z.boolean()).optional(), // Permissions pour les managers
+  // Nouveaux champs hiérarchie et commissions
+  hierarchical_level: z.string().optional().nullable(),
+  commission_rate: z.number().min(0).max(100).optional().default(0),
+  team_commission_rate: z.number().min(0).max(100).optional().default(0),
+  commission_type: z.enum(['percentage', 'fixed', 'mixed']).optional().default('percentage'),
+  base_salary: z.number().optional().nullable()
 });
 
 // Permissions par défaut pour un manager (toutes désactivées)
@@ -54,6 +60,8 @@ async function handler(req, res) {
           `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
                   u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
                   u.is_super_admin, u.permissions,
+                  u.hierarchical_level, u.commission_rate, u.team_commission_rate,
+                  u.commission_type, u.base_salary, u.department_id,
                   t.name as tenant_name
            FROM users u
            LEFT JOIN tenants t ON u.tenant_id = t.id
@@ -68,7 +76,9 @@ async function handler(req, res) {
         users = await queryAll(
           `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.role,
                   u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
-                  u.is_super_admin,
+                  u.is_super_admin, u.permissions,
+                  u.hierarchical_level, u.commission_rate, u.team_commission_rate,
+                  u.commission_type, u.base_salary, u.department_id,
                   t.name as tenant_name
            FROM users u
            LEFT JOIN tenants t ON u.tenant_id = t.id
@@ -94,6 +104,8 @@ async function handler(req, res) {
         users = await queryAll(
           `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
                   u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
+                  u.hierarchical_level, u.commission_rate, u.team_commission_rate,
+                  u.commission_type, u.base_salary,
                   t.name as tenant_name
            FROM users u
            LEFT JOIN tenants t ON u.tenant_id = t.id
@@ -150,9 +162,11 @@ async function handler(req, res) {
       }
 
       const newUser = await queryOne(
-        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, phone, permissions, requires_password_change)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
-         RETURNING id, email, first_name, last_name, role, phone, permissions, created_at`,
+        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, phone, permissions, requires_password_change,
+                           hierarchical_level, commission_rate, team_commission_rate, commission_type, base_salary)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, $12, $13)
+         RETURNING id, email, first_name, last_name, role, phone, permissions, created_at,
+                   hierarchical_level, commission_rate, team_commission_rate, commission_type, base_salary`,
         [
           req.user.tenant_id,
           data.email,
@@ -161,7 +175,12 @@ async function handler(req, res) {
           data.last_name,
           data.role,
           data.phone || null,
-          JSON.stringify(permissions)
+          JSON.stringify(permissions),
+          data.hierarchical_level || null,
+          data.commission_rate || 0,
+          data.team_commission_rate || 0,
+          data.commission_type || 'percentage',
+          data.base_salary || null
         ]
       );
 
@@ -236,7 +255,10 @@ async function handler(req, res) {
         }
       }
 
-      const { first_name, last_name, role, phone, team_id, permissions } = req.body;
+      const {
+        first_name, last_name, role, phone, team_id, permissions,
+        hierarchical_level, commission_rate, team_commission_rate, commission_type, base_salary
+      } = req.body;
 
       if (!first_name || !last_name || !role) {
         return res.status(400).json({
@@ -268,24 +290,34 @@ async function handler(req, res) {
         });
       }
 
-      // Construire la requête de mise à jour
-      let updateQuery, updateParams;
+      // Construire la requête de mise à jour avec tous les champs
+      const updateQuery = `UPDATE users
+         SET first_name = $1, last_name = $2, role = $3, phone = $4,
+             permissions = COALESCE($5, permissions),
+             hierarchical_level = $6,
+             commission_rate = COALESCE($7, commission_rate),
+             team_commission_rate = COALESCE($8, team_commission_rate),
+             commission_type = COALESCE($9, commission_type),
+             base_salary = $10,
+             updated_at = NOW()
+         WHERE id = $11 AND tenant_id = $12
+         RETURNING id, email, first_name, last_name, role, phone, permissions, is_active, created_at,
+                   hierarchical_level, commission_rate, team_commission_rate, commission_type, base_salary`;
 
-      if (permissions && role === 'manager') {
-        // Mise à jour avec permissions
-        updateQuery = `UPDATE users
-           SET first_name = $1, last_name = $2, role = $3, phone = $4, permissions = $5, updated_at = NOW()
-           WHERE id = $6 AND tenant_id = $7
-           RETURNING id, email, first_name, last_name, role, phone, permissions, is_active, created_at`;
-        updateParams = [first_name, last_name, role, phone || null, JSON.stringify(permissions), userId, req.user.tenant_id];
-      } else {
-        // Mise à jour sans permissions
-        updateQuery = `UPDATE users
-           SET first_name = $1, last_name = $2, role = $3, phone = $4, updated_at = NOW()
-           WHERE id = $5 AND tenant_id = $6
-           RETURNING id, email, first_name, last_name, role, phone, permissions, is_active, created_at`;
-        updateParams = [first_name, last_name, role, phone || null, userId, req.user.tenant_id];
-      }
+      const updateParams = [
+        first_name,
+        last_name,
+        role,
+        phone || null,
+        permissions ? JSON.stringify(permissions) : null,
+        role === 'manager' ? (hierarchical_level || null) : null,
+        commission_rate !== undefined ? commission_rate : null,
+        team_commission_rate !== undefined ? team_commission_rate : null,
+        commission_type || null,
+        base_salary || null,
+        userId,
+        req.user.tenant_id
+      ];
 
       const updatedUser = await queryOne(updateQuery, updateParams);
 
