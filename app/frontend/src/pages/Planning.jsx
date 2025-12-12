@@ -418,6 +418,7 @@ export default function Planning() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('🚀 handleSubmit appelé avec formData:', formData);
 
     if (!formData.title.trim()) {
       alert('Veuillez entrer un titre');
@@ -431,16 +432,20 @@ export default function Planning() {
 
     try {
       setSaving(true);
+      console.log('📝 Envoi de la requête API...');
 
       const payload = {
         ...formData,
         title: formData.title.trim()
       };
+      console.log('📦 Payload:', payload);
 
       if (selectedEvent) {
-        await api.put(`/planning/${selectedEvent.id}`, payload);
+        const response = await api.put(`/planning/${selectedEvent.id}`, payload);
+        console.log('✅ Réponse PUT:', response.data);
       } else {
-        await api.post('/planning', payload);
+        const response = await api.post('/planning', payload);
+        console.log('✅ Réponse POST:', response.data);
       }
 
       setShowModal(false);
@@ -458,8 +463,9 @@ export default function Planning() {
       });
       loadEvents();
     } catch (err) {
-      console.error('Erreur sauvegarde événement:', err);
-      alert(err.response?.data?.error || 'Erreur lors de la sauvegarde');
+      console.error('❌ Erreur sauvegarde événement:', err);
+      console.error('❌ Response data:', err.response?.data);
+      alert(err.response?.data?.error || err.response?.data?.details || 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -477,9 +483,13 @@ export default function Planning() {
   };
 
   const days = useMemo(() => {
+    console.log('📆 days useMemo - viewMode:', viewMode, 'currentDate:', currentDate, 'currentDate.getDay():', currentDate.getDay());
     if (viewMode === 'month') return getDaysInMonth();
     if (viewMode === 'week') return getWeekDays();
-    return [{ date: currentDate, isCurrentMonth: true }];
+    // Pour la vue jour, créer un nouveau Date pour éviter les problèmes de référence
+    const dayDate = new Date(currentDate.getTime());
+    console.log('📆 Vue jour - dayDate:', dayDate, 'dayDate.getDay():', dayDate.getDay());
+    return [{ date: dayDate, isCurrentMonth: true }];
   }, [currentDate, viewMode]);
 
   const getPeriodLabel = () => {
@@ -647,6 +657,7 @@ export default function Planning() {
   const renderTimeGrid = () => {
     // Utiliser le tableau days mémorisé pour assurer la cohérence
     const gridDays = days;
+    console.log('🗓️ renderTimeGrid - viewMode:', viewMode, 'gridDays:', gridDays.length, 'currentDate:', currentDate);
 
     return (
       <div className="bg-white rounded-2xl overflow-hidden">
@@ -659,7 +670,9 @@ export default function Planning() {
             const isTodayDate = isToday(day.date);
             // S'assurer que day.date est bien un objet Date
             const dateObj = day.date instanceof Date ? day.date : new Date(day.date);
-            const dayName = DAYS[dateObj.getDay()];
+            const dayOfWeek = dateObj.getDay();
+            const dayName = DAYS[dayOfWeek];
+            console.log(`📅 Jour ${idx}: date=${dateObj.toISOString()}, getDay()=${dayOfWeek}, dayName=${dayName}`);
             return (
               <div
                 key={idx}
