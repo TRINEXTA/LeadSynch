@@ -348,17 +348,42 @@ export default function Planning() {
     return days;
   };
 
+  // Helper pour parser une date sans problème de timezone
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return null;
+    // Si c'est déjà un objet Date, retourner tel quel
+    if (dateStr instanceof Date) return dateStr;
+    // Si c'est une chaîne ISO (YYYY-MM-DD), parser manuellement pour éviter les problèmes de timezone
+    if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    // Sinon, utiliser le constructeur Date standard
+    return new Date(dateStr);
+  };
+
   const getEventsForDate = (date) => {
+    const targetDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
     return allEvents.filter(event => {
-      const eventDate = new Date(event.start_date);
-      return eventDate.toDateString() === date.toDateString();
+      // Extraire juste la partie date de start_date (format YYYY-MM-DD)
+      let eventDateStr = event.start_date;
+      if (eventDateStr && eventDateStr.includes('T')) {
+        eventDateStr = eventDateStr.split('T')[0];
+      }
+      return eventDateStr === targetDateStr;
     });
   };
 
   const getEventsForHour = (date, hour) => {
+    const targetDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
     return allEvents.filter(event => {
-      const eventDate = new Date(event.start_date);
-      if (eventDate.toDateString() !== date.toDateString()) return false;
+      let eventDateStr = event.start_date;
+      if (eventDateStr && eventDateStr.includes('T')) {
+        eventDateStr = eventDateStr.split('T')[0];
+      }
+      if (eventDateStr !== targetDateStr) return false;
       if (!event.start_time) return false;
       const eventHour = parseInt(event.start_time.split(':')[0]);
       return eventHour === hour;
