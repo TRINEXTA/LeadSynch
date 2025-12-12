@@ -43,7 +43,16 @@ const DEFAULT_MANAGER_PERMISSIONS = {
 async function handler(req, res) {
   const { method } = req;
 
+  // Check for /team subpath
+  const urlPath = req.url.split('?')[0];
+  const isTeamEndpoint = urlPath.includes('/team');
+
   try {
+    // GET /api/users/team - Get team members for current user (manager/admin)
+    if (method === 'GET' && isTeamEndpoint) {
+      return await getTeamMembers(req, res);
+    }
+
     // GET - List users
     if (method === 'GET') {
       log('🔍 GET /api/users - User:', req.user.email, 'Role:', req.user.role, 'Tenant:', req.user.tenant_id);
@@ -580,6 +589,83 @@ async function handler(req, res) {
       error: 'Erreur serveur',
       message: err.message
     });
+  }
+}
+
+// GET /api/users/team - Récupérer les membres de l'équipe pour le planning
+async function getTeamMembers(req, res) {
+  const userId = req.user.id;
+  const tenantId = req.user.tenant_id;
+  const userRole = req.user.role;
+
+  log('🔍 GET /api/users/team - User:', req.user.email, 'Role:', userRole);
+
+  let users = [];
+  let team = null;
+
+  try {
+    if (userRole === 'admin') {
+      // Admin voit tous les utilisateurs du tenant
+      users = await queryAll(
+        `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
+                u.phone, u.avatar_url, u.is_active, u.planning_color,
+                u.hierarchical_level
+         FROM users u
+         WHERE u.tenant_id = $1 AND u.is_active = true
+         ORDER BY u.first_name, u.last_name`,
+        [tenantId]
+      );
+    } else if (userRole === 'manager') {
+      // Manager voit les membres de ses équipes
+      // D'abord récupérer l'équipe du manager
+      const managerTeam = await queryOne(
+        `SELECT t.id, t.name FROM teams t WHERE t.manager_id = $1 AND t.tenant_id = $2`,
+        [userId, tenantId]
+      );
+
+      team = managerTeam;
+
+      // Puis récupérer les membres
+      users = await queryAll(
+        `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.role,
+                u.phone, u.avatar_url, u.is_active, u.planning_color,
+                u.hierarchical_level
+         FROM users u
+         LEFT JOIN team_members tm ON tm.user_id = u.id
+         LEFT JOIN teams t ON t.id = tm.team_id
+         WHERE u.tenant_id = $1
+           AND u.is_active = true
+           AND (
+             -- Utilisateurs avec ce manager_id
+             u.manager_id = $2
+             -- OU membres d'une équipe gérée par ce manager
+             OR t.manager_id = $2
+           )
+         ORDER BY u.first_name, u.last_name`,
+        [tenantId, userId]
+      );
+
+      log(`📅 Équipe manager ${userId}: ${users.length} membres`);
+    } else {
+      // Commercial ne voit que lui-même
+      users = await queryAll(
+        `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
+                u.phone, u.avatar_url, u.is_active, u.planning_color,
+                u.hierarchical_level
+         FROM users u
+         WHERE u.id = $1`,
+        [userId]
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      users,
+      team
+    });
+  } catch (err) {
+    error('❌ Error getting team members:', err);
+    return res.status(500).json({ error: err.message });
   }
 }
 

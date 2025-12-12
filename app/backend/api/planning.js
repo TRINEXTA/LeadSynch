@@ -1,13 +1,19 @@
-import { log, error, warn } from "../../lib/logger.js";
+import { log, error, warn } from "../lib/logger.js";
 import { query, queryOne, queryAll, execute } from '../lib/db.js';
 import { verifyAuth } from '../middleware/auth.js';
 import { z } from 'zod';
+
+// List of valid event types including new categories
+const VALID_EVENT_TYPES = [
+  'meeting', 'call', 'video', 'task', 'break', 'other',
+  'absence', 'sick_leave', 'vacation', 'late', 'full_day', 'half_day', 'follow_up'
+];
 
 // Schéma de validation pour créer un événement
 const createEventSchema = z.object({
   title: z.string().min(1, 'Titre requis'),
   description: z.string().optional(),
-  event_type: z.enum(['meeting', 'call', 'video', 'task', 'break', 'other']).default('meeting'),
+  event_type: z.enum(VALID_EVENT_TYPES).default('meeting'),
   start_date: z.string(),
   start_time: z.string().optional(),
   end_date: z.string().optional(),
@@ -91,17 +97,29 @@ async function getEvents(req, res, userId, tenantId, role) {
   let userFilter = '';
   if (include_team === 'true' && (role === 'manager' || role === 'admin')) {
     if (role === 'manager') {
-      // Récupérer les membres de l'équipe
+      // Récupérer les membres de l'équipe (utilisateurs qui ont ce manager comme manager_id)
+      // Also include users who are in teams where this manager is the manager
       const teamMembers = await queryAll(`
-        SELECT id FROM users WHERE tenant_id = $1 AND manager_id = $2
+        SELECT DISTINCT u.id
+        FROM users u
+        LEFT JOIN team_members tm ON tm.user_id = u.id
+        LEFT JOIN teams t ON t.id = tm.team_id
+        WHERE u.tenant_id = $1
+          AND (u.manager_id = $2 OR t.manager_id = $2)
       `, [tenantId, userId]);
 
       const memberIds = [userId, ...teamMembers.map(m => m.id)];
+
+      // Remove duplicates
+      const uniqueIds = [...new Set(memberIds)];
+
+      log(`📅 Planning équipe - Manager ${userId} - ${uniqueIds.length} membres:`, uniqueIds);
+
       userFilter = ` AND pe.user_id = ANY($${paramIndex}::uuid[])`;
-      params.push(memberIds);
+      params.push(uniqueIds);
       paramIndex++;
     }
-    // Admin voit tous les événements du tenant
+    // Admin voit tous les événements du tenant (pas de filtre utilisateur)
   } else {
     // Voir uniquement ses propres événements
     userFilter = ` AND pe.user_id = $${paramIndex}`;
@@ -113,6 +131,9 @@ async function getEvents(req, res, userId, tenantId, role) {
     SELECT
       pe.*,
       u.first_name || ' ' || u.last_name as owner_name,
+      u.planning_color as user_color,
+      u.first_name as user_first_name,
+      u.last_name as user_last_name,
       COALESCE(
         (SELECT json_agg(json_build_object('id', att.id, 'name', att.first_name || ' ' || att.last_name))
          FROM users att
@@ -125,6 +146,8 @@ async function getEvents(req, res, userId, tenantId, role) {
     ORDER BY pe.start_date ASC, pe.start_time ASC
   `, params);
 
+  log(`📅 Planning - ${events.length} événements trouvés`);
+
   return res.json({ events });
 }
 
@@ -133,7 +156,8 @@ async function getEventById(req, res, eventId, userId, tenantId) {
   const event = await queryOne(`
     SELECT
       pe.*,
-      u.first_name || ' ' || u.last_name as owner_name
+      u.first_name || ' ' || u.last_name as owner_name,
+      u.planning_color as user_color
     FROM planning_events pe
     JOIN users u ON pe.user_id = u.id
     WHERE pe.id = $1 AND pe.tenant_id = $2
@@ -171,6 +195,8 @@ async function createEvent(req, res, userId, tenantId) {
     data.attendees || [],
     data.all_day
   ]);
+
+  log('✅ Événement créé:', result.id);
 
   return res.status(201).json({
     success: true,
@@ -230,6 +256,8 @@ async function updateEvent(req, res, eventId, userId, tenantId) {
     tenantId
   ]);
 
+  log('✅ Événement mis à jour:', eventId);
+
   return res.json({
     success: true,
     event: result
@@ -258,6 +286,8 @@ async function deleteEvent(req, res, eventId, userId, tenantId) {
   await execute(`
     DELETE FROM planning_events WHERE id = $1 AND tenant_id = $2
   `, [eventId, tenantId]);
+
+  log('✅ Événement supprimé:', eventId);
 
   return res.json({
     success: true,

@@ -254,7 +254,6 @@ export default function ProfilePage() {
                 <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
                   {data?.first_name} {data?.last_name}
                 </h1>
-                <p className="text-gray-500 mt-1 text-lg">{data?.email}</p>
 
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-4">
                   <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border ${roleBadge.color}`}>
