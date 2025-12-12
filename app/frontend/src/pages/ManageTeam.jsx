@@ -1,6 +1,6 @@
 import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit2, Trash2, UserPlus, Crown, X, UserMinus } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, UserPlus, Crown, X, UserMinus, Shield, AlertTriangle } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 
@@ -156,6 +156,22 @@ export default function ManageTeam() {
           <Plus className="w-5 h-5" />
           Nouvelle Equipe
         </button>
+      </div>
+
+      {/* Info Banner */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <Shield className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-blue-900">Assignation automatique des managers</h3>
+            <p className="text-sm text-blue-700 mt-1">
+              Lorsqu'un utilisateur est ajouté à une équipe, il est automatiquement assigné au manager de cette équipe.
+              Cela permet au manager de voir les événements de son équipe dans le planning.
+            </p>
+          </div>
+        </div>
       </div>
 
       {loading ? (
