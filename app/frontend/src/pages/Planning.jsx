@@ -78,6 +78,7 @@ export default function Planning() {
   const [userColorMap, setUserColorMap] = useState({});
   const [notifications, setNotifications] = useState([]);
   const notificationIntervalRef = useRef(null);
+  const [selectedMemberId, setSelectedMemberId] = useState(null); // Pour filtrer le planning d'un membre
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -253,8 +254,13 @@ export default function Planning() {
   }, []);
 
   const allEvents = useMemo(() => {
-    return [...events, ...followUps];
-  }, [events, followUps]);
+    const combined = [...events, ...followUps];
+    // Si un membre spécifique est sélectionné, filtrer ses événements uniquement
+    if (selectedMemberId) {
+      return combined.filter(e => e.user_id === selectedMemberId);
+    }
+    return combined;
+  }, [events, followUps, selectedMemberId]);
 
   const handlePrevPeriod = () => {
     if (viewMode === 'month') {
@@ -491,33 +497,98 @@ export default function Planning() {
     return `${DAYS_FULL[currentDate.getDay()]} ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
   };
 
+  // Membres de l'équipe sans le manager actuel (pour éviter le doublon)
+  const otherTeamMembers = useMemo(() => {
+    return teamMembers.filter(m => m.id !== user?.id);
+  }, [teamMembers, user?.id]);
+
+  const handleMemberClick = (memberId) => {
+    if (selectedMemberId === memberId) {
+      setSelectedMemberId(null); // Désélectionner si déjà sélectionné
+    } else {
+      setSelectedMemberId(memberId);
+    }
+  };
+
+  const getSelectedMemberName = () => {
+    if (!selectedMemberId) return null;
+    if (selectedMemberId === user?.id) return 'Moi';
+    const member = teamMembers.find(m => m.id === selectedMemberId);
+    return member ? `${member.first_name} ${member.last_name}` : null;
+  };
+
   const TeamLegend = () => {
-    if (!showTeamEvents || teamMembers.length === 0) return null;
+    if (!showTeamEvents || (otherTeamMembers.length === 0 && !user)) return null;
 
     return (
       <div className="mb-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100">
-        <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <Users className="w-4 h-4" />
-          Membres de l'équipe
-        </h4>
-        <div className="flex flex-wrap gap-3">
-          {teamMembers.map(member => (
-            <div key={member.id} className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full">
-              <div
-                className="w-3 h-3 rounded-full shadow-sm"
-                style={{ backgroundColor: userColorMap[member.id] || '#6B7280' }}
-              />
-              <span className="text-sm text-gray-600">{member.first_name} {member.last_name}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Membres de l'équipe
+          </h4>
+          {selectedMemberId && (
+            <button
+              onClick={() => setSelectedMemberId(null)}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              Voir tous
+            </button>
+          )}
+        </div>
+        {selectedMemberId && (
+          <div className="mb-3 px-3 py-2 bg-indigo-50 rounded-lg text-sm text-indigo-700 font-medium">
+            Affichage du planning de : {getSelectedMemberName()}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {/* Moi (utilisateur actuel) - toujours en premier */}
+          <button
+            onClick={() => handleMemberClick(user?.id)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all cursor-pointer ${
+              selectedMemberId === user?.id
+                ? 'bg-indigo-600 text-white ring-2 ring-indigo-300'
+                : selectedMemberId === null
+                  ? 'bg-indigo-50 hover:bg-indigo-100'
+                  : 'bg-gray-100 hover:bg-gray-200 opacity-60'
+            }`}
+          >
             <div
               className="w-3 h-3 rounded-full shadow-sm"
-              style={{ backgroundColor: userColorMap[user?.id] || '#3B82F6' }}
+              style={{ backgroundColor: selectedMemberId === user?.id ? '#fff' : (userColorMap[user?.id] || '#3B82F6') }}
             />
-            <span className="text-sm text-indigo-700 font-medium">Moi</span>
-          </div>
+            <span className={`text-sm font-medium ${selectedMemberId === user?.id ? 'text-white' : 'text-indigo-700'}`}>
+              Moi
+            </span>
+          </button>
+          {/* Autres membres de l'équipe */}
+          {otherTeamMembers.map(member => (
+            <button
+              key={member.id}
+              onClick={() => handleMemberClick(member.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all cursor-pointer ${
+                selectedMemberId === member.id
+                  ? 'ring-2 ring-offset-1 text-white'
+                  : selectedMemberId === null
+                    ? 'bg-gray-50 hover:bg-gray-100'
+                    : 'bg-gray-100 hover:bg-gray-200 opacity-60'
+              }`}
+              style={selectedMemberId === member.id ? { backgroundColor: userColorMap[member.id] || '#6B7280' } : {}}
+            >
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
+                style={{ backgroundColor: selectedMemberId === member.id ? '#fff' : (userColorMap[member.id] || '#6B7280') }}
+              />
+              <span className={`text-sm ${selectedMemberId === member.id ? 'text-white font-medium' : 'text-gray-600'}`}>
+                {member.first_name} {member.last_name}
+              </span>
+            </button>
+          ))}
         </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Cliquez sur un membre pour voir uniquement son planning
+        </p>
       </div>
     );
   };
@@ -574,18 +645,21 @@ export default function Planning() {
 
   // Vue jour/semaine améliorée
   const renderTimeGrid = () => {
-    const displayDays = viewMode === 'day' ? [{ date: new Date(currentDate), isCurrentMonth: true }] : days;
+    // Utiliser le tableau days mémorisé pour assurer la cohérence
+    const gridDays = days;
 
     return (
       <div className="bg-white rounded-2xl overflow-hidden">
         {/* Header avec les jours */}
-        <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: `100px repeat(${displayDays.length}, 1fr)` }}>
+        <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: `100px repeat(${gridDays.length}, 1fr)` }}>
           <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border-r border-gray-200">
             <Clock className="w-5 h-5 text-gray-400 mx-auto" />
           </div>
-          {displayDays.map((day, idx) => {
+          {gridDays.map((day, idx) => {
             const isTodayDate = isToday(day.date);
-            const dayName = DAYS[day.date.getDay()];
+            // S'assurer que day.date est bien un objet Date
+            const dateObj = day.date instanceof Date ? day.date : new Date(day.date);
+            const dayName = DAYS[dateObj.getDay()];
             return (
               <div
                 key={idx}
@@ -599,7 +673,7 @@ export default function Planning() {
                   {dayName}
                 </div>
                 <div className={`text-2xl font-bold mt-1 ${isTodayDate ? 'text-indigo-700' : 'text-gray-900'}`}>
-                  {day.date.getDate()}
+                  {dateObj.getDate()}
                 </div>
                 {isTodayDate && (
                   <div className="text-xs text-indigo-500 font-medium mt-1">Aujourd'hui</div>
@@ -615,7 +689,7 @@ export default function Planning() {
             <div
               key={hour}
               className="grid border-b border-gray-100 last:border-b-0"
-              style={{ gridTemplateColumns: `100px repeat(${displayDays.length}, 1fr)` }}
+              style={{ gridTemplateColumns: `100px repeat(${gridDays.length}, 1fr)` }}
             >
               {/* Colonne des heures */}
               <div className="p-3 border-r border-gray-200 bg-gradient-to-r from-gray-50 to-white flex items-start justify-end">
@@ -625,7 +699,7 @@ export default function Planning() {
               </div>
 
               {/* Cellules pour chaque jour */}
-              {displayDays.map((day, dayIdx) => {
+              {gridDays.map((day, dayIdx) => {
                 const hourEvents = getEventsForHour(day.date, hour);
                 const isTodayDate = isToday(day.date);
 
