@@ -1,16 +1,11 @@
 import { log, error, warn } from "../lib/logger.js";
-import { authMiddleware } from '../middleware/auth.js';
 import { queryOne, execute } from '../lib/db.js';
 import { hashPassword, verifyPassword } from '../lib/auth.js';
 import { z } from 'zod';
 
 const changePasswordSchema = z.object({
   current_password: z.string().min(1, 'Mot de passe actuel requis'),
-  new_password: z.string().min(8, 'Le nouveau mot de passe doit faire au moins 8 caractères'),
-  confirm_password: z.string().min(1, 'Confirmation requise')
-}).refine(data => data.new_password === data.confirm_password, {
-  message: 'Les mots de passe ne correspondent pas',
-  path: ['confirm_password']
+  new_password: z.string().min(8, 'Le nouveau mot de passe doit faire au moins 8 caractères')
 });
 
 const updateProfileSchema = z.object({
@@ -192,4 +187,4 @@ async function handler(req, res) {
   }
 }
 
-export default authMiddleware(handler);
+export default handler;
