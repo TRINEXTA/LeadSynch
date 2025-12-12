@@ -12,15 +12,17 @@ const VALID_EVENT_TYPES = [
 // Schéma de validation pour créer un événement
 const createEventSchema = z.object({
   title: z.string().min(1, 'Titre requis'),
-  description: z.string().optional(),
-  event_type: z.enum(VALID_EVENT_TYPES).default('meeting'),
+  description: z.string().optional().nullable(),
+  event_type: z.string().refine(val => VALID_EVENT_TYPES.includes(val), {
+    message: 'Type d\'événement invalide'
+  }).default('meeting'),
   start_date: z.string(),
-  start_time: z.string().optional(),
-  end_date: z.string().optional(),
-  end_time: z.string().optional(),
-  location: z.string().optional(),
-  attendees: z.array(z.string().uuid()).optional(),
-  all_day: z.boolean().default(false)
+  start_time: z.string().optional().nullable(),
+  end_date: z.string().optional().nullable(),
+  end_time: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  attendees: z.array(z.string()).optional().default([]),
+  all_day: z.boolean().optional().default(false)
 });
 
 // Schéma pour mise à jour
@@ -172,36 +174,55 @@ async function getEventById(req, res, eventId, userId, tenantId) {
 
 // Créer un événement
 async function createEvent(req, res, userId, tenantId) {
-  const data = createEventSchema.parse(req.body);
+  log('📅 Création événement - données reçues:', JSON.stringify(req.body));
 
-  const result = await queryOne(`
-    INSERT INTO planning_events (
-      tenant_id, user_id, title, description, event_type,
-      start_date, start_time, end_date, end_time,
-      location, attendees, all_day
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-    RETURNING *
-  `, [
-    tenantId,
-    userId,
-    data.title,
-    data.description || null,
-    data.event_type,
-    data.start_date,
-    data.start_time || null,
-    data.end_date || data.start_date,
-    data.end_time || null,
-    data.location || null,
-    data.attendees || [],
-    data.all_day
-  ]);
+  let data;
+  try {
+    data = createEventSchema.parse(req.body);
+  } catch (validationError) {
+    error('❌ Erreur validation:', validationError.errors);
+    return res.status(400).json({
+      error: 'Données invalides',
+      details: validationError.errors
+    });
+  }
 
-  log('✅ Événement créé:', result.id);
+  try {
+    const result = await queryOne(`
+      INSERT INTO planning_events (
+        tenant_id, user_id, title, description, event_type,
+        start_date, start_time, end_date, end_time,
+        location, attendees, all_day
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [
+      tenantId,
+      userId,
+      data.title,
+      data.description || null,
+      data.event_type || 'meeting',
+      data.start_date,
+      data.start_time || null,
+      data.end_date || data.start_date,
+      data.end_time || null,
+      data.location || null,
+      data.attendees || [],
+      data.all_day || false
+    ]);
 
-  return res.status(201).json({
-    success: true,
-    event: result
-  });
+    log('✅ Événement créé:', result.id);
+
+    return res.status(201).json({
+      success: true,
+      event: result
+    });
+  } catch (dbError) {
+    error('❌ Erreur DB création événement:', dbError);
+    return res.status(500).json({
+      error: 'Erreur lors de la création de l\'événement',
+      details: dbError.message
+    });
+  }
 }
 
 // Mettre à jour un événement

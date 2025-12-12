@@ -122,6 +122,17 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'user_id requis' });
       }
 
+      // Récupérer le manager de l'équipe
+      const team = await queryOne(
+        'SELECT manager_id FROM teams WHERE id = $1 AND tenant_id = $2',
+        [teamId, tenant_id]
+      );
+
+      if (!team) {
+        return res.status(404).json({ error: 'Équipe non trouvée' });
+      }
+
+      // Ajouter le membre à l'équipe
       await execute(
         `INSERT INTO team_members (id, team_id, user_id, role, joined_at)
          VALUES (gen_random_uuid(), $1, $2, $3, NOW())
@@ -129,7 +140,17 @@ async function handler(req, res) {
         [teamId, user_id, role || 'member']
       );
 
-      return res.json({ success: true, message: 'Membre ajoute' });
+      // Auto-assigner le manager de l'équipe à cet utilisateur
+      if (team.manager_id) {
+        await execute(
+          `UPDATE users SET manager_id = $1, updated_at = NOW()
+           WHERE id = $2 AND tenant_id = $3 AND (manager_id IS NULL OR manager_id != $1)`,
+          [team.manager_id, user_id, tenant_id]
+        );
+        log(`✅ Auto-assigné manager ${team.manager_id} à l'utilisateur ${user_id}`);
+      }
+
+      return res.json({ success: true, message: 'Membre ajouté et manager assigné' });
     }
 
     // PUT - Modifier une équipe
