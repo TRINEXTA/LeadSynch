@@ -63,6 +63,9 @@ import leadOfficesRoute from '../api/lead-offices.js';
 import leadNotesRoute from '../api/lead-notes.js';
 import healthRoute from '../api/health.js';
 import trainingRoute from '../api/training.js';
+import profileRoute from '../api/profile.js';
+import commissionsRoute from '../api/commissions.js';
+import planningRoute from '../api/planning.js';
 import aiGenerateTemplateRoute from '../api/ai-generate-template.js';
 import checkBlacklistRoute from '../api/check-blacklist.js';
 import campaignFollowUpsRoute from '../api/campaigns-follow-ups.js';
@@ -219,6 +222,14 @@ export function setupRoutes(app) {
   app.post('/api/images/upload', authMiddleware, imageUploadController.uploadImage);
   app.get('/api/images', authMiddleware, imageUploadController.getImages);
   app.delete('/api/images/:id', authMiddleware, imageUploadController.deleteImage);
+
+  // ========== PROFILE, COMMISSIONS, PLANNING ==========
+  app.all('/api/profile', authMiddleware, profileRoute);
+  app.all('/api/profile/*', authMiddleware, profileRoute);
+  app.all('/api/commissions', authMiddleware, commissionsRoute);
+  app.all('/api/commissions/*', authMiddleware, commissionsRoute);
+  app.all('/api/planning', authMiddleware, planningRoute);
+  app.all('/api/planning/*', authMiddleware, planningRoute);
 
   log('✅ Routes configurées');
 }
