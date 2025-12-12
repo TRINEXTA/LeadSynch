@@ -30,7 +30,9 @@ export function authMiddleware(handlerOrReq, res, next) {
         
         // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)
         const { rows } = await db.query(
-          `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions
+          `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions,
+                  hierarchical_level, commission_rate, team_commission_rate, commission_type,
+                  base_salary, department_id, avatar_url
            FROM users
            WHERE id = $1`,
           [decoded.id]
@@ -75,7 +77,9 @@ export function authMiddleware(handlerOrReq, res, next) {
       
       // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)
       const { rows } = await db.query(
-        `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions
+        `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions,
+                hierarchical_level, commission_rate, team_commission_rate, commission_type,
+                base_salary, department_id, avatar_url
          FROM users
          WHERE id = $1`,
         [decoded.id]
@@ -121,7 +125,9 @@ export async function verifyAuth(req) {
 
     // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)
     const { rows } = await db.query(
-      `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions
+      `SELECT id, email, first_name, last_name, role, tenant_id, is_super_admin, permissions,
+              hierarchical_level, commission_rate, team_commission_rate, commission_type,
+              base_salary, department_id, avatar_url
        FROM users
        WHERE id = $1`,
       [decoded.id]

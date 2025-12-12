@@ -48,7 +48,8 @@ function Sidebar() {
     email: false,
     generation: false,
     billing: false,
-    admin: false
+    admin: false,
+    personal: false
   })
 
   const toggleSection = useCallback((section) => {
@@ -171,6 +172,16 @@ function Sidebar() {
       ]
     },
 
+    personal: {
+      title: 'Mon Espace',
+      icon: UserCircle,
+      items: [
+        { name: 'Mon Profil', href: '/profile', icon: UserCircle },
+        { name: 'Mes Commissions', href: '/my-commissions', icon: DollarSign, roles: ['admin', 'manager', 'commercial'] },
+        { name: 'Planning', href: '/planning', icon: Calendar }
+      ]
+    },
+
     super_admin: {
       title: '👑 SUPER-ADMIN TRINEXTA',
       icon: Crown,
@@ -268,6 +279,7 @@ function Sidebar() {
         {renderSection('generation', navigation.generation)}
         {renderSection('billing', navigation.billing)}
         {renderSection('admin', navigation.admin)}
+        {renderSection('personal', navigation.personal)}
       </nav>
 
       <div className='p-4 border-t border-gray-800'>
