@@ -66,22 +66,28 @@ function Sidebar() {
 
   // Fonction pour vérifier l'accès (rôle + permission) - mémoïsée
   const checkAccess = useCallback((item) => {
-    // Si pas de roles définis, tout le monde peut voir
-    if (!item.roles) return true
-
-    // Vérifier le rôle de base
-    if (!item.roles.includes(user?.role)) return false
-
     // Pour les admins et super-admins, toujours autoriser
     if (isAdmin || isSuperAdmin) return true
 
-    // Pour les managers, vérifier les permissions si spécifiées
+    // Si roles défini, vérifier le rôle de base
+    if (item.roles && !item.roles.includes(user?.role)) return false
+
+    // Pour les managers, TOUJOURS vérifier les permissions si spécifiées
+    // Même si roles n'est pas défini sur l'item
     if (isManager && item.permission) {
       return hasPermission(user, item.permission)
     }
 
+    // Pour les commerciaux avec permission requise, refuser
+    if (isCommercial && item.permission) {
+      return false
+    }
+
+    // Si pas de roles définis et pas de permission, tout le monde peut voir
+    if (!item.roles) return true
+
     return true
-  }, [user, isAdmin, isSuperAdmin, isManager])
+  }, [user, isAdmin, isSuperAdmin, isManager, isCommercial])
 
   const navigation = {
     main: [
