@@ -17,6 +17,11 @@ import { queryAll, queryOne, execute } from '../lib/db.js';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
+import dns from 'dns';
+import { promisify } from 'util';
+
+const resolveMx = promisify(dns.resolveMx);
+
 // ============================================================
 // CONFIGURATION
 // ============================================================
@@ -46,6 +51,23 @@ const CONFIG = {
     'wix.com', 'wordpress.com', 'squarespace.com',
     'sentry.io', 'google.com', 'facebook.com',
     'noreply', 'no-reply', 'donotreply'
+  ],
+
+  // Domaines d'emails jetables (disposable)
+  DISPOSABLE_EMAIL_DOMAINS: [
+    'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'temp-mail.org',
+    'throwaway.email', '10minutemail.com', 'fakeinbox.com', 'trashmail.com',
+    'yopmail.com', 'maildrop.cc', 'getnada.com', 'tempail.com',
+    'dispostable.com', 'sharklasers.com', 'guerrillamailblock.com',
+    'emailondeck.com', 'tempr.email', 'discard.email', 'mailcatch.com',
+    'jetable.org', 'mytrashmail.com', 'spamgourmet.com'
+  ],
+
+  // Domaines génériques (moins fiables pour contact business)
+  GENERIC_EMAIL_DOMAINS: [
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'live.com',
+    'orange.fr', 'wanadoo.fr', 'free.fr', 'sfr.fr', 'laposte.net',
+    'aol.com', 'icloud.com', 'protonmail.com', 'gmx.com', 'mail.com'
   ]
 };
 
@@ -637,7 +659,7 @@ class LeadEnrichmentService {
   }
 
   /**
-   * Valider un email
+   * Valider un email (version basique)
    */
   isValidEmail(email) {
     if (!email || email.length < 5) return false;
@@ -651,6 +673,281 @@ class LeadEnrichmentService {
     // Vérifier format basique
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(email);
+  }
+
+  /**
+   * Validation email avancée avec score de confiance
+   * @param {string} email - Email à valider
+   * @returns {Object} { valid, score, reason, isDisposable, isGeneric, hasMx }
+   */
+  async validateEmailAdvanced(email) {
+    const result = {
+      valid: false,
+      score: 0,
+      reason: '',
+      isDisposable: false,
+      isGeneric: false,
+      hasMx: false,
+      domain: null
+    };
+
+    if (!email || email.length < 5) {
+      result.reason = 'Email vide ou trop court';
+      return result;
+    }
+
+    email = email.toLowerCase().trim();
+
+    // Vérifier format basique
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      result.reason = 'Format email invalide';
+      return result;
+    }
+
+    // Extraire le domaine
+    const domain = email.split('@')[1];
+    result.domain = domain;
+
+    // Vérifier les patterns à ignorer
+    for (const pattern of CONFIG.IGNORE_EMAIL_PATTERNS) {
+      if (email.includes(pattern)) {
+        result.reason = `Domaine ignoré: ${pattern}`;
+        return result;
+      }
+    }
+
+    // Vérifier si email jetable (disposable)
+    if (CONFIG.DISPOSABLE_EMAIL_DOMAINS.includes(domain)) {
+      result.isDisposable = true;
+      result.reason = 'Email jetable (disposable)';
+      return result;
+    }
+
+    // Vérifier si domaine générique (gmail, yahoo, etc.)
+    if (CONFIG.GENERIC_EMAIL_DOMAINS.includes(domain)) {
+      result.isGeneric = true;
+      result.score = 50; // Score réduit pour emails génériques
+    }
+
+    // Vérifier l'existence du domaine via MX records
+    try {
+      const mxRecords = await resolveMx(domain);
+      if (mxRecords && mxRecords.length > 0) {
+        result.hasMx = true;
+        result.score += 30; // Bonus pour MX valide
+      }
+    } catch (err) {
+      // Pas de MX records = domaine probablement invalide
+      result.reason = 'Domaine sans enregistrement MX';
+      result.score = 10;
+    }
+
+    // Email professionnel (domaine d'entreprise)
+    if (!result.isGeneric && result.hasMx) {
+      result.score = 90; // Score élevé pour email professionnel
+    }
+
+    result.valid = result.score >= 30;
+    if (!result.reason) {
+      result.reason = result.valid ? 'Email valide' : 'Score de confiance insuffisant';
+    }
+
+    return result;
+  }
+
+  /**
+   * Vérifier si une entreprise est toujours active via Sirene
+   * @param {string} siret - Numéro SIRET de l'entreprise
+   * @returns {Object} { active, lastUpdate, closureDate, reason }
+   */
+  async verifyBusinessStatus(siret) {
+    const result = {
+      active: null,
+      lastUpdate: null,
+      closureDate: null,
+      reason: '',
+      companyData: null
+    };
+
+    if (!siret || siret.length !== 14) {
+      result.reason = 'SIRET invalide';
+      return result;
+    }
+
+    try {
+      // Utiliser l'API Sirene pour vérifier le statut
+      const response = await axios.get(`${CONFIG.SIRENE_API_URL}`, {
+        params: {
+          q: siret,
+          per_page: 1
+        },
+        timeout: CONFIG.HTTP_TIMEOUT
+      });
+
+      if (!response.data?.results || response.data.results.length === 0) {
+        result.reason = 'Entreprise non trouvée dans Sirene';
+        result.active = false;
+        return result;
+      }
+
+      const company = response.data.results[0];
+      const siege = company.siege || {};
+
+      // Vérifier l'état administratif
+      // A = Actif, F = Fermé
+      result.active = company.etat_administratif === 'A';
+      result.lastUpdate = company.date_mise_a_jour || null;
+
+      if (!result.active) {
+        result.closureDate = company.date_fermeture || siege.date_fermeture || null;
+        result.reason = 'Entreprise fermée';
+      } else {
+        result.reason = 'Entreprise active';
+      }
+
+      // Données complémentaires
+      result.companyData = {
+        nom: company.nom_complet,
+        siret: siege.siret,
+        siren: company.siren,
+        activite: company.libelle_activite_principale,
+        effectif: company.tranche_effectif_salarie,
+        dateCreation: company.date_creation
+      };
+
+      return result;
+
+    } catch (err) {
+      if (err.response?.status === 429) {
+        result.reason = 'Rate limit API Sirene';
+      } else {
+        result.reason = `Erreur vérification: ${err.message}`;
+      }
+      return result;
+    }
+  }
+
+  /**
+   * Validation complète d'un lead (email + statut entreprise)
+   * @param {Object} lead - Le lead à valider
+   * @returns {Object} Résultat de validation avec scores
+   */
+  async validateLeadQuality(lead) {
+    const validation = {
+      isValid: true,
+      emailValidation: null,
+      businessValidation: null,
+      qualityScore: 0,
+      issues: [],
+      recommendations: []
+    };
+
+    // 1. Valider l'email si présent
+    if (lead.email) {
+      validation.emailValidation = await this.validateEmailAdvanced(lead.email);
+
+      if (validation.emailValidation.isDisposable) {
+        validation.issues.push('Email jetable détecté');
+        validation.recommendations.push('Trouver un email professionnel');
+      }
+
+      if (validation.emailValidation.isGeneric) {
+        validation.issues.push('Email générique (gmail, yahoo...)');
+        validation.recommendations.push('Privilégier un email @domaine-entreprise');
+      }
+
+      if (!validation.emailValidation.hasMx) {
+        validation.issues.push('Domaine email sans serveur MX');
+        validation.recommendations.push('Vérifier l\'existence du domaine');
+      }
+    } else {
+      validation.issues.push('Pas d\'email');
+      validation.recommendations.push('Enrichir avec email via site web');
+    }
+
+    // 2. Vérifier le statut de l'entreprise si SIRET présent
+    if (lead.siret) {
+      validation.businessValidation = await this.verifyBusinessStatus(lead.siret);
+
+      if (validation.businessValidation.active === false) {
+        validation.isValid = false;
+        validation.issues.push('Entreprise fermée');
+        validation.recommendations.push('Exclure ce lead de la prospection');
+      }
+    } else {
+      validation.issues.push('Pas de SIRET');
+      validation.recommendations.push('Enrichir avec données Sirene');
+    }
+
+    // 3. Calculer le score de qualité global
+    validation.qualityScore = this.calculateEnhancedQualityScore(lead, validation);
+
+    // 4. Déterminer si le lead est valide
+    validation.isValid = validation.isValid && validation.qualityScore >= CONFIG.MIN_QUALITY_SCORE;
+
+    return validation;
+  }
+
+  /**
+   * Score de qualité amélioré avec validation
+   */
+  calculateEnhancedQualityScore(lead, validation = null) {
+    let score = 0;
+
+    // === DONNÉES DE BASE (max 25 points) ===
+    if (lead.company_name) score += 8;
+    if (lead.city) score += 5;
+    if (lead.address) score += 4;
+    if (lead.postal_code) score += 4;
+    if (lead.sector || lead.industry) score += 4;
+
+    // === DONNÉES LÉGALES (max 25 points) ===
+    if (lead.siret) score += 12;
+    if (lead.siren) score += 5;
+    if (lead.naf_code) score += 4;
+    if (lead.creation_date) score += 4;
+
+    // === CONTACT (max 30 points) ===
+    if (lead.email) {
+      if (validation?.emailValidation) {
+        // Utiliser le score de validation email
+        const emailScore = validation.emailValidation.score / 100 * 15;
+        score += Math.round(emailScore);
+
+        // Pénalités
+        if (validation.emailValidation.isDisposable) score -= 10;
+        if (validation.emailValidation.isGeneric) score -= 3;
+      } else if (!lead.email_generated) {
+        score += 12; // Email réel trouvé
+      } else {
+        score += 5; // Email généré (contact@domain)
+      }
+    }
+    if (lead.phone) score += 10;
+    if (lead.website) score += 5;
+
+    // === ENRICHISSEMENT (max 20 points) ===
+    if (lead.contact_name) score += 6;
+    if (lead.contact_role) score += 4;
+    if (lead.employee_count) score += 4;
+    if (lead.rating && lead.rating >= 4) score += 3;
+    if (lead.review_count && lead.review_count > 10) score += 3;
+
+    // === PÉNALITÉS ===
+    // Entreprise fermée = score 0
+    if (validation?.businessValidation?.active === false) {
+      return 0;
+    }
+
+    // Données trop anciennes
+    if (lead.last_verified_at) {
+      const daysSinceVerification = (Date.now() - new Date(lead.last_verified_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceVerification > 180) score -= 10;
+      else if (daysSinceVerification > 90) score -= 5;
+    }
+
+    return Math.max(0, Math.min(score, 100));
   }
 
   /**

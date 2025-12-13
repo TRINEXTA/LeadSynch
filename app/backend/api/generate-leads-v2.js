@@ -28,9 +28,12 @@ const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API
 
 // Configuration
 const CONFIG = {
-  MAX_QUANTITY: 10000,  // Limite augmentée (était 500)
+  MAX_QUANTITY: 500,        // Limite raisonnable pour éviter crash mémoire (était 10000)
+  MAX_QUANTITY_SUPERADMIN: 2000, // Super admin a une limite plus élevée mais raisonnable
   DEFAULT_RADIUS: 10,
-  COST_PER_LEAD: 0.10
+  COST_PER_LEAD: 0.10,
+  // Seuil pour désactiver l'enrichissement (trop gourmand en mémoire)
+  ENRICHMENT_THRESHOLD: 200
 };
 
 // Mapping secteur -> types Google Maps
@@ -49,7 +52,61 @@ const SECTOR_TO_GOOGLE_TYPES = {
   marketing: ['marketing_agency', 'advertising_agency'],
   rh: ['employment_agency', 'staffing_agency'],
   industrie: ['factory', 'manufacturing'],
-  automobile: ['car_repair', 'car_dealer']
+  automobile: ['car_repair', 'car_dealer'],
+  // Secteurs ajoutés (manquants)
+  assurance: ['insurance_agency'],
+  banque: ['bank', 'atm'],
+  beaute: ['beauty_salon', 'hair_care', 'spa', 'nail_salon'],
+  sport: ['gym', 'fitness_center', 'sports_club'],
+  artisan: ['locksmith', 'painter', 'carpenter', 'plumber', 'electrician']
+};
+
+// Mapping secteur -> codes NAF pour filtrage précis Sirene
+const SECTOR_TO_NAF_CODES = {
+  informatique: ['62', '63'],           // Programmation, conseil informatique
+  juridique: ['69'],                     // Activités juridiques
+  comptabilite: ['69.20'],               // Activités comptables
+  sante: ['86', '87'],                   // Activités pour la santé
+  btp: ['41', '42', '43'],               // Construction
+  hotellerie: ['55', '56'],              // Hébergement et restauration
+  immobilier: ['68'],                    // Activités immobilières
+  commerce: ['47'],                      // Commerce de détail
+  logistique: ['49', '52'],              // Transport et entreposage
+  education: ['85'],                     // Enseignement
+  consulting: ['70'],                    // Conseil de gestion
+  marketing: ['73'],                     // Publicité et études de marché
+  rh: ['78'],                           // Activités liées à l'emploi
+  industrie: ['10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33'],
+  automobile: ['45'],                    // Commerce et réparation auto
+  assurance: ['65'],                     // Assurance
+  banque: ['64'],                        // Services financiers
+  beaute: ['96.02', '96.04'],           // Coiffure et soins de beauté
+  sport: ['93'],                         // Activités sportives
+  artisan: ['43']                        // Travaux de construction spécialisés
+};
+
+// Labels français pour les secteurs (pour les requêtes textuelles)
+const SECTOR_LABELS_FR = {
+  informatique: 'informatique développement logiciel',
+  juridique: 'avocat cabinet juridique',
+  comptabilite: 'expert comptable cabinet comptabilité',
+  sante: 'médecin docteur clinique',
+  btp: 'construction bâtiment travaux',
+  hotellerie: 'restaurant hôtel café',
+  immobilier: 'agence immobilière',
+  commerce: 'magasin boutique commerce',
+  logistique: 'transport logistique',
+  education: 'école formation enseignement',
+  consulting: 'conseil consulting',
+  marketing: 'agence marketing communication publicité',
+  rh: 'ressources humaines recrutement',
+  industrie: 'usine industrie fabrication',
+  automobile: 'garage automobile réparation',
+  assurance: 'assurance courtier',
+  banque: 'banque finance',
+  beaute: 'salon coiffure beauté esthétique spa bien-être',
+  sport: 'salle sport fitness gym',
+  artisan: 'artisan serrurier plombier électricien'
 };
 
 // Gestion des recherches actives
@@ -274,6 +331,14 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     return res.status(400).json({ error: 'Secteur requis' });
   }
 
+  // Limiter la quantité pour éviter les problèmes de mémoire
+  const user = await queryOne('SELECT is_super_admin FROM users WHERE id = $1', [user_id]);
+  const isSuperAdmin = user?.is_super_admin === true;
+  const maxQuantity = isSuperAdmin ? CONFIG.MAX_QUANTITY_SUPERADMIN : CONFIG.MAX_QUANTITY;
+  const safeQuantity = Math.min(Math.max(1, parseInt(quantity) || 50), maxQuantity);
+
+  log(`📊 [GENERATE] Quantité demandée: ${quantity}, limitée à: ${safeQuantity} (max: ${maxQuantity})`);
+
   // Déterminer les villes à rechercher
   let citiesToSearch = [];
 
@@ -351,22 +416,22 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   }
 
   // Vérification des crédits (sauf super admin)
-  const isSuperAdmin = req.user.is_super_admin === true;
+  // Note: isSuperAdmin déjà défini plus haut
 
   // Limite de quantité (super admin a une limite plus élevée)
-  const maxQuantity = isSuperAdmin ? 10000 : CONFIG.MAX_QUANTITY;
-  if (quantity > maxQuantity) {
+  // Note: maxQuantity et safeQuantity déjà définis plus haut
+  if (safeQuantity > maxQuantity) {
     return res.status(400).json({ error: `Maximum ${maxQuantity} leads par recherche` });
   }
 
   if (!isSuperAdmin && !skipExternal) {
-    const creditCheck = await checkCredits(tenant_id, quantity);
+    const creditCheck = await checkCredits(tenant_id, safeQuantity);
     if (!creditCheck.hasEnough) {
       return res.status(403).json({
         error: 'Quota insuffisant',
         message: creditCheck.message,
         available: creditCheck.available,
-        requested: quantity,
+        requested: safeQuantity,
         action: 'buy_credits',
         redirect: '/settings/billing'
       });
@@ -407,10 +472,10 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       sendProgress({ type: 'progress', percent: 5, message: `Recherche dans votre base (${totalCities} villes)...` });
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
-        const remaining = quantity - allLeads.length;
+        const remaining = safeQuantity - allLeads.length;
         let cityLeads = await searchInternalDatabase(tenant_id, sector, cityName, remaining);
 
         // Filtrer selon les exigences téléphone/email
@@ -439,7 +504,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         });
       }
 
-      if (allLeads.length >= quantity) {
+      if (allLeads.length >= safeQuantity) {
         sendProgress({
           type: 'complete',
           percent: 100,
@@ -462,10 +527,10 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       processedCities = 0;
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
-        const remaining = quantity - allLeads.length;
+        const remaining = safeQuantity - allLeads.length;
         let cacheLeads = await searchGlobalCache(sector, cityName, remaining, allLeads);
 
         // Filtrer selon les exigences téléphone/email
@@ -494,7 +559,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         });
       }
 
-      if (allLeads.length >= quantity || skipExternal) {
+      if (allLeads.length >= safeQuantity || skipExternal) {
         sendProgress({
           type: 'complete',
           percent: 100,
@@ -509,7 +574,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       log(`📦 [GENERATE] Mode Alimentation BDD: skip cache global`);
     }
 
-    if (allLeads.length >= quantity || skipExternal) {
+    if (allLeads.length >= safeQuantity || skipExternal) {
       sendProgress({
         type: 'complete',
         percent: 100,
@@ -528,11 +593,11 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       processedCities = 0;
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
         // Augmenter la limite par ville pour les grandes recherches
-        const remaining = Math.min(100, quantity - allLeads.length);
+        const remaining = Math.min(100, safeQuantity - allLeads.length);
         let sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
 
         // Filtrer selon les exigences email (pas téléphone car déjà vérifié ci-dessus)
@@ -571,7 +636,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         }
       }
 
-      if (allLeads.length >= quantity) {
+      if (allLeads.length >= safeQuantity) {
         sendProgress({
           type: 'complete',
           percent: 100,
@@ -589,7 +654,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
 
     // ========== ÉTAPE 4: GOOGLE MAPS (PRINCIPAL pour les téléphones) ==========
     // Chercher dans TOUTES les villes jusqu'à atteindre la quantité
-    if (GOOGLE_API_KEY && allLeads.length < quantity) {
+    if (GOOGLE_API_KEY && allLeads.length < safeQuantity) {
       const googleStartPercent = requirePhone ? 40 : 70;
       sendProgress({ type: 'progress', percent: googleStartPercent, message: `Recherche Google Maps (${citiesToSearch.length} villes disponibles)...` });
 
@@ -598,7 +663,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       const maxEmptyCities = 10; // Arrêter si 10 villes consécutives sans résultat
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
 
         // Si trop de villes vides consécutives, arrêter
         if (consecutiveEmptyCities >= maxEmptyCities) {
@@ -608,7 +673,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
 
         await waitIfPaused(searchState);
 
-        const remaining = quantity - allLeads.length;
+        const remaining = safeQuantity - allLeads.length;
         const leadsBeforeCity = allLeads.length;
 
         let googleLeads = await searchGoogleMaps(
@@ -632,7 +697,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         sendProgress({
           type: 'progress',
           percent: Math.min(googlePercent, 89),
-          message: `Google Maps: ${cityName} (${allLeads.length}/${quantity} leads)`
+          message: `Google Maps: ${cityName} (${allLeads.length}/${safeQuantity} leads)`
         });
       }
 
@@ -647,26 +712,57 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       sendProgress({ type: 'warning', message: 'API Google Maps non configurée' });
     }
 
-    // ========== ENRICHISSEMENT FINAL ==========
-    sendProgress({ type: 'progress', percent: 90, message: 'Enrichissement des données...' });
+    // ========== ENRICHISSEMENT FINAL (CONDITIONNEL) ==========
+    // Désactiver l'enrichissement si trop de leads pour éviter crash mémoire
+    const leadsToProcess = allLeads.slice(0, safeQuantity);
+    let finalLeads;
 
-    const enrichmentService = new LeadEnrichmentService(tenant_id, user_id);
-    const enrichedLeads = await enrichmentService.enrichLeads(allLeads.slice(0, quantity));
+    if (leadsToProcess.length <= CONFIG.ENRICHMENT_THRESHOLD) {
+      sendProgress({ type: 'progress', percent: 90, message: `Enrichissement de ${leadsToProcess.length} leads...` });
 
-    stats.total = enrichedLeads.length;
+      const enrichmentService = new LeadEnrichmentService(tenant_id, user_id);
+      finalLeads = await enrichmentService.enrichLeads(leadsToProcess);
 
-    // Envoyer les leads enrichis un par un
-    for (const lead of enrichedLeads) {
-      sendProgress({ type: 'enriched_lead', lead });
+      // Libérer la mémoire
+      allLeads.length = 0;
+    } else {
+      // Skip enrichissement pour économiser mémoire
+      sendProgress({
+        type: 'progress',
+        percent: 90,
+        message: `${leadsToProcess.length} leads trouvés (enrichissement désactivé pour optimisation mémoire)`
+      });
+
+      // Calculer un score de qualité basique sans enrichissement
+      finalLeads = leadsToProcess.map(lead => ({
+        ...lead,
+        quality_score: calculateBasicQualityScore(lead)
+      }));
+
+      // Libérer la mémoire immédiatement
+      allLeads.length = 0;
     }
+
+    stats.total = finalLeads.length;
+
+    // Envoyer un résumé au lieu de chaque lead individuellement (économise mémoire)
+    sendProgress({
+      type: 'leads_summary',
+      count: finalLeads.length,
+      sample: finalLeads.slice(0, 10) // Envoyer seulement un échantillon
+    });
 
     sendProgress({
       type: 'complete',
       percent: 100,
-      total: enrichedLeads.length,
+      total: finalLeads.length,
+      leads: finalLeads, // Envoyer tous les leads une seule fois à la fin
       message: getCompleteMessage(stats),
       stats
     });
+
+    // Libérer la mémoire
+    finalLeads = null;
 
     res.end();
 
@@ -758,13 +854,36 @@ async function searchGlobalCache(sector, city, limit, excludeLeads = []) {
 }
 
 /**
- * Rechercher via API Sirene (GRATUIT) - AVEC PAGINATION
+ * Vérifier si un code NAF correspond au secteur
+ */
+function isNafCodeMatchingSector(nafCode, sector) {
+  if (!nafCode) return false;
+
+  const expectedCodes = SECTOR_TO_NAF_CODES[sector];
+  if (!expectedCodes || expectedCodes.length === 0) return true; // Pas de filtre NAF pour ce secteur
+
+  // Vérifier si le code NAF commence par un des codes attendus
+  const nafClean = nafCode.replace(/[.-]/g, '');
+  return expectedCodes.some(code => {
+    const codeClean = code.replace(/[.-]/g, '');
+    return nafClean.startsWith(codeClean);
+  });
+}
+
+/**
+ * Rechercher via API Sirene (GRATUIT) - AVEC PAGINATION ET FILTRAGE NAF
  */
 async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, searchState) {
   const leads = [];
   const maxPages = Math.ceil(limit / 25); // Nombre de pages nécessaires
-  const maxPagesAllowed = 10; // Limite pour ne pas surcharger l'API
+  const maxPagesAllowed = 15; // Augmenté car on filtre plus
   const pagesToFetch = Math.min(maxPages, maxPagesAllowed);
+
+  // Utiliser les labels français pour une meilleure recherche
+  const searchLabel = SECTOR_LABELS_FR[sector] || sector;
+  const nafCodes = SECTOR_TO_NAF_CODES[sector] || [];
+
+  log(`🔍 [SIRENE] Recherche: "${searchLabel} ${city}" (NAF: ${nafCodes.join(', ') || 'tous'})`);
 
   for (let page = 1; page <= pagesToFetch; page++) {
     if (leads.length >= limit || !searchState.active) break;
@@ -773,7 +892,7 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
     try {
       const response = await axios.get('https://recherche-entreprises.api.gouv.fr/search', {
         params: {
-          q: `${sector} ${city}`,
+          q: `${searchLabel} ${city}`,
           per_page: 25,
           page: page
         },
@@ -784,19 +903,43 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
         break; // Plus de résultats
       }
 
+      let filteredCount = 0;
+      let skippedCount = 0;
+      let closedCount = 0;
+
       for (const company of response.data.results) {
         await waitIfPaused(searchState);
         if (!searchState.active) break;
+        if (leads.length >= limit) break;
+
+        // FILTRAGE: ENTREPRISES FERMÉES
+        // etat_administratif: A = Active, F = Fermée
+        if (company.etat_administratif !== 'A') {
+          closedCount++;
+          continue; // Skip les entreprises fermées
+        }
+
+        // FILTRAGE PAR CODE NAF - Ne garder que les entreprises du bon secteur
+        const companyNaf = company.activite_principale;
+        if (nafCodes.length > 0 && !isNafCodeMatchingSector(companyNaf, sector)) {
+          skippedCount++;
+          continue; // Skip cette entreprise, mauvais secteur
+        }
 
         const lead = formatSireneResult(company, sector);
+
+        // Forcer le secteur demandé (important!)
+        lead.sector = sector;
+        lead.industry = sector;
 
         // Sauvegarder dans le cache global
         await saveToGlobalCache(lead, tenant_id);
 
         leads.push(lead);
-
-        if (leads.length >= limit) break;
+        filteredCount++;
       }
+
+      log(`🔍 [SIRENE] Page ${page}: ${filteredCount} gardés, ${skippedCount} filtrés (NAF), ${closedCount} fermées`);
 
       // Si moins de 25 résultats, pas la peine de continuer
       if (response.data.results.length < 25) break;
@@ -817,6 +960,7 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
     }
   }
 
+  log(`✅ [SIRENE] Total: ${leads.length} leads pour secteur "${sector}"`);
   return leads;
 }
 
@@ -829,6 +973,12 @@ async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeL
   const excludeNames = new Set(excludeLeads.map(l => l.company_name?.toLowerCase()).filter(Boolean));
   const processedPlaceIds = new Set();
 
+  // Utiliser les labels français pour de meilleures recherches
+  const sectorLabel = SECTOR_LABELS_FR[sector] || sector;
+
+  // Log pour debug
+  log(`🗺️ [GOOGLE] Recherche secteur "${sector}" avec types: ${googleTypes.join(', ')}`);
+
   // Essayer plusieurs types Google pour ce secteur
   for (const type of googleTypes) {
     if (leads.length >= limit || !searchState.active) break;
@@ -836,10 +986,10 @@ async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeL
     await waitIfPaused(searchState);
 
     try {
-      // Recherche textSearch avec plusieurs formulations
+      // Recherche textSearch avec plusieurs formulations (utiliser labels français)
       const queries = [
         `${type} ${city}`,
-        `${sector} ${city}`,
+        `${sectorLabel} ${city}`,
         `${type} à ${city}`
       ];
 
@@ -904,7 +1054,8 @@ async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeL
               city: city,
               latitude: details.geometry?.location?.lat || null,
               longitude: details.geometry?.location?.lng || null,
-              industry: sector,
+              sector: sector,  // Forcer le secteur demandé
+              industry: sector, // Pour compatibilité
               google_place_id: place.place_id,
               google_types: JSON.stringify(details.types || []),
               rating: details.rating || null,
@@ -955,7 +1106,7 @@ function formatSireneResult(company, sector) {
     siret: siege.siret || null,
     siren: company.siren || null,
     naf_code: company.activite_principale || null,
-    naf_label: company.libelle_activite_principale || null,
+    naf_label: company.libelle_activite_principale || null, // Activité originale (info)
     employee_count: parseEmployeeCount(company.tranche_effectif_salarie),
     employee_range: company.tranche_effectif_salarie || null,
     legal_form: company.nature_juridique || null,
@@ -967,8 +1118,12 @@ function formatSireneResult(company, sector) {
     longitude: siege.longitude || null,
     contact_name: dirigeants[0]?.nom_complet || null,
     contact_role: dirigeants[0]?.qualite || null,
-    industry: company.libelle_activite_principale || sector,
-    data_source: 'sirene_insee'
+    sector: sector,  // FORCER le secteur demandé
+    industry: sector, // FORCER le secteur demandé (pour cohérence)
+    data_source: 'sirene_insee',
+    // Statut entreprise (vérifié au moment de la génération)
+    business_status: company.etat_administratif === 'A' ? 'active' : 'closed',
+    last_sirene_update: company.date_mise_a_jour || null
   };
 }
 
@@ -1167,6 +1322,39 @@ async function waitIfPaused(searchState) {
 }
 
 /**
+ * Calcul basique du score de qualité (sans enrichissement web)
+ * Utilisé quand on a trop de leads pour l'enrichissement complet
+ */
+function calculateBasicQualityScore(lead) {
+  let score = 0;
+
+  // Données de base (max 30 points)
+  if (lead.company_name) score += 10;
+  if (lead.city) score += 5;
+  if (lead.address) score += 5;
+  if (lead.postal_code) score += 5;
+  if (lead.sector || lead.industry) score += 5;
+
+  // Données légales (max 25 points)
+  if (lead.siret) score += 15;
+  if (lead.siren) score += 5;
+  if (lead.naf_code) score += 5;
+
+  // Contact (max 30 points)
+  if (lead.email) score += 15;
+  if (lead.phone) score += 10;
+  if (lead.website) score += 5;
+
+  // Enrichissement (max 15 points)
+  if (lead.contact_name) score += 5;
+  if (lead.employee_count) score += 5;
+  if (lead.rating) score += 3;
+  if (lead.creation_date) score += 2;
+
+  return Math.min(score, 100);
+}
+
+/**
  * Message de fin
  */
 function getCompleteMessage(stats) {
@@ -1220,7 +1408,7 @@ async function handlePreviewSearch(req, res, tenant_id) {
     return res.json({
       success: true,
       preview: {
-        requested: quantity,
+        requested: safeQuantity,
         foundInternal: internalLeads.length,
         foundGlobal: globalLeads.length,
         totalAvailable: totalFound,
