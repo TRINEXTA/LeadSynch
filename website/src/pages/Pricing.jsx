@@ -13,21 +13,18 @@ export default function Pricing() {
       iconColor: 'text-gray-600',
       iconBg: 'bg-gray-100',
       price: { monthly: 0, annual: 0 },
-      description: 'Essai 14 jours pour découvrir LeadSynch',
+      description: 'Pour tester LeadSynch',
       badge: null,
       features: [
-        { text: '30 leads/emails', included: true },
-        { text: '2 recherches Google Maps', included: true },
-        { text: '1 devis/mois', included: true },
-        { text: '0 contrats', included: true },
+        { text: '15 prospects/mois', included: true },
+        { text: '15 emails de campagne', included: true },
+        { text: '0 relance', included: true },
         { text: '1 utilisateur', included: true },
         { text: '1 campagne active', included: true },
         { text: 'Pipeline basique', included: true },
-        { text: 'Import CSV', included: true },
+        { text: 'Import CSV', included: false },
         { text: 'Support email', included: true },
         { text: 'Asefi IA', included: false },
-        { text: 'Devis & contrats illimités', included: false },
-        { text: 'Analytics avancés', included: false },
         { text: 'API', included: false },
       ],
       cta: 'Démarrer gratuitement',
@@ -35,7 +32,7 @@ export default function Pricing() {
       buttonStyle: 'border-2 border-gray-300 text-gray-700 hover:border-primary-500 hover:text-primary-600'
     },
     {
-      id: 'basic',
+      id: 'starter',
       name: 'Starter',
       icon: Zap,
       iconColor: 'text-blue-600',
@@ -44,23 +41,22 @@ export default function Pricing() {
       description: 'Pour les entrepreneurs et petites équipes',
       badge: null,
       features: [
-        { text: '5,000 leads/emails', included: true },
-        { text: 'Max 1,000 prospects Google Maps', included: true },
-        { text: '50 devis/mois', included: true },
-        { text: '30 contrats/mois', included: true },
+        { text: '10,000 prospects/mois', included: true },
+        { text: '10,000 emails campagne', included: true },
+        { text: '10,000 emails relance (×10)', included: true },
+        { text: 'Ou 30,000 emails avec votre base', included: true },
         { text: '3 utilisateurs', included: true },
         { text: '5 campagnes actives', included: true },
         { text: 'Pipeline avancé', included: true },
         { text: 'Mode Prospection', included: true },
-        { text: 'Asefi IA Basic (500 caractères)', included: true },
+        { text: 'Asefi IA (500 caractères)', included: true },
         { text: 'Templates email', included: true },
         { text: 'Import CSV illimité', included: true },
         { text: 'Support email + chat', included: true },
-        { text: 'Analytics de base', included: true },
         { text: 'API', included: false },
       ],
       cta: 'Choisir Starter',
-      ctaLink: '/register?plan=basic',
+      ctaLink: '/register?plan=starter',
       buttonStyle: 'bg-blue-600 text-white hover:bg-blue-700'
     },
     {
@@ -74,10 +70,10 @@ export default function Pricing() {
       badge: '⭐ Plus populaire',
       badgeColor: 'bg-gradient-to-r from-purple-600 to-pink-600',
       features: [
-        { text: '20,000 leads/emails', included: true },
-        { text: '2,500 générations Google Maps', included: true },
-        { text: '500 devis/mois', included: true },
-        { text: '200 contrats/mois', included: true },
+        { text: '30,000 prospects/mois', included: true },
+        { text: '30,000 emails campagne', included: true },
+        { text: '20,000 emails relance (×2)', included: true },
+        { text: 'Ou 60,000 emails avec votre base', included: true },
         { text: '10 utilisateurs', included: true },
         { text: 'Campagnes illimitées', included: true },
         { text: 'Pipeline personnalisable', included: true },
@@ -89,7 +85,6 @@ export default function Pricing() {
         { text: 'Analytics avancés + rapports', included: true },
         { text: 'API complète', included: true },
         { text: 'Intégrations (Zapier, Make)', included: true },
-        { text: 'Webhooks', included: true },
       ],
       cta: 'Choisir Pro',
       ctaLink: '/register?plan=pro',
@@ -105,10 +100,9 @@ export default function Pricing() {
       description: 'Pour les grandes organisations',
       badge: null,
       features: [
-        { text: 'Quotas personnalisés selon vos besoins', included: true },
-        { text: 'Utilisateurs selon votre équipe', included: true },
-        { text: 'Volume emails adapté (protection anti-abus)', included: true },
-        { text: 'Devis & contrats personnalisés', included: true },
+        { text: 'Prospects illimités', included: true },
+        { text: 'Emails illimités', included: true },
+        { text: 'Utilisateurs illimités', included: true },
         { text: 'Tout du plan Pro +', included: true },
         { text: 'Asefi IA Enterprise (10k caractères)', included: true },
         { text: 'Infrastructure dédiée', included: true },
@@ -265,11 +259,15 @@ export default function Pricing() {
               },
               {
                 q: "Le plan Gratuit nécessite-t-il une carte bancaire ?",
-                a: "Non ! Le plan Gratuit est 100% gratuit pour 14 jours d'essai, sans carte bancaire requise. Vous avez 30 leads/emails et 2 recherches Google Maps gratuitement."
+                a: "Non ! Le plan Gratuit est 100% gratuit, sans carte bancaire requise. Vous avez 15 prospects et 15 emails gratuits chaque mois."
               },
               {
                 q: "Que se passe-t-il si je dépasse mes quotas ?",
-                a: "Nous vous préviendrons par email avant d'atteindre vos limites. Vous pourrez alors upgrader votre plan ou attendre le mois suivant. Aucune interruption de service."
+                a: "Nous vous préviendrons par email avant d'atteindre vos limites. Vous pouvez acheter des crédits supplémentaires (0.05€/prospect), upgrader votre plan, ou attendre le mois suivant."
+              },
+              {
+                q: "Quelle est la différence entre 'Notre base' et 'Ma propre base' ?",
+                a: "Avec 'Notre base', vous accédez à nos millions de prospects enrichis. Avec 'Votre propre base' (import CSV), vous bénéficiez de plus d'emails mais devez fournir vos propres contacts. Vous pouvez aussi mixer les deux modes !"
               },
               {
                 q: "Y a-t-il un engagement ?",
@@ -308,7 +306,7 @@ export default function Pricing() {
           >
             Commencer gratuitement
           </Link>
-          <p className="text-white/80 text-sm mt-4">✓ Sans carte bancaire   ✓ 30 leads/emails gratuits   ✓ Essai 14 jours</p>
+          <p className="text-white/80 text-sm mt-4">✓ Sans carte bancaire   ✓ 15 prospects gratuits/mois   ✓ Aucun engagement</p>
         </div>
       </section>
     </div>

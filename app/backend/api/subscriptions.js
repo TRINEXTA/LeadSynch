@@ -2,6 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import express from 'express';
 import { query as q } from '../lib/db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import subscriptionService from '../services/subscriptionService.js';
 
 const router = express.Router();
 
@@ -393,6 +394,193 @@ router.get('/stats/summary', async (req, res) => {
   } catch (error) {
     error('Erreur stats abonnements:', error);
     res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  }
+});
+
+// ============================================
+// NOUVELLES ROUTES - Quotas et Plans Tenant
+// ============================================
+
+/**
+ * GET /api/subscriptions/quota
+ * Récupérer le résumé des quotas du tenant connecté
+ */
+router.get('/quota', async (req, res) => {
+  try {
+    const quota = await subscriptionService.getQuotaSummary(req.user.tenant_id);
+
+    if (!quota) {
+      return res.status(404).json({
+        success: false,
+        error: 'Aucun abonnement trouvé'
+      });
+    }
+
+    res.json({ success: true, data: quota });
+  } catch (err) {
+    error('Error getting quota:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/subscriptions/plans
+ * Récupérer tous les plans disponibles
+ */
+router.get('/plans', async (req, res) => {
+  try {
+    const plans = await subscriptionService.getAvailablePlans();
+    res.json({ success: true, data: plans });
+  } catch (err) {
+    error('Error getting plans:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/subscriptions/check-prospects
+ * Vérifier si le tenant peut générer X prospects
+ */
+router.post('/check-prospects', async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ success: false, error: 'Quantité invalide' });
+    }
+
+    const result = await subscriptionService.canGenerateProspects(req.user.tenant_id, quantity);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    error('Error checking prospects:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/subscriptions/check-emails
+ * Vérifier si le tenant peut envoyer X emails
+ */
+router.post('/check-emails', async (req, res) => {
+  try {
+    const { quantity, type = 'campaign' } = req.body;
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ success: false, error: 'Quantité invalide' });
+    }
+
+    let result;
+    if (type === 'followup') {
+      result = await subscriptionService.canSendFollowupEmails(req.user.tenant_id, quantity);
+    } else {
+      result = await subscriptionService.canSendCampaignEmails(req.user.tenant_id, quantity);
+    }
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    error('Error checking emails:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * PUT /api/subscriptions/usage-mode
+ * Changer le mode d'utilisation (our_base, own_base, mixed)
+ */
+router.put('/usage-mode', async (req, res) => {
+  try {
+    const { mode } = req.body;
+    const result = await subscriptionService.setUsageMode(req.user.tenant_id, mode);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    error('Error setting usage mode:', err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/subscriptions/credits
+ * Récupérer le solde de crédits
+ */
+router.get('/credits', async (req, res) => {
+  try {
+    const balance = await subscriptionService.getCreditsBalance(req.user.tenant_id);
+    res.json({ success: true, data: { balance } });
+  } catch (err) {
+    error('Error getting credits:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/subscriptions/credits/history
+ * Récupérer l'historique des transactions de crédits
+ */
+router.get('/credits/history', async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+    const transactions = await subscriptionService.getCreditTransactions(req.user.tenant_id, parseInt(limit));
+    res.json({ success: true, data: transactions });
+  } catch (err) {
+    error('Error getting credit history:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/subscriptions/credits/purchase
+ * Acheter des crédits (0.05€/prospect)
+ */
+router.post('/credits/purchase', async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    if (!quantity || quantity < 100) {
+      return res.status(400).json({ success: false, error: 'Minimum 100 crédits' });
+    }
+
+    // Calcul du prix avec réductions volume
+    let pricePerProspect = 0.05;
+    if (quantity >= 10000) pricePerProspect = 0.04;
+    else if (quantity >= 5000) pricePerProspect = 0.045;
+
+    const totalPrice = quantity * pricePerProspect;
+
+    // TODO: Intégrer Stripe ici
+    const result = await subscriptionService.addCredits(
+      req.user.tenant_id,
+      quantity,
+      totalPrice,
+      `manual_${Date.now()}`
+    );
+
+    res.json({
+      success: true,
+      data: { ...result, price_per_prospect: pricePerProspect, total_price: totalPrice }
+    });
+  } catch (err) {
+    error('Error purchasing credits:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/subscriptions/pricing
+ * Récupérer les tarifs des crédits
+ */
+router.get('/pricing', async (req, res) => {
+  try {
+    const pricing = {
+      credits: [
+        { quantity: 100, price: 5.00, price_per_prospect: 0.05 },
+        { quantity: 500, price: 25.00, price_per_prospect: 0.05 },
+        { quantity: 1000, price: 50.00, price_per_prospect: 0.05 },
+        { quantity: 5000, price: 225.00, price_per_prospect: 0.045, discount: '10%' },
+        { quantity: 10000, price: 400.00, price_per_prospect: 0.04, discount: '20%' }
+      ],
+      currency: 'EUR'
+    };
+    res.json({ success: true, data: pricing });
+  } catch (err) {
+    error('Error getting pricing:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
