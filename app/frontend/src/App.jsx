@@ -33,6 +33,7 @@ const Pipeline = lazy(() => import('./pages/Pipeline'));
 
 // Bases de données
 const LeadDatabases = lazy(() => import('./pages/LeadDatabases'));
+const LeadDatabasesAdmin = lazy(() => import('./pages/LeadDatabasesAdmin'));
 const DatabaseDetails = lazy(() => import('./pages/DatabaseDetails'));
 const ImportLeads = lazy(() => import('./pages/ImportLeads'));
 const MigrateLeads = lazy(() => import('./pages/MigrateLeads'));
@@ -177,6 +178,7 @@ function App() {
               <Route path="/MyLeads" element={<MyLeads />} />
 
               <Route path="/LeadDatabases" element={<LeadDatabases />} />
+              <Route path="/LeadDatabasesAdmin" element={<LeadDatabasesAdmin />} />
               <Route path="/DatabaseDetails" element={<DatabaseDetails />} />
               <Route path="/ImportLeads" element={<ImportLeads />} />
               <Route path="/MigrateLeads" element={<MigrateLeads />} />
