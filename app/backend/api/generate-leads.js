@@ -275,17 +275,17 @@ async function handler(req, res) {
       const foundInDatabase = existingLeads.length;
       const missingCount = quantity - foundInDatabase;
 
-      log(`✅ ${foundInDatabase} leads trouvés en base (0.10€/lead)`);
-      log(`🔍 ${missingCount} leads manquants, recherche Google Maps (0.10€/lead)`);
+      log(`✅ ${foundInDatabase} prospects trouvés en base (0.05€/prospect)`);
+      log(`🔍 ${missingCount} prospects manquants, recherche Google Maps (0.05€/prospect)`);
 
       let newLeads = [];
       let googleLeadsGenerated = 0;
       let creditsConsumed = 0;
       let totalCost = 0;
 
-      // Consommer les crédits pour les leads de la base (0.10€) - sauf super admin
+      // Consommer les crédits pour les prospects de la base (0.05€) - sauf super admin
       if (foundInDatabase > 0 && !isSuperAdmin) {
-        const dbCost = foundInDatabase * 0.10;
+        const dbCost = foundInDatabase * 0.05;
         creditsConsumed += foundInDatabase;
         totalCost += dbCost;
 
@@ -293,7 +293,7 @@ async function handler(req, res) {
         for (const lead of existingLeads) {
           await execute(
             `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
-             VALUES ($1, $2, 1, 'database', 0.10)`,
+             VALUES ($1, $2, 1, 'database', 0.05)`,
             [tenant_id, lead.id]
           );
         }
@@ -301,7 +301,7 @@ async function handler(req, res) {
         log(`💰 ${foundInDatabase} crédits consommés (BDD): ${dbCost.toFixed(2)}€`);
       }
 
-      // 3. GÉNÉRER DEPUIS GOOGLE MAPS API (0.10€) SI NÉCESSAIRE
+      // 3. GÉNÉRER DEPUIS GOOGLE MAPS API (0.05€) SI NÉCESSAIRE
       if (missingCount > 0) {
         if (!GOOGLE_API_KEY) {
           log(`⚠️ Pas de clé Google Maps API configurée, seulement ${foundInDatabase} leads retournés`);
@@ -380,16 +380,16 @@ async function handler(req, res) {
                     ]
                   );
 
-                  // Enregistrer l'usage pour ce lead Google Maps (0.10€) - sauf super admin
+                  // Enregistrer l'usage pour ce prospect Google Maps (0.05€) - sauf super admin
                   if (!isSuperAdmin) {
                     await execute(
                       `INSERT INTO credit_usage (tenant_id, lead_id, credits_used, source, cost_euros)
-                       VALUES ($1, $2, 1, 'google_maps', 0.10)`,
+                       VALUES ($1, $2, 1, 'google_maps', 0.05)`,
                       [tenant_id, newLead.id]
                     );
                     creditsConsumed++;
-                    totalCost += 0.10;
-                    log(`💰 1 crédit consommé (Google Maps): 0.10€`);
+                    totalCost += 0.05;
+                    log(`💰 1 crédit consommé (Google Maps): 0.05€`);
                   }
 
                   newLeads.push(newLead);
@@ -429,7 +429,7 @@ async function handler(req, res) {
         fetched_from_google: googleLeadsGenerated,
         total: totalLeads.length,
         credits_consumed: isSuperAdmin ? 0 : creditsConsumed,
-        cost_per_lead: 0.10,
+        cost_per_prospect: 0.05,
         total_cost: isSuperAdmin ? '0.00' : totalCost.toFixed(2),
         credits_remaining: isSuperAdmin ? 999999 : (creditsAvailable - creditsConsumed),
         unlimited: isSuperAdmin || undefined,

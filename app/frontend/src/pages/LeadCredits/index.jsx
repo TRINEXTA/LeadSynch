@@ -8,7 +8,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../../lib/confirmDialog';
 
-const PRICE_PER_PROSPECT = 0.10; // Prix fixe par prospect
+const PRICE_PER_PROSPECT = 0.05; // Prix fixe par prospect
 
 export default function LeadCredits() {
   const [credits, setCredits] = useState(null);
@@ -144,7 +144,7 @@ export default function LeadCredits() {
                 {/* Prix fixe */}
                 <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-5 rounded-xl border-2 border-green-200">
                   <p className="text-sm font-bold text-green-700 mb-2">💰 Tarif unique</p>
-                  <p className="text-5xl font-black text-green-600 mb-1">0,10€</p>
+                  <p className="text-5xl font-black text-green-600 mb-1">0,05€</p>
                   <p className="text-sm text-green-700 font-semibold">par fiche prospect</p>
                 </div>
 
@@ -173,7 +173,7 @@ export default function LeadCredits() {
                   </div>
                   {prospectCount && (
                     <p className="text-sm text-blue-700 mt-2 font-semibold">
-                      {prospectCount} prospects × 0,10€ = {totalPrice}€
+                      {prospectCount} prospects × 0,05€ = {totalPrice}€
                     </p>
                   )}
                 </div>
@@ -217,7 +217,7 @@ export default function LeadCredits() {
                   <div>
                     <h3 className="font-bold text-gray-900 mb-1 text-lg">Prix fixe et transparent</h3>
                     <p className="text-gray-600 text-sm">
-                      Chaque fiche prospect coûte <strong>0,10€</strong>, quel que soit le nombre acheté. Simple et clair.
+                      Chaque fiche prospect coûte <strong>0,05€</strong>, quel que soit le nombre acheté. Simple et clair.
                     </p>
                   </div>
                 </div>
@@ -316,7 +316,7 @@ export default function LeadCredits() {
                         {purchase.amount_euros}€
                       </span>
                       <span className="text-sm text-gray-600 font-semibold">
-                        0,10€ par prospect
+                        0,05€ par prospect
                       </span>
                     </div>
                   </div>
