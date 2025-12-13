@@ -28,9 +28,12 @@ const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API
 
 // Configuration
 const CONFIG = {
-  MAX_QUANTITY: 10000,  // Limite augmentée (était 500)
+  MAX_QUANTITY: 500,        // Limite raisonnable pour éviter crash mémoire (était 10000)
+  MAX_QUANTITY_SUPERADMIN: 2000, // Super admin a une limite plus élevée mais raisonnable
   DEFAULT_RADIUS: 10,
-  COST_PER_LEAD: 0.10
+  COST_PER_LEAD: 0.10,
+  // Seuil pour désactiver l'enrichissement (trop gourmand en mémoire)
+  ENRICHMENT_THRESHOLD: 200
 };
 
 // Mapping secteur -> types Google Maps
@@ -328,6 +331,14 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
     return res.status(400).json({ error: 'Secteur requis' });
   }
 
+  // Limiter la quantité pour éviter les problèmes de mémoire
+  const user = await queryOne('SELECT is_super_admin FROM users WHERE id = $1', [user_id]);
+  const isSuperAdmin = user?.is_super_admin === true;
+  const maxQuantity = isSuperAdmin ? CONFIG.MAX_QUANTITY_SUPERADMIN : CONFIG.MAX_QUANTITY;
+  const safeQuantity = Math.min(Math.max(1, parseInt(quantity) || 50), maxQuantity);
+
+  log(`📊 [GENERATE] Quantité demandée: ${quantity}, limitée à: ${safeQuantity} (max: ${maxQuantity})`);
+
   // Déterminer les villes à rechercher
   let citiesToSearch = [];
 
@@ -405,22 +416,22 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
   }
 
   // Vérification des crédits (sauf super admin)
-  const isSuperAdmin = req.user.is_super_admin === true;
+  // Note: isSuperAdmin déjà défini plus haut
 
   // Limite de quantité (super admin a une limite plus élevée)
-  const maxQuantity = isSuperAdmin ? 10000 : CONFIG.MAX_QUANTITY;
-  if (quantity > maxQuantity) {
+  // Note: maxQuantity et safeQuantity déjà définis plus haut
+  if (safeQuantity > maxQuantity) {
     return res.status(400).json({ error: `Maximum ${maxQuantity} leads par recherche` });
   }
 
   if (!isSuperAdmin && !skipExternal) {
-    const creditCheck = await checkCredits(tenant_id, quantity);
+    const creditCheck = await checkCredits(tenant_id, safeQuantity);
     if (!creditCheck.hasEnough) {
       return res.status(403).json({
         error: 'Quota insuffisant',
         message: creditCheck.message,
         available: creditCheck.available,
-        requested: quantity,
+        requested: safeQuantity,
         action: 'buy_credits',
         redirect: '/settings/billing'
       });
@@ -461,10 +472,10 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       sendProgress({ type: 'progress', percent: 5, message: `Recherche dans votre base (${totalCities} villes)...` });
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
-        const remaining = quantity - allLeads.length;
+        const remaining = safeQuantity - allLeads.length;
         let cityLeads = await searchInternalDatabase(tenant_id, sector, cityName, remaining);
 
         // Filtrer selon les exigences téléphone/email
@@ -493,7 +504,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         });
       }
 
-      if (allLeads.length >= quantity) {
+      if (allLeads.length >= safeQuantity) {
         sendProgress({
           type: 'complete',
           percent: 100,
@@ -516,10 +527,10 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       processedCities = 0;
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
-        const remaining = quantity - allLeads.length;
+        const remaining = safeQuantity - allLeads.length;
         let cacheLeads = await searchGlobalCache(sector, cityName, remaining, allLeads);
 
         // Filtrer selon les exigences téléphone/email
@@ -548,7 +559,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         });
       }
 
-      if (allLeads.length >= quantity || skipExternal) {
+      if (allLeads.length >= safeQuantity || skipExternal) {
         sendProgress({
           type: 'complete',
           percent: 100,
@@ -563,7 +574,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       log(`📦 [GENERATE] Mode Alimentation BDD: skip cache global`);
     }
 
-    if (allLeads.length >= quantity || skipExternal) {
+    if (allLeads.length >= safeQuantity || skipExternal) {
       sendProgress({
         type: 'complete',
         percent: 100,
@@ -582,11 +593,11 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       processedCities = 0;
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
         await waitIfPaused(searchState);
 
         // Augmenter la limite par ville pour les grandes recherches
-        const remaining = Math.min(100, quantity - allLeads.length);
+        const remaining = Math.min(100, safeQuantity - allLeads.length);
         let sireneLeads = await searchSireneAPI(sector, cityName, remaining, tenant_id, sendProgress, searchState);
 
         // Filtrer selon les exigences email (pas téléphone car déjà vérifié ci-dessus)
@@ -625,7 +636,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         }
       }
 
-      if (allLeads.length >= quantity) {
+      if (allLeads.length >= safeQuantity) {
         sendProgress({
           type: 'complete',
           percent: 100,
@@ -643,7 +654,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
 
     // ========== ÉTAPE 4: GOOGLE MAPS (PRINCIPAL pour les téléphones) ==========
     // Chercher dans TOUTES les villes jusqu'à atteindre la quantité
-    if (GOOGLE_API_KEY && allLeads.length < quantity) {
+    if (GOOGLE_API_KEY && allLeads.length < safeQuantity) {
       const googleStartPercent = requirePhone ? 40 : 70;
       sendProgress({ type: 'progress', percent: googleStartPercent, message: `Recherche Google Maps (${citiesToSearch.length} villes disponibles)...` });
 
@@ -652,7 +663,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       const maxEmptyCities = 10; // Arrêter si 10 villes consécutives sans résultat
 
       for (const cityName of citiesToSearch) {
-        if (allLeads.length >= quantity || !searchState.active) break;
+        if (allLeads.length >= safeQuantity || !searchState.active) break;
 
         // Si trop de villes vides consécutives, arrêter
         if (consecutiveEmptyCities >= maxEmptyCities) {
@@ -662,7 +673,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
 
         await waitIfPaused(searchState);
 
-        const remaining = quantity - allLeads.length;
+        const remaining = safeQuantity - allLeads.length;
         const leadsBeforeCity = allLeads.length;
 
         let googleLeads = await searchGoogleMaps(
@@ -686,7 +697,7 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
         sendProgress({
           type: 'progress',
           percent: Math.min(googlePercent, 89),
-          message: `Google Maps: ${cityName} (${allLeads.length}/${quantity} leads)`
+          message: `Google Maps: ${cityName} (${allLeads.length}/${safeQuantity} leads)`
         });
       }
 
@@ -701,26 +712,57 @@ async function handleGenerateLeads(req, res, tenant_id, user_id) {
       sendProgress({ type: 'warning', message: 'API Google Maps non configurée' });
     }
 
-    // ========== ENRICHISSEMENT FINAL ==========
-    sendProgress({ type: 'progress', percent: 90, message: 'Enrichissement des données...' });
+    // ========== ENRICHISSEMENT FINAL (CONDITIONNEL) ==========
+    // Désactiver l'enrichissement si trop de leads pour éviter crash mémoire
+    const leadsToProcess = allLeads.slice(0, safeQuantity);
+    let finalLeads;
 
-    const enrichmentService = new LeadEnrichmentService(tenant_id, user_id);
-    const enrichedLeads = await enrichmentService.enrichLeads(allLeads.slice(0, quantity));
+    if (leadsToProcess.length <= CONFIG.ENRICHMENT_THRESHOLD) {
+      sendProgress({ type: 'progress', percent: 90, message: `Enrichissement de ${leadsToProcess.length} leads...` });
 
-    stats.total = enrichedLeads.length;
+      const enrichmentService = new LeadEnrichmentService(tenant_id, user_id);
+      finalLeads = await enrichmentService.enrichLeads(leadsToProcess);
 
-    // Envoyer les leads enrichis un par un
-    for (const lead of enrichedLeads) {
-      sendProgress({ type: 'enriched_lead', lead });
+      // Libérer la mémoire
+      allLeads.length = 0;
+    } else {
+      // Skip enrichissement pour économiser mémoire
+      sendProgress({
+        type: 'progress',
+        percent: 90,
+        message: `${leadsToProcess.length} leads trouvés (enrichissement désactivé pour optimisation mémoire)`
+      });
+
+      // Calculer un score de qualité basique sans enrichissement
+      finalLeads = leadsToProcess.map(lead => ({
+        ...lead,
+        quality_score: calculateBasicQualityScore(lead)
+      }));
+
+      // Libérer la mémoire immédiatement
+      allLeads.length = 0;
     }
+
+    stats.total = finalLeads.length;
+
+    // Envoyer un résumé au lieu de chaque lead individuellement (économise mémoire)
+    sendProgress({
+      type: 'leads_summary',
+      count: finalLeads.length,
+      sample: finalLeads.slice(0, 10) // Envoyer seulement un échantillon
+    });
 
     sendProgress({
       type: 'complete',
       percent: 100,
-      total: enrichedLeads.length,
+      total: finalLeads.length,
+      leads: finalLeads, // Envoyer tous les leads une seule fois à la fin
       message: getCompleteMessage(stats),
       stats
     });
+
+    // Libérer la mémoire
+    finalLeads = null;
 
     res.end();
 
@@ -1269,6 +1311,39 @@ async function waitIfPaused(searchState) {
 }
 
 /**
+ * Calcul basique du score de qualité (sans enrichissement web)
+ * Utilisé quand on a trop de leads pour l'enrichissement complet
+ */
+function calculateBasicQualityScore(lead) {
+  let score = 0;
+
+  // Données de base (max 30 points)
+  if (lead.company_name) score += 10;
+  if (lead.city) score += 5;
+  if (lead.address) score += 5;
+  if (lead.postal_code) score += 5;
+  if (lead.sector || lead.industry) score += 5;
+
+  // Données légales (max 25 points)
+  if (lead.siret) score += 15;
+  if (lead.siren) score += 5;
+  if (lead.naf_code) score += 5;
+
+  // Contact (max 30 points)
+  if (lead.email) score += 15;
+  if (lead.phone) score += 10;
+  if (lead.website) score += 5;
+
+  // Enrichissement (max 15 points)
+  if (lead.contact_name) score += 5;
+  if (lead.employee_count) score += 5;
+  if (lead.rating) score += 3;
+  if (lead.creation_date) score += 2;
+
+  return Math.min(score, 100);
+}
+
+/**
  * Message de fin
  */
 function getCompleteMessage(stats) {
@@ -1322,7 +1397,7 @@ async function handlePreviewSearch(req, res, tenant_id) {
     return res.json({
       success: true,
       preview: {
-        requested: quantity,
+        requested: safeQuantity,
         foundInternal: internalLeads.length,
         foundGlobal: globalLeads.length,
         totalAvailable: totalFound,
