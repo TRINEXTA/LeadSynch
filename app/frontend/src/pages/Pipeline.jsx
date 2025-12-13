@@ -1,7 +1,7 @@
 import { log, error, warn } from "../lib/logger.js";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { TrendingUp, Users, DollarSign, Clock, Filter, Search, Plus, Target } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Clock, Filter, Search, Plus, Target, ChevronDown, ChevronUp, BarChart3, X } from 'lucide-react';
 import api from '../api/axios';
 import ProspectingMode from './ProspectingMode';
 import LeadModal from '../components/LeadModal';
@@ -27,19 +27,24 @@ const STAGES = [
 
 export default function Pipeline() {
   const [leads, setLeads] = useState([]);
-  const [filteredLeads, setFilteredLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({});
-  
+
+  // UI State - récupérer depuis localStorage
+  const [showStats, setShowStats] = useState(() => {
+    const saved = localStorage.getItem('pipeline_show_stats');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
   // Modals
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [creatingLeadStage, setCreatingLeadStage] = useState(null);
   const [prospectionMode, setProspectionMode] = useState(false);
-  
+
   // Quick Actions Modals
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
@@ -47,24 +52,26 @@ export default function Pipeline() {
   const [showContractModal, setShowContractModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showValidationModal, setShowValidationModal] = useState(false);
-  const [validationRequestType, setValidationRequestType] = useState('validation'); // 'validation' ou 'help'
+  const [validationRequestType, setValidationRequestType] = useState('validation');
   const [selectedLead, setSelectedLead] = useState(null);
+
+  // Sauvegarder préférence stats
+  useEffect(() => {
+    localStorage.setItem('pipeline_show_stats', JSON.stringify(showStats));
+  }, [showStats]);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  useEffect(() => {
-    filterLeads();
-  }, [leads, selectedCampaign, searchQuery]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const leadsResponse = await api.get('/pipeline-leads');
-      const leadsData = leadsResponse.data.leads || [];
+      const [leadsResponse, campaignsResponse] = await Promise.all([
+        api.get('/pipeline-leads'),
+        api.get('/campaigns/my-campaigns')
+      ]);
 
-      // Utiliser /my-campaigns pour charger uniquement les campagnes assignées à l'utilisateur
-      const campaignsResponse = await api.get('/campaigns/my-campaigns');
+      const leadsData = leadsResponse.data.leads || [];
       const campaignsData = campaignsResponse.data.campaigns || [];
 
       log('✅ Leads chargés:', leadsData.length);
@@ -72,17 +79,16 @@ export default function Pipeline() {
 
       setLeads(leadsData);
       setCampaigns(campaignsData);
-      setFilteredLeads(leadsData);
-      calculateStats(leadsData);
       setLoading(false);
-    } catch (error) {
-      error('❌ Erreur chargement données:', error);
+    } catch (err) {
+      error('❌ Erreur chargement données:', err);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterLeads = () => {
-    let filtered = [...leads];
+  // Filtrage optimisé avec useMemo
+  const filteredLeads = useMemo(() => {
+    let filtered = leads;
 
     if (selectedCampaign !== 'all') {
       filtered = filtered.filter(lead => lead.campaign_id === selectedCampaign);
@@ -90,7 +96,7 @@ export default function Pipeline() {
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(lead => 
+      filtered = filtered.filter(lead =>
         lead.company_name?.toLowerCase().includes(query) ||
         lead.contact_name?.toLowerCase().includes(query) ||
         lead.email?.toLowerCase().includes(query) ||
@@ -99,101 +105,122 @@ export default function Pipeline() {
       );
     }
 
-    setFilteredLeads(filtered);
-    calculateStats(filtered);
-  };
+    return filtered;
+  }, [leads, selectedCampaign, searchQuery]);
 
-  const calculateStats = (leadsData) => {
+  // Stats calculées avec useMemo
+  const stats = useMemo(() => {
     const statsByStage = {};
     STAGES.forEach(stage => {
-      const stageLeads = leadsData.filter(l => l.stage === stage.id);
+      const stageLeads = filteredLeads.filter(l => l.stage === stage.id);
       statsByStage[stage.id] = {
         count: stageLeads.length,
         value: stageLeads.reduce((sum, l) => sum + (parseFloat(l.deal_value) || 0), 0)
       };
     });
-    setStats(statsByStage);
-  };
+    return statsByStage;
+  }, [filteredLeads]);
 
-  const onDragEnd = async (result) => {
+  // Stats globales calculées avec useMemo
+  const globalStats = useMemo(() => ({
+    totalLeads: filteredLeads.length,
+    totalValue: filteredLeads.reduce((sum, lead) => sum + (parseFloat(lead.deal_value) || 0), 0),
+    wonDeals: filteredLeads.filter(l => l.stage === 'gagne').length,
+    activeLeads: filteredLeads.filter(l => !['gagne', 'hors_scope', 'nrp'].includes(l.stage)).length
+  }), [filteredLeads]);
+
+  // Optimisation: mise à jour locale sans recharger toutes les données
+  const onDragEnd = useCallback(async (result) => {
     if (!result.destination) return;
     const { source, destination, draggableId } = result;
     if (source.droppableId === destination.droppableId) return;
 
-    const updatedLeads = leads.map(lead => 
-      lead.id === draggableId ? { ...lead, stage: destination.droppableId } : lead
+    // Mise à jour optimiste immédiate
+    setLeads(prevLeads =>
+      prevLeads.map(lead =>
+        lead.id === draggableId ? { ...lead, stage: destination.droppableId } : lead
+      )
     );
-    setLeads(updatedLeads);
 
     try {
       await api.patch(`/pipeline-leads/${draggableId}`, { stage: destination.droppableId });
       log('✅ Stage mis à jour:', draggableId, '->', destination.droppableId);
-    } catch (error) {
-      error('❌ Erreur update stage:', error);
-      loadData();
+    } catch (err) {
+      error('❌ Erreur update stage:', err);
+      // Revert en cas d'erreur
+      setLeads(prevLeads =>
+        prevLeads.map(lead =>
+          lead.id === draggableId ? { ...lead, stage: source.droppableId } : lead
+        )
+      );
     }
-  };
+  }, []);
 
-  const getLeadsByStage = (stageId) => {
-    return filteredLeads.filter(lead => lead.stage === stageId);
-  };
+  // Leads par stage avec useMemo
+  const leadsByStage = useMemo(() => {
+    const grouped = {};
+    STAGES.forEach(stage => {
+      grouped[stage.id] = filteredLeads.filter(lead => lead.stage === stage.id);
+    });
+    return grouped;
+  }, [filteredLeads]);
 
-  // Quick Actions Handlers
-  const handleEmailClick = (lead) => {
+  // Quick Actions Handlers - optimisés avec useCallback
+  const handleEmailClick = useCallback((lead) => {
     setSelectedLead(lead);
     setShowEmailModal(true);
-  };
+  }, []);
 
-  const handleCallClick = (lead) => {
+  const handleCallClick = useCallback((lead) => {
     setSelectedLead(lead);
     setShowCallModal(true);
-  };
+  }, []);
 
-  const handleProposalClick = (lead) => {
+  const handleProposalClick = useCallback((lead) => {
     setSelectedLead(lead);
     setShowProposalModal(true);
-  };
+  }, []);
 
-  const handleContractClick = (lead) => {
+  const handleContractClick = useCallback((lead) => {
     setSelectedLead(lead);
     setShowContractModal(true);
-  };
+  }, []);
 
-  const handleEditClick = (lead) => {
+  const handleEditClick = useCallback((lead) => {
     setEditingLead(lead);
     setShowLeadModal(true);
-  };
+  }, []);
 
-  const handleViewHistory = (lead) => {
+  const handleViewHistory = useCallback((lead) => {
     setSelectedLead(lead);
     setShowHistoryModal(true);
-  };
+  }, []);
 
-  const handleRequestValidation = (lead) => {
+  const handleRequestValidation = useCallback((lead) => {
     setSelectedLead(lead);
     setValidationRequestType('validation');
     setShowValidationModal(true);
-  };
+  }, []);
 
-  const handleRequestHelp = (lead) => {
+  const handleRequestHelp = useCallback((lead) => {
     setSelectedLead(lead);
     setValidationRequestType('help');
     setShowValidationModal(true);
-  };
+  }, []);
 
-  const handleLeadShow = (lead) => {
+  const handleLeadShow = useCallback((lead) => {
     setSelectedLead(lead);
     setValidationRequestType('leadshow');
     setShowValidationModal(true);
-  };
+  }, []);
 
-  const handleCreateLead = (stageId) => {
+  const handleCreateLead = useCallback((stageId) => {
     setCreatingLeadStage(stageId);
     setEditingLead(null);
     setShowLeadModal(true);
-  };
+  }, []);
 
-  const handleSaveLead = async (leadData) => {
+  const handleSaveLead = useCallback(async (leadData) => {
     try {
       if (editingLead) {
         await api.patch(`/pipeline-leads/${editingLead.id}`, leadData);
@@ -205,20 +232,20 @@ export default function Pipeline() {
         });
         log('✅ Lead créé');
       }
-      
+
       setShowLeadModal(false);
       setEditingLead(null);
       setCreatingLeadStage(null);
       loadData();
-    } catch (error) {
-      error('❌ Erreur sauvegarde lead:', error);
-      throw error;
+    } catch (err) {
+      error('❌ Erreur sauvegarde lead:', err);
+      throw err;
     }
-  };
+  }, [editingLead, creatingLeadStage, loadData]);
 
-  const handleModalSuccess = () => {
+  const handleModalSuccess = useCallback(() => {
     loadData();
-  };
+  }, [loadData]);
 
   if (prospectionMode) {
     return (
@@ -244,163 +271,205 @@ export default function Pipeline() {
     );
   }
 
-  const totalLeads = filteredLeads.length;
-  const totalValue = filteredLeads.reduce((sum, lead) => sum + (parseFloat(lead.deal_value) || 0), 0);
-  const wonDeals = filteredLeads.filter(l => l.stage === 'gagne').length;
-  const activeLeads = filteredLeads.filter(l => !['gagne', 'hors_scope', 'nrp'].includes(l.stage)).length;
-
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      {/* Header fixe */}
-      <div className="bg-white shadow-sm border-b border-gray-200 p-6 flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Target className="w-8 h-8 text-purple-600" />
-              Pipeline Commercial
-            </h1>
-            <p className="text-gray-600 mt-1">Gérez vos opportunités de la prospection à la signature</p>
+      {/* Header compact */}
+      <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex-shrink-0">
+        <div className="flex items-center justify-between gap-4">
+          {/* Titre + Stats inline */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Target className="w-6 h-6 text-purple-600" />
+              <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
+            </div>
+
+            {/* Mini stats inline */}
+            <div className="hidden md:flex items-center gap-3 text-sm">
+              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg font-medium">
+                {globalStats.totalLeads} leads
+              </span>
+              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg font-medium">
+                {globalStats.totalValue.toLocaleString()}€
+              </span>
+              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg font-medium">
+                {globalStats.wonDeals} gagnés
+              </span>
+            </div>
           </div>
 
-          <button
-            onClick={() => setProspectionMode(true)}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg flex items-center gap-2"
-          >
-            <TrendingUp className="w-5 h-5" />
-            Mode Prospection
-          </button>
-        </div>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {/* Toggle Stats */}
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className={`p-2 rounded-lg transition-colors ${showStats ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              title={showStats ? 'Masquer les statistiques' : 'Afficher les statistiques'}
+            >
+              <BarChart3 className="w-5 h-5" />
+            </button>
 
-        {/* Filtres */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher (entreprise, contact, email, téléphone...)"
-              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
+            {/* Toggle Filtres */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`p-2 rounded-lg transition-colors ${showFilters ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              title={showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+            >
+              <Filter className="w-5 h-5" />
+            </button>
 
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            {/* Filtre campagne compact */}
             <select
               value={selectedCampaign}
               onChange={(e) => setSelectedCampaign(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border-2 border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 appearance-none bg-white font-semibold text-gray-700"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-purple-500 max-w-[200px]"
             >
-              <option value="all">📋 Toutes les campagnes ({leads.length} leads)</option>
-              {campaigns.map(campaign => {
-                const campaignLeadsCount = leads.filter(l => l.campaign_id === campaign.id).length;
-                return (
-                  <option key={campaign.id} value={campaign.id}>
-                    🎯 {campaign.name} ({campaignLeadsCount} leads)
-                  </option>
-                );
-              })}
+              <option value="all">Toutes ({leads.length})</option>
+              {campaigns.map(campaign => (
+                <option key={campaign.id} value={campaign.id}>
+                  {campaign.name}
+                </option>
+              ))}
             </select>
+
+            {/* Mode Prospection */}
+            <button
+              onClick={() => setProspectionMode(true)}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all shadow flex items-center gap-2 text-sm"
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">Prospection</span>
+            </button>
           </div>
         </div>
+
+        {/* Barre de recherche - collapsible */}
+        {showFilters && (
+          <div className="mt-3 flex items-center gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher..."
+                className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <span className="text-sm text-gray-500">
+              {filteredLeads.length} résultat{filteredLeads.length > 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="bg-white px-6 py-4 border-b border-gray-200 flex-shrink-0">
-        <div className="grid grid-cols-4 gap-3">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-md p-4 text-white">
-            <div className="flex items-center gap-2">
-              <Users className="w-6 h-6" />
-              <div>
-                <p className="text-xs font-medium opacity-90">Total Leads</p>
-                <p className="text-2xl font-bold">{totalLeads}</p>
+      {/* Stats Cards - collapsible */}
+      {showStats && (
+        <div className="bg-white px-4 py-3 border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-4 gap-3">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-3 text-white">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                <div>
+                  <p className="text-xs opacity-90">Total Leads</p>
+                  <p className="text-xl font-bold">{globalStats.totalLeads}</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-md p-4 text-white">
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-6 h-6" />
-              <div>
-                <p className="text-xs font-medium opacity-90">Valeur Totale</p>
-                <p className="text-2xl font-bold">{totalValue.toLocaleString()}€</p>
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-3 text-white">
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                <div>
+                  <p className="text-xs opacity-90">Valeur Totale</p>
+                  <p className="text-xl font-bold">{globalStats.totalValue.toLocaleString()}€</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-md p-4 text-white">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-6 h-6" />
-              <div>
-                <p className="text-xs font-medium opacity-90">Deals Gagnés</p>
-                <p className="text-2xl font-bold">{wonDeals}</p>
+            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-sm p-3 text-white">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                <div>
+                  <p className="text-xs opacity-90">Deals Gagnés</p>
+                  <p className="text-xl font-bold">{globalStats.wonDeals}</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-md p-4 text-white">
-            <div className="flex items-center gap-2">
-              <Clock className="w-6 h-6" />
-              <div>
-                <p className="text-xs font-medium opacity-90">En Cours</p>
-                <p className="text-2xl font-bold">{activeLeads}</p>
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-sm p-3 text-white">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                <div>
+                  <p className="text-xs opacity-90">En Cours</p>
+                  <p className="text-xl font-bold">{globalStats.activeLeads}</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Kanban avec scroll optimisé */}
-      <div className="flex-1 overflow-hidden p-6">
+      <div className="flex-1 overflow-hidden p-4">
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="h-full overflow-x-auto overflow-y-hidden">
-            <div className="inline-flex gap-4 h-full">
+          <div className="h-full overflow-x-auto overflow-y-hidden pb-2">
+            <div className="inline-flex gap-3 h-full">
               {STAGES.map(stage => (
-                <div key={stage.id} className="flex-shrink-0 w-80 flex flex-col">
-                  <div className={`${stage.color} text-white rounded-t-xl p-3 shadow-lg flex items-center justify-between mb-2`}>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-base">{stage.name}</h3>
-                      <div className="text-xs opacity-90 font-semibold mt-0.5">
+                <div key={stage.id} className="flex-shrink-0 w-72 flex flex-col">
+                  {/* Header de colonne compact */}
+                  <div className={`${stage.color} text-white rounded-t-lg p-2.5 shadow flex items-center justify-between`}>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm truncate">{stage.name}</h3>
+                      <div className="text-xs opacity-90">
                         {(stats[stage.id]?.value || 0).toLocaleString()}€
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="bg-white px-2.5 py-1 rounded-full font-bold text-sm text-gray-900">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="bg-white/90 px-2 py-0.5 rounded-full font-bold text-xs text-gray-900">
                         {stats[stage.id]?.count || 0}
                       </span>
                       <button
                         onClick={() => handleCreateLead(stage.id)}
-                        className="bg-white hover:bg-gray-100 p-1.5 rounded-lg transition-all text-gray-700"
+                        className="bg-white/90 hover:bg-white p-1 rounded transition-all text-gray-700"
                         title="Créer un lead"
                       >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
+                  {/* Zone de drop */}
                   <Droppable droppableId={stage.id}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`${stage.bgLight} rounded-b-xl p-3 flex-1 overflow-y-auto transition-all ${
-                          snapshot.isDraggingOver ? 'ring-4 ring-blue-300 bg-blue-100' : ''
+                        className={`${stage.bgLight} rounded-b-lg p-2 flex-1 overflow-y-auto transition-colors ${
+                          snapshot.isDraggingOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''
                         }`}
-                        style={{ 
-                          maxHeight: 'calc(100vh - 420px)',
-                          minHeight: '500px'
+                        style={{
+                          maxHeight: showStats ? 'calc(100vh - 280px)' : 'calc(100vh - 180px)',
+                          minHeight: '400px'
                         }}
                       >
-                        <div className="space-y-3 pb-32">
-                          {getLeadsByStage(stage.id).map((lead, index) => (
+                        <div className="space-y-2 pb-20">
+                          {leadsByStage[stage.id]?.map((lead, index) => (
                             <Draggable key={lead.id} draggableId={lead.id} index={index}>
                               {(provided, snapshot) => (
                                 <div
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
-                                  className={`transition-all cursor-move ${
-                                    snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl ring-4 ring-purple-400' : ''
+                                  className={`transition-transform ${
+                                    snapshot.isDragging ? 'rotate-1 scale-105 shadow-xl ring-2 ring-purple-400' : ''
                                   }`}
                                 >
                                   <LeadCard
