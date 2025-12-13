@@ -44,6 +44,42 @@ function convertToCSV(data, columns) {
   return [header, ...rows].join('\n');
 }
 
+// Sources protégées (base partagée - export interdit)
+const PROTECTED_SOURCES = ['google_maps', 'api_gouv', 'ai_generation', 'sirene'];
+
+/**
+ * Vérifie si une base de données peut être exportée
+ * @param {string} databaseId - ID de la base
+ * @param {string} tenantId - ID du tenant
+ * @returns {Promise<{allowed: boolean, reason?: string, source?: string}>}
+ */
+async function canExportDatabase(databaseId, tenantId) {
+  if (!databaseId) {
+    return { allowed: true }; // Pas de filtre par base = export général autorisé
+  }
+
+  const { rows } = await q(
+    `SELECT source FROM lead_databases WHERE id = $1 AND tenant_id = $2`,
+    [databaseId, tenantId]
+  );
+
+  if (rows.length === 0) {
+    return { allowed: false, reason: 'Base de données non trouvée' };
+  }
+
+  const source = rows[0].source;
+
+  if (PROTECTED_SOURCES.includes(source)) {
+    return {
+      allowed: false,
+      reason: 'Export non autorisé pour les bases générées. Ces prospects sont protégés.',
+      source
+    };
+  }
+
+  return { allowed: true, source };
+}
+
 /**
  * GET /api/export/leads/csv
  * Exporte les leads au format CSV
@@ -52,6 +88,16 @@ router.get('/leads/csv', async (req, res) => {
   try {
     const { tenant_id: tenantId } = req.user;
     const { database_id, status, sector } = req.query;
+
+    // Vérifier si l'export est autorisé pour cette base
+    const exportCheck = await canExportDatabase(database_id, tenantId);
+    if (!exportCheck.allowed) {
+      return res.status(403).json({
+        error: 'Export non autorisé',
+        message: exportCheck.reason,
+        source: exportCheck.source
+      });
+    }
 
     // Construire la requête
     let query = `SELECT * FROM leads WHERE tenant_id = $1`;
@@ -228,6 +274,24 @@ router.post('/leads/selection/csv', async (req, res) => {
       return res.status(400).json({
         error: 'Paramètres invalides',
         message: 'lead_ids (array) requis'
+      });
+    }
+
+    // Vérifier si les leads proviennent de bases protégées
+    const { rows: protectedLeads } = await q(
+      `SELECT DISTINCT ld.source, COUNT(*) as count
+       FROM leads l
+       JOIN lead_databases ld ON l.database_id = ld.id
+       WHERE l.id = ANY($1) AND l.tenant_id = $2 AND ld.source = ANY($3)
+       GROUP BY ld.source`,
+      [lead_ids, tenantId, PROTECTED_SOURCES]
+    );
+
+    if (protectedLeads.length > 0) {
+      return res.status(403).json({
+        error: 'Export non autorisé',
+        message: 'Certains prospects sélectionnés proviennent de bases générées et ne peuvent pas être exportés.',
+        protected_sources: protectedLeads
       });
     }
 

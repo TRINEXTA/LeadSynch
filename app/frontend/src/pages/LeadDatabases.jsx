@@ -1,9 +1,15 @@
 import { log, error, warn } from "../lib/logger.js";
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Database, Upload, Search, BarChart3, TrendingUp, Eye, Trash2, Archive, RefreshCw, FileSpreadsheet, Zap } from 'lucide-react';
+import { Plus, Database, Upload, Search, BarChart3, TrendingUp, Eye, Trash2, Archive, RefreshCw, FileSpreadsheet, Zap, Download, Lock } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+
+// Sources autorisées pour l'export (données appartenant au client)
+const EXPORTABLE_SOURCES = ['import_csv', 'manual'];
+
+// Sources protégées (base partagée LeadSynch)
+const PROTECTED_SOURCES = ['google_maps', 'api_gouv', 'ai_generation', 'sirene'];
 
 const SECTEURS_MAPPING = {
   juridique: { label: "Juridique / Legal", icon: "⚖️", color: "from-blue-500 to-cyan-500" },
@@ -128,6 +134,46 @@ export default function LeadDatabases() {
       success: '📦 Base archivée avec succès',
       error: 'Erreur lors de l\'archivage',
     });
+  };
+
+  // Vérifie si l'export est autorisé pour une base
+  const canExport = (database) => {
+    return EXPORTABLE_SOURCES.includes(database.source);
+  };
+
+  // Exporter une base en CSV
+  const handleExport = async (database) => {
+    if (!canExport(database)) {
+      toast.error('Export non autorisé pour les bases générées par LeadSynch');
+      return;
+    }
+
+    try {
+      toast.loading('Préparation de l\'export...');
+      const response = await api.get(`/export/leads/csv?database_id=${database.id}`, {
+        responseType: 'blob'
+      });
+
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${database.name}_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.dismiss();
+      toast.success('Export téléchargé avec succès');
+    } catch (err) {
+      toast.dismiss();
+      if (err.response?.status === 403) {
+        toast.error('Export non autorisé pour cette base');
+      } else {
+        toast.error('Erreur lors de l\'export');
+      }
+    }
   };
 
   if (loading) {
@@ -328,7 +374,26 @@ export default function LeadDatabases() {
                       <Eye className="w-4 h-4" />
                       Voir
                     </button>
-                    
+
+                    {/* Bouton Export - visible uniquement pour les bases autorisées */}
+                    {canExport(database) ? (
+                      <button
+                        onClick={() => handleExport(database)}
+                        className="bg-green-100 text-green-700 py-2 px-3 rounded-lg hover:bg-green-200"
+                        title="Exporter en CSV"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="bg-gray-100 text-gray-400 py-2 px-3 rounded-lg cursor-not-allowed"
+                        title="Export non autorisé - Base protégée LeadSynch"
+                      >
+                        <Lock className="w-4 h-4" />
+                      </button>
+                    )}
+
                     <button
                       onClick={() => handleArchive(database.id)}
                       className="bg-gray-100 text-gray-700 py-2 px-3 rounded-lg hover:bg-gray-200"
