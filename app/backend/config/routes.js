@@ -36,6 +36,7 @@ import sectorsRoute from '../api/sectors.js';
 import leadsCountMultiRoute from '../api/leads-count-multi.js';
 import trackRoutes from '../api/track.js';
 import leadDatabasesRoute from '../api/lead-databases.js';
+import organizeLeadsRoute from '../api/organize-leads.js';
 import pipelineLeadsRoute from '../api/pipeline-leads.js';
 import signaturesRoute from '../api/signatures.js';
 import proposalsRoute from '../api/proposals.js';
@@ -159,6 +160,7 @@ export function setupRoutes(app) {
   app.use('/api/upload-attachment', uploadAttachmentRoute);
   app.use('/api/track', trackRoutes);
   app.use('/api/lead-databases', leadDatabasesRoute);
+  app.use('/api/organize-leads', organizeLeadsRoute);
   app.use('/api/pipeline-leads', pipelineLeadsRoute);
   app.post('/api/inject-pipeline', injectPipelineRoute);
   app.use('/api/api-gouv', apiGouvLeadsRoute);
