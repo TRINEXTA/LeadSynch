@@ -15,39 +15,37 @@ const PLANS = {
     icon: Zap,
     color: 'from-gray-600 to-gray-700',
     features: [
-      { text: '30 leads/emails', included: true },
-      { text: '2 recherches Google Maps', included: true },
-      { text: '1 devis/mois', included: true },
-      { text: '0 contrats', included: true },
+      { text: '15 prospects/mois', included: true },
+      { text: '15 emails de campagne', included: true },
+      { text: '0 relance', included: true },
       { text: '1 utilisateur', included: true },
       { text: '1 campagne active', included: true },
       { text: 'Pipeline basique', included: true },
-      { text: 'Import CSV', included: true },
+      { text: 'Import CSV', included: false },
       { text: 'Support email', included: true },
       { text: 'Asefi IA', included: false },
       { text: 'API', included: false }
     ]
   },
-  BASIC: {
+  STARTER: {
     name: 'Starter',
     price: 49,
     icon: TrendingUp,
     color: 'from-blue-600 to-cyan-600',
     popular: false,
     features: [
-      { text: '5,000 leads/emails', included: true },
-      { text: 'Max 1,000 prospects Google Maps', included: true },
-      { text: '50 devis/mois', included: true },
-      { text: '30 contrats/mois', included: true },
+      { text: '10,000 prospects/mois', included: true },
+      { text: '10,000 emails campagne', included: true },
+      { text: '10,000 emails relance (×10)', included: true },
+      { text: 'Ou 30,000 emails avec votre base', included: true },
       { text: '3 utilisateurs', included: true },
       { text: '5 campagnes actives', included: true },
       { text: 'Pipeline avancé', included: true },
       { text: 'Mode Prospection', included: true },
-      { text: 'Asefi IA Basic (500 caractères)', included: true },
+      { text: 'Asefi IA (500 caractères)', included: true },
       { text: 'Templates email', included: true },
       { text: 'Import CSV illimité', included: true },
       { text: 'Support email + chat', included: true },
-      { text: 'Analytics de base', included: true },
       { text: 'API', included: false }
     ]
   },
@@ -58,10 +56,10 @@ const PLANS = {
     color: 'from-purple-600 to-pink-600',
     popular: true,
     features: [
-      { text: '20,000 leads/emails', included: true },
-      { text: '2,500 générations Google Maps', included: true },
-      { text: '500 devis/mois', included: true },
-      { text: '200 contrats/mois', included: true },
+      { text: '30,000 prospects/mois', included: true },
+      { text: '30,000 emails campagne', included: true },
+      { text: '20,000 emails relance (×2)', included: true },
+      { text: 'Ou 60,000 emails avec votre base', included: true },
       { text: '10 utilisateurs', included: true },
       { text: 'Campagnes illimitées', included: true },
       { text: 'Pipeline personnalisable', included: true },
@@ -72,8 +70,7 @@ const PLANS = {
       { text: 'Support prioritaire 24/7', included: true },
       { text: 'Analytics avancés + rapports', included: true },
       { text: 'API complète', included: true },
-      { text: 'Intégrations (Zapier, Make)', included: true },
-      { text: 'Webhooks', included: true }
+      { text: 'Intégrations (Zapier, Make)', included: true }
     ]
   },
   ENTERPRISE: {
@@ -82,10 +79,9 @@ const PLANS = {
     icon: Building,
     color: 'from-orange-600 to-red-600',
     features: [
-      { text: 'Quotas personnalisés selon vos besoins', included: true },
-      { text: 'Utilisateurs selon votre équipe', included: true },
-      { text: 'Volume emails adapté (protection anti-abus)', included: true },
-      { text: 'Devis & contrats personnalisés', included: true },
+      { text: 'Prospects illimités', included: true },
+      { text: 'Emails illimités', included: true },
+      { text: 'Utilisateurs illimités', included: true },
       { text: 'Tout du plan Pro +', included: true },
       { text: 'Asefi IA Enterprise (10k caractères)', included: true },
       { text: 'Infrastructure dédiée', included: true },
