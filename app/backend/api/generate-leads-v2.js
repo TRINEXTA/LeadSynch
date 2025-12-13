@@ -905,11 +905,19 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
 
       let filteredCount = 0;
       let skippedCount = 0;
+      let closedCount = 0;
 
       for (const company of response.data.results) {
         await waitIfPaused(searchState);
         if (!searchState.active) break;
         if (leads.length >= limit) break;
+
+        // FILTRAGE: ENTREPRISES FERMÉES
+        // etat_administratif: A = Active, F = Fermée
+        if (company.etat_administratif !== 'A') {
+          closedCount++;
+          continue; // Skip les entreprises fermées
+        }
 
         // FILTRAGE PAR CODE NAF - Ne garder que les entreprises du bon secteur
         const companyNaf = company.activite_principale;
@@ -931,7 +939,7 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
         filteredCount++;
       }
 
-      log(`🔍 [SIRENE] Page ${page}: ${filteredCount} gardés, ${skippedCount} filtrés (mauvais NAF)`);
+      log(`🔍 [SIRENE] Page ${page}: ${filteredCount} gardés, ${skippedCount} filtrés (NAF), ${closedCount} fermées`);
 
       // Si moins de 25 résultats, pas la peine de continuer
       if (response.data.results.length < 25) break;
@@ -1112,7 +1120,10 @@ function formatSireneResult(company, sector) {
     contact_role: dirigeants[0]?.qualite || null,
     sector: sector,  // FORCER le secteur demandé
     industry: sector, // FORCER le secteur demandé (pour cohérence)
-    data_source: 'sirene_insee'
+    data_source: 'sirene_insee',
+    // Statut entreprise (vérifié au moment de la génération)
+    business_status: company.etat_administratif === 'A' ? 'active' : 'closed',
+    last_sirene_update: company.date_mise_a_jour || null
   };
 }
 
