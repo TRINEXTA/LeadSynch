@@ -8,8 +8,8 @@ const router = express.Router();
 // Toutes les routes nécessitent l'authentification
 router.use(authMiddleware);
 
-// Prix par lead - TARIF UNIQUE
-const PRICE_PER_LEAD = 0.10; // Prix unique par lead (peu importe la source)
+// Prix par prospect - TARIF UNIQUE
+const PRICE_PER_PROSPECT = 0.05; // Prix unique par prospect (peu importe la source)
 
 /**
  * GET /api/lead-credits
@@ -290,7 +290,7 @@ router.post('/consume', async (req, res) => {
       return res.status(400).json({ error: 'Source invalide' });
     }
 
-    const cost = PRICE_PER_LEAD; // Tarif unique quelle que soit la source
+    const cost = PRICE_PER_PROSPECT; // Tarif unique quelle que soit la source
 
     // Super admin bypass - pas de consommation de crédits
     if (is_super_admin) {
@@ -349,12 +349,12 @@ router.post('/consume', async (req, res) => {
  */
 router.get('/pricing', (req, res) => {
   res.json({
-    price_per_lead: PRICE_PER_LEAD,
+    price_per_prospect: PRICE_PER_PROSPECT,
     packs: [
-      { credits: 100, price_per_lead: 0.10, total: 10, savings: 0 },
-      { credits: 500, price_per_lead: 0.09, total: 45, savings: 10 },
-      { credits: 1000, price_per_lead: 0.08, total: 80, savings: 20 },
-      { credits: 5000, price_per_lead: 0.07, total: 350, savings: 30 }
+      { credits: 100, price_per_prospect: 0.05, total: 5, savings: 0 },
+      { credits: 500, price_per_prospect: 0.045, total: 22.50, savings: 10 },
+      { credits: 1000, price_per_prospect: 0.04, total: 40, savings: 20 },
+      { credits: 5000, price_per_prospect: 0.035, total: 175, savings: 30 }
     ]
   });
 });

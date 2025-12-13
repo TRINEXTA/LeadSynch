@@ -31,7 +31,7 @@ const CONFIG = {
   MAX_QUANTITY: 500,        // Limite raisonnable pour éviter crash mémoire (était 10000)
   MAX_QUANTITY_SUPERADMIN: 2000, // Super admin a une limite plus élevée mais raisonnable
   DEFAULT_RADIUS: 10,
-  COST_PER_LEAD: 0.10,
+  COST_PER_PROSPECT: 0.05,
   // Seuil pour désactiver l'enrichissement (trop gourmand en mémoire)
   ENRICHMENT_THRESHOLD: 200
 };
