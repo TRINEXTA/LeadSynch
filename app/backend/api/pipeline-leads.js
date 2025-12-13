@@ -9,7 +9,8 @@ const q = (text, params=[]) => db.query(text, params);
 
 // =============================
 // GET /pipeline-leads
-// Récupère tous les leads du pipeline pour l'utilisateur connecté
+// Récupère les leads du pipeline pour l'utilisateur connecté
+// OPTIMISÉ: Sans subqueries, avec LIMIT
 // =============================
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -17,10 +18,19 @@ router.get('/', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const isSuperAdmin = req.user?.is_super_admin === true;
+    const limit = Math.min(parseInt(req.query.limit) || 500, 1000);
 
+    // Requête optimisée sans subqueries
     let query = `
       SELECT
-        pl.*,
+        pl.id,
+        pl.lead_id,
+        pl.campaign_id,
+        pl.stage,
+        pl.assigned_user_id,
+        pl.deal_value,
+        pl.created_at,
+        pl.updated_at,
         l.company_name,
         l.contact_name,
         l.email,
@@ -30,25 +40,7 @@ router.get('/', authenticateToken, async (req, res) => {
         l.status as lead_status,
         c.name as campaign_name,
         c.type as campaign_type,
-        u.first_name || ' ' || u.last_name as assigned_user_name,
-        -- Compter les emails envoyés
-        (SELECT COUNT(*)
-         FROM lead_call_history
-         WHERE lead_id = pl.lead_id
-           AND action_type = 'email'
-           AND tenant_id = pl.tenant_id) as emails_sent,
-        -- Compter les appels passés
-        (SELECT COUNT(*)
-         FROM lead_call_history
-         WHERE lead_id = pl.lead_id
-           AND action_type = 'call'
-           AND tenant_id = pl.tenant_id) as calls_made,
-        -- Vérifier s'il y a une demande de validation en cours
-        (SELECT COUNT(*) > 0
-         FROM validation_requests
-         WHERE lead_id = pl.lead_id
-           AND status = 'pending'
-           AND tenant_id = pl.tenant_id) as has_pending_request
+        u.first_name || ' ' || u.last_name as assigned_user_name
       FROM pipeline_leads pl
       JOIN leads l ON l.id = pl.lead_id
       LEFT JOIN campaigns c ON c.id = pl.campaign_id
@@ -57,55 +49,37 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
 
     const params = [tenantId];
+    let paramIndex = 2;
 
     // Admin ou super admin : voir tous les leads
     if (isSuperAdmin || userRole === 'admin') {
       // Pas de filtre supplémentaire
-      log(`✅ Admin - accès à tous les leads du pipeline`);
     }
-    // Manager : voir ses leads + ceux de ses équipes + campagnes assignées
+    // Manager : voir ses leads + ceux assignés
     else if (userRole === 'manager') {
-      query += ` AND (
-        pl.assigned_user_id = $2
-        OR l.assigned_to = $2
-        -- Ou leads des membres de ses équipes (où il est manager)
-        OR pl.assigned_user_id IN (
-          SELECT tm.user_id FROM team_members tm
-          JOIN teams t ON tm.team_id = t.id
-          WHERE t.manager_id = $2 AND t.tenant_id = $1
-        )
-        -- Ou des campagnes où il est dans campaign_assignments
-        OR pl.campaign_id IN (
-          SELECT ca.campaign_id FROM campaign_assignments ca
-          WHERE ca.user_id = $2
-        )
-        -- Ou des campagnes où il est dans assigned_users (JSON)
-        OR pl.campaign_id IN (
-          SELECT c2.id FROM campaigns c2
-          WHERE c2.tenant_id = $1 AND c2.assigned_users::jsonb ? $2::text
-        )
-      )`;
+      query += ` AND (pl.assigned_user_id = $${paramIndex} OR l.assigned_to = $${paramIndex})`;
       params.push(userId);
-      log(`✅ Manager ${userId} - accès à ses leads + équipe + campagnes assignées`);
+      paramIndex++;
     }
     // Commercial/User : uniquement ses propres leads
     else {
-      query += ` AND (pl.assigned_user_id = $2 OR l.assigned_to = $2)`;
+      query += ` AND (pl.assigned_user_id = $${paramIndex} OR l.assigned_to = $${paramIndex})`;
       params.push(userId);
-      log(`✅ User ${userId} - accès à ses leads uniquement`);
+      paramIndex++;
     }
 
-    query += ` ORDER BY pl.updated_at DESC`;
+    query += ` ORDER BY pl.updated_at DESC LIMIT $${paramIndex}`;
+    params.push(limit);
 
     const { rows } = await q(query, params);
 
-    log(`Pipeline leads: ${rows.length} pour user:${userId} role:${userRole}`);
+    log(`Pipeline leads: ${rows.length} (limit: ${limit})`);
 
     return res.json({ success: true, leads: rows });
 
-  } catch (error) {
-    error('❌ Erreur GET pipeline-leads:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET pipeline-leads:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
