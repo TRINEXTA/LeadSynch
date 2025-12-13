@@ -8,33 +8,145 @@ const q = (text, params=[]) => db.query(text, params);
 
 log('🔥 FICHIER lead-databases.js CHARGÉ');
 
-// GET /lead-databases - Liste toutes les bases
+// GET /lead-databases/stats - Statistiques globales (super admin)
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user?.is_super_admin;
+    const tenantId = req.user?.tenant_id;
+
+    let statsQuery, statsParams;
+
+    if (isSuperAdmin) {
+      // Super admin: stats sur TOUS les tenants
+      statsQuery = `
+        SELECT
+          (SELECT COUNT(*) FROM lead_databases) as total_databases,
+          (SELECT COUNT(*) FROM leads) as total_leads,
+          (SELECT COUNT(DISTINCT tenant_id) FROM lead_databases) as total_tenants,
+          (SELECT COUNT(*) FROM lead_databases WHERE created_at > NOW() - INTERVAL '7 days') as this_week,
+          (SELECT COUNT(*) FROM lead_databases WHERE created_at > NOW() - INTERVAL '30 days') as this_month
+      `;
+      statsParams = [];
+    } else {
+      // Admin normal: stats sur son tenant uniquement
+      statsQuery = `
+        SELECT
+          (SELECT COUNT(*) FROM lead_databases WHERE tenant_id = $1) as total_databases,
+          (SELECT COUNT(*) FROM leads WHERE tenant_id = $1) as total_leads,
+          1 as total_tenants,
+          (SELECT COUNT(*) FROM lead_databases WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '7 days') as this_week,
+          (SELECT COUNT(*) FROM lead_databases WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '30 days') as this_month
+      `;
+      statsParams = [tenantId];
+    }
+
+    const { rows } = await q(statsQuery, statsParams);
+
+    // Stats par source
+    let sourceQuery, sourceParams;
+    if (isSuperAdmin) {
+      sourceQuery = `SELECT source, COUNT(*) as count FROM lead_databases GROUP BY source ORDER BY count DESC`;
+      sourceParams = [];
+    } else {
+      sourceQuery = `SELECT source, COUNT(*) as count FROM lead_databases WHERE tenant_id = $1 GROUP BY source ORDER BY count DESC`;
+      sourceParams = [tenantId];
+    }
+    const { rows: bySource } = await q(sourceQuery, sourceParams);
+
+    return res.json({
+      success: true,
+      stats: {
+        ...rows[0],
+        by_source: bySource
+      }
+    });
+  } catch (err) {
+    error('❌ Erreur GET stats:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /lead-databases - Liste toutes les bases (AVEC PAGINATION)
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
+    const isSuperAdmin = req.user?.is_super_admin;
 
-    // Compter les leads depuis DEUX sources:
-    // 1. leads.database_id (nouvelle méthode - generate-leads-v2)
-    // 2. lead_database_relations (ancienne méthode - import-csv)
-    const { rows } = await q(
-      `SELECT
+    // Paramètres de pagination et filtres
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const source = req.query.source || '';
+    const filterTenantId = req.query.tenant_id || ''; // Pour super admin
+
+    // Construire la requête dynamiquement
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+
+    // Filtre tenant (super admin peut voir tous, sinon filtre par tenant)
+    if (isSuperAdmin && filterTenantId) {
+      whereConditions.push(`ld.tenant_id = $${paramIndex++}`);
+      params.push(filterTenantId);
+    } else if (!isSuperAdmin) {
+      whereConditions.push(`ld.tenant_id = $${paramIndex++}`);
+      params.push(tenantId);
+    }
+
+    // Filtre recherche
+    if (search) {
+      whereConditions.push(`(ld.name ILIKE $${paramIndex} OR ld.description ILIKE $${paramIndex})`);
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Filtre source
+    if (source && source !== 'all') {
+      whereConditions.push(`ld.source = $${paramIndex++}`);
+      params.push(source);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Compter le total (pour pagination)
+    const countQuery = `SELECT COUNT(*) as total FROM lead_databases ld ${whereClause}`;
+    const { rows: countRows } = await q(countQuery, params);
+    const total = parseInt(countRows[0].total);
+
+    // Requête principale avec pagination
+    const dataQuery = `
+      SELECT
         ld.*,
+        ${isSuperAdmin ? 't.name as tenant_name,' : ''}
         (
           SELECT COUNT(DISTINCT lead_id) FROM (
-            -- Leads liés via database_id
             SELECT id as lead_id FROM leads WHERE database_id = ld.id
             UNION
-            -- Leads liés via lead_database_relations
             SELECT lead_id FROM lead_database_relations WHERE database_id = ld.id
           ) combined
         ) as lead_count
        FROM lead_databases ld
-       WHERE ld.tenant_id = $1
-       ORDER BY ld.created_at DESC`,
-      [tenantId]
-    );
+       ${isSuperAdmin ? 'LEFT JOIN tenants t ON ld.tenant_id = t.id' : ''}
+       ${whereClause}
+       ORDER BY ld.created_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
 
-    return res.json({ success: true, databases: rows });
+    const { rows } = await q(dataQuery, [...params, limit, offset]);
+
+    return res.json({
+      success: true,
+      databases: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+        has_next: page * limit < total,
+        has_prev: page > 1
+      }
+    });
   } catch (err) {
     error('❌ Erreur GET lead-databases:', err);
     return res.status(500).json({ error: err.message });

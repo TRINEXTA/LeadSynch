@@ -104,6 +104,7 @@ function Sidebar() {
         { name: 'Mes Prospects', href: '/MyLeads', icon: UserCircle, roles: ['commercial', 'manager'] },
         { name: 'Tous les Leads', href: '/leads', icon: Database, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_ALL_LEADS },
         { name: 'Bases de Données', href: '/LeadDatabases', icon: FolderOpen, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_DATABASES },
+        { name: 'Bases Admin', href: '/LeadDatabasesAdmin', icon: Database, roles: ['admin'] },
         { name: 'Importer des Leads', href: '/ImportLeads', icon: FileSpreadsheet, roles: ['admin', 'manager'], permission: PERMISSIONS.IMPORT_LEADS },
         { name: 'Scoring & Qualification', href: '/LeadScoring', icon: TrendingUp, roles: ['admin'] }
       ]
