@@ -557,4 +557,126 @@ Réponds en JSON strict sans markdown:
     });
   }
 });
+
+// POST /asefi/generate-email-template - Génération template email HTML complet
+router.post('/generate-email-template', authMiddleware, async (req, res) => {
+  log('📧 Génération template email HTML avec Asefi');
+
+  try {
+    const { prompt, tone, target, subject } = req.body;
+
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: 'Description (prompt) requise' });
+    }
+
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ error: 'Sujet requis' });
+    }
+
+    const toneDescriptions = {
+      professional: 'professionnel et formel',
+      friendly: 'amical et chaleureux',
+      persuasive: 'persuasif et convaincant',
+      informative: 'informatif et éducatif',
+      urgent: 'urgent et pressant'
+    };
+
+    const toneDesc = toneDescriptions[tone] || 'professionnel';
+
+    const emailPrompt = `Tu es Asefi, assistant IA expert en email marketing pour LeadSynch CRM.
+
+Génère un template email HTML professionnel et moderne basé sur ces informations:
+
+SUJET DE L'EMAIL: ${subject}
+
+DESCRIPTION/OBJECTIF:
+${prompt}
+
+AUDIENCE CIBLE: ${target || 'Professionnels B2B'}
+
+TON DEMANDÉ: ${toneDesc}
+
+CONSIGNES DE GÉNÉRATION:
+
+1. **Structure HTML complète** avec:
+   - Doctype HTML5
+   - Meta charset UTF-8
+   - Meta viewport pour mobile
+   - Styles inline (compatibilité email clients)
+
+2. **Design moderne**:
+   - Largeur max 600px centrée
+   - Couleurs professionnelles (bleu #2563eb comme accent)
+   - Police Arial/sans-serif
+   - Espacement aéré
+   - Bouton CTA visible et cliquable
+
+3. **Contenu structuré**:
+   - En-tête avec logo placeholder {{LOGO_URL}}
+   - Corps avec paragraphes bien espacés
+   - Variables de personnalisation: {{COMPANY_NAME}}, {{CONTACT_NAME}}, {{SENDER_NAME}}, {{SENDER_COMPANY}}
+   - Bouton CTA avec lien placeholder {{CTA_URL}}
+   - Pied de page avec signature et lien de désinscription {{UNSUBSCRIBE_URL}}
+
+4. **Compatibilité**:
+   - Tables pour la mise en page (compatibilité Outlook)
+   - Styles inline uniquement
+   - Images avec alt text
+
+5. **Ton ${toneDesc}**: Adapte le style d'écriture au ton demandé
+
+IMPORTANT:
+- Génère UNIQUEMENT le code HTML complet
+- Pas d'explications, pas de markdown, pas de backticks
+- Le HTML doit être prêt à l'emploi
+- Inclus les variables de personnalisation avec la syntaxe {{VARIABLE}}`;
+
+    log('🤖 Appel à Claude API pour génération template HTML...');
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      temperature: 0.7,
+      messages: [{ role: 'user', content: emailPrompt }]
+    });
+
+    let htmlContent = message.content[0].text.trim();
+
+    // Nettoyage si Claude a ajouté des backticks
+    htmlContent = htmlContent.replace(/```html/gi, '');
+    htmlContent = htmlContent.replace(/```/g, '');
+    htmlContent = htmlContent.trim();
+
+    // Vérifier que c'est bien du HTML
+    if (!htmlContent.toLowerCase().includes('<!doctype') && !htmlContent.toLowerCase().includes('<html')) {
+      // Envelopper dans une structure HTML basique si nécessaire
+      htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  ${htmlContent}
+</body>
+</html>`;
+    }
+
+    log('✅ Template HTML généré avec succès');
+
+    res.json({
+      success: true,
+      html: htmlContent,
+      tokens_used: message.usage.input_tokens + message.usage.output_tokens
+    });
+
+  } catch (err) {
+    error('❌ Erreur génération template email:', err);
+    res.status(500).json({
+      error: 'Erreur lors de la génération du template',
+      details: err.message
+    });
+  }
+});
+
 export default router;
