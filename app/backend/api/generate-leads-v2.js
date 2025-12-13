@@ -49,7 +49,61 @@ const SECTOR_TO_GOOGLE_TYPES = {
   marketing: ['marketing_agency', 'advertising_agency'],
   rh: ['employment_agency', 'staffing_agency'],
   industrie: ['factory', 'manufacturing'],
-  automobile: ['car_repair', 'car_dealer']
+  automobile: ['car_repair', 'car_dealer'],
+  // Secteurs ajoutés (manquants)
+  assurance: ['insurance_agency'],
+  banque: ['bank', 'atm'],
+  beaute: ['beauty_salon', 'hair_care', 'spa', 'nail_salon'],
+  sport: ['gym', 'fitness_center', 'sports_club'],
+  artisan: ['locksmith', 'painter', 'carpenter', 'plumber', 'electrician']
+};
+
+// Mapping secteur -> codes NAF pour filtrage précis Sirene
+const SECTOR_TO_NAF_CODES = {
+  informatique: ['62', '63'],           // Programmation, conseil informatique
+  juridique: ['69'],                     // Activités juridiques
+  comptabilite: ['69.20'],               // Activités comptables
+  sante: ['86', '87'],                   // Activités pour la santé
+  btp: ['41', '42', '43'],               // Construction
+  hotellerie: ['55', '56'],              // Hébergement et restauration
+  immobilier: ['68'],                    // Activités immobilières
+  commerce: ['47'],                      // Commerce de détail
+  logistique: ['49', '52'],              // Transport et entreposage
+  education: ['85'],                     // Enseignement
+  consulting: ['70'],                    // Conseil de gestion
+  marketing: ['73'],                     // Publicité et études de marché
+  rh: ['78'],                           // Activités liées à l'emploi
+  industrie: ['10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33'],
+  automobile: ['45'],                    // Commerce et réparation auto
+  assurance: ['65'],                     // Assurance
+  banque: ['64'],                        // Services financiers
+  beaute: ['96.02', '96.04'],           // Coiffure et soins de beauté
+  sport: ['93'],                         // Activités sportives
+  artisan: ['43']                        // Travaux de construction spécialisés
+};
+
+// Labels français pour les secteurs (pour les requêtes textuelles)
+const SECTOR_LABELS_FR = {
+  informatique: 'informatique développement logiciel',
+  juridique: 'avocat cabinet juridique',
+  comptabilite: 'expert comptable cabinet comptabilité',
+  sante: 'médecin docteur clinique',
+  btp: 'construction bâtiment travaux',
+  hotellerie: 'restaurant hôtel café',
+  immobilier: 'agence immobilière',
+  commerce: 'magasin boutique commerce',
+  logistique: 'transport logistique',
+  education: 'école formation enseignement',
+  consulting: 'conseil consulting',
+  marketing: 'agence marketing communication publicité',
+  rh: 'ressources humaines recrutement',
+  industrie: 'usine industrie fabrication',
+  automobile: 'garage automobile réparation',
+  assurance: 'assurance courtier',
+  banque: 'banque finance',
+  beaute: 'salon coiffure beauté esthétique spa bien-être',
+  sport: 'salle sport fitness gym',
+  artisan: 'artisan serrurier plombier électricien'
 };
 
 // Gestion des recherches actives
@@ -758,13 +812,36 @@ async function searchGlobalCache(sector, city, limit, excludeLeads = []) {
 }
 
 /**
- * Rechercher via API Sirene (GRATUIT) - AVEC PAGINATION
+ * Vérifier si un code NAF correspond au secteur
+ */
+function isNafCodeMatchingSector(nafCode, sector) {
+  if (!nafCode) return false;
+
+  const expectedCodes = SECTOR_TO_NAF_CODES[sector];
+  if (!expectedCodes || expectedCodes.length === 0) return true; // Pas de filtre NAF pour ce secteur
+
+  // Vérifier si le code NAF commence par un des codes attendus
+  const nafClean = nafCode.replace(/[.-]/g, '');
+  return expectedCodes.some(code => {
+    const codeClean = code.replace(/[.-]/g, '');
+    return nafClean.startsWith(codeClean);
+  });
+}
+
+/**
+ * Rechercher via API Sirene (GRATUIT) - AVEC PAGINATION ET FILTRAGE NAF
  */
 async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, searchState) {
   const leads = [];
   const maxPages = Math.ceil(limit / 25); // Nombre de pages nécessaires
-  const maxPagesAllowed = 10; // Limite pour ne pas surcharger l'API
+  const maxPagesAllowed = 15; // Augmenté car on filtre plus
   const pagesToFetch = Math.min(maxPages, maxPagesAllowed);
+
+  // Utiliser les labels français pour une meilleure recherche
+  const searchLabel = SECTOR_LABELS_FR[sector] || sector;
+  const nafCodes = SECTOR_TO_NAF_CODES[sector] || [];
+
+  log(`🔍 [SIRENE] Recherche: "${searchLabel} ${city}" (NAF: ${nafCodes.join(', ') || 'tous'})`);
 
   for (let page = 1; page <= pagesToFetch; page++) {
     if (leads.length >= limit || !searchState.active) break;
@@ -773,7 +850,7 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
     try {
       const response = await axios.get('https://recherche-entreprises.api.gouv.fr/search', {
         params: {
-          q: `${sector} ${city}`,
+          q: `${searchLabel} ${city}`,
           per_page: 25,
           page: page
         },
@@ -784,19 +861,35 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
         break; // Plus de résultats
       }
 
+      let filteredCount = 0;
+      let skippedCount = 0;
+
       for (const company of response.data.results) {
         await waitIfPaused(searchState);
         if (!searchState.active) break;
+        if (leads.length >= limit) break;
+
+        // FILTRAGE PAR CODE NAF - Ne garder que les entreprises du bon secteur
+        const companyNaf = company.activite_principale;
+        if (nafCodes.length > 0 && !isNafCodeMatchingSector(companyNaf, sector)) {
+          skippedCount++;
+          continue; // Skip cette entreprise, mauvais secteur
+        }
 
         const lead = formatSireneResult(company, sector);
+
+        // Forcer le secteur demandé (important!)
+        lead.sector = sector;
+        lead.industry = sector;
 
         // Sauvegarder dans le cache global
         await saveToGlobalCache(lead, tenant_id);
 
         leads.push(lead);
-
-        if (leads.length >= limit) break;
+        filteredCount++;
       }
+
+      log(`🔍 [SIRENE] Page ${page}: ${filteredCount} gardés, ${skippedCount} filtrés (mauvais NAF)`);
 
       // Si moins de 25 résultats, pas la peine de continuer
       if (response.data.results.length < 25) break;
@@ -817,6 +910,7 @@ async function searchSireneAPI(sector, city, limit, tenant_id, sendProgress, sea
     }
   }
 
+  log(`✅ [SIRENE] Total: ${leads.length} leads pour secteur "${sector}"`);
   return leads;
 }
 
@@ -829,6 +923,12 @@ async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeL
   const excludeNames = new Set(excludeLeads.map(l => l.company_name?.toLowerCase()).filter(Boolean));
   const processedPlaceIds = new Set();
 
+  // Utiliser les labels français pour de meilleures recherches
+  const sectorLabel = SECTOR_LABELS_FR[sector] || sector;
+
+  // Log pour debug
+  log(`🗺️ [GOOGLE] Recherche secteur "${sector}" avec types: ${googleTypes.join(', ')}`);
+
   // Essayer plusieurs types Google pour ce secteur
   for (const type of googleTypes) {
     if (leads.length >= limit || !searchState.active) break;
@@ -836,10 +936,10 @@ async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeL
     await waitIfPaused(searchState);
 
     try {
-      // Recherche textSearch avec plusieurs formulations
+      // Recherche textSearch avec plusieurs formulations (utiliser labels français)
       const queries = [
         `${type} ${city}`,
-        `${sector} ${city}`,
+        `${sectorLabel} ${city}`,
         `${type} à ${city}`
       ];
 
@@ -904,7 +1004,8 @@ async function searchGoogleMaps(sector, city, radius, limit, tenant_id, excludeL
               city: city,
               latitude: details.geometry?.location?.lat || null,
               longitude: details.geometry?.location?.lng || null,
-              industry: sector,
+              sector: sector,  // Forcer le secteur demandé
+              industry: sector, // Pour compatibilité
               google_place_id: place.place_id,
               google_types: JSON.stringify(details.types || []),
               rating: details.rating || null,
@@ -955,7 +1056,7 @@ function formatSireneResult(company, sector) {
     siret: siege.siret || null,
     siren: company.siren || null,
     naf_code: company.activite_principale || null,
-    naf_label: company.libelle_activite_principale || null,
+    naf_label: company.libelle_activite_principale || null, // Activité originale (info)
     employee_count: parseEmployeeCount(company.tranche_effectif_salarie),
     employee_range: company.tranche_effectif_salarie || null,
     legal_form: company.nature_juridique || null,
@@ -967,7 +1068,8 @@ function formatSireneResult(company, sector) {
     longitude: siege.longitude || null,
     contact_name: dirigeants[0]?.nom_complet || null,
     contact_role: dirigeants[0]?.qualite || null,
-    industry: company.libelle_activite_principale || sector,
+    sector: sector,  // FORCER le secteur demandé
+    industry: sector, // FORCER le secteur demandé (pour cohérence)
     data_source: 'sirene_insee'
   };
 }
