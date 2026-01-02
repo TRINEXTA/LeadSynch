@@ -7,7 +7,9 @@ import toast from 'react-hot-toast';
 import {
   Users, TrendingUp, Target, DollarSign, Activity, RefreshCw,
   BarChart3, PieChart, Calendar, Clock, Mail, Phone, CheckCircle,
-  XCircle, AlertCircle, Award, Zap, Eye, ArrowUp, ArrowDown, Shield
+  XCircle, AlertCircle, Award, Zap, Eye, ArrowUp, ArrowDown, Shield,
+  Headphones, Coffee, Play, Pause, PhoneCall, UserCheck, Flame,
+  Timer, Radio, Wifi, WifiOff
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, PieChart as RePieChart, Pie, Cell,
@@ -32,6 +34,17 @@ export default function AdminDashboard() {
   const [topPerformers, setTopPerformers] = useState([]);
   const [conversionData, setConversionData] = useState([]);
 
+  // NOUVEAUX ÉTATS - Tracking temps réel
+  const [teamCallStats, setTeamCallStats] = useState([]);
+  const [todayCallStats, setTodayCallStats] = useState({
+    totalSeconds: 0,
+    totalLeads: 0,
+    totalQualified: 0,
+    totalRdv: 0,
+    activeSessions: 0
+  });
+  const [liveUsers, setLiveUsers] = useState([]);
+
   // Vérification admin uniquement
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -44,10 +57,10 @@ export default function AdminDashboard() {
     if (user?.role === 'admin') {
       loadDashboardData();
 
-      // Auto-refresh toutes les 30 secondes
+      // Auto-refresh toutes les 15 secondes pour le temps réel
       const interval = setInterval(() => {
         loadDashboardData(true);
-      }, 30000);
+      }, 15000);
 
       return () => clearInterval(interval);
     }
@@ -65,14 +78,16 @@ export default function AdminDashboard() {
         campaignsRes,
         usersRes,
         followUpsRes,
-        validationsRes
+        validationsRes,
+        callStatsRes
       ] = await Promise.all([
         api.get('/stats'),
         api.get('/leads'),
         api.get('/campaigns'),
         api.get('/users'),
         api.get('/follow-ups'),
-        api.get('/validation-requests?status=pending')
+        api.get('/validation-requests?status=pending'),
+        api.get('/call-sessions', { params: { action: 'team-summary' } }).catch(() => ({ data: { team: [] } }))
       ]);
 
       const leads = leadsRes.data.leads || [];
@@ -80,6 +95,25 @@ export default function AdminDashboard() {
       const users = usersRes.data.users || [];
       const followUps = followUpsRes.data.followups || [];
       const validations = validationsRes.data.requests || [];
+      const teamStats = callStatsRes.data.team || [];
+
+      // === STATS D'APPELS EN TEMPS RÉEL ===
+      setTeamCallStats(teamStats);
+
+      // Calculer les totaux d'aujourd'hui
+      const todayTotals = teamStats.reduce((acc, member) => ({
+        totalSeconds: acc.totalSeconds + (parseInt(member.today_seconds) || 0),
+        totalLeads: acc.totalLeads + (parseInt(member.today_leads) || 0),
+        totalQualified: acc.totalQualified + (parseInt(member.today_qualified) || 0),
+        totalRdv: acc.totalRdv + (parseInt(member.today_rdv) || 0),
+        activeSessions: acc.activeSessions + (member.has_active_session ? 1 : 0)
+      }), { totalSeconds: 0, totalLeads: 0, totalQualified: 0, totalRdv: 0, activeSessions: 0 });
+
+      setTodayCallStats(todayTotals);
+
+      // Utilisateurs actuellement en ligne (session active)
+      const live = teamStats.filter(m => m.has_active_session);
+      setLiveUsers(live);
 
       // === KPIs ===
       const convertedLeads = leads.filter(l => l.status === 'gagne' || l.status === 'won');
@@ -222,7 +256,7 @@ export default function AdminDashboard() {
       return {
         id: user.id,
         name: `${user.first_name} ${user.last_name}`,
-        avatar: `${user.first_name[0]}${user.last_name[0]}`,
+        avatar: `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`,
         leads: userLeads.length,
         converted,
         rate: userLeads.length > 0 ? ((converted / userLeads.length) * 100).toFixed(1) : 0
@@ -230,6 +264,21 @@ export default function AdminDashboard() {
     })
     .sort((a, b) => parseFloat(b.rate) - parseFloat(a.rate))
     .slice(0, 5);
+  };
+
+  // Formater la durée
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0m';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  // Calculer le pourcentage d'objectif
+  const getProgressPercent = (current, target) => {
+    if (!target) return 0;
+    return Math.min(Math.round((current / target) * 100), 100);
   };
 
   if (loading) {
@@ -245,102 +294,243 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
-      <div className="max-w-[1800px] mx-auto">
+      <div className="max-w-[1900px] mx-auto">
 
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-br from-red-500 to-pink-500 rounded-2xl">
               <Shield className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-white mb-1">
+              <h1 className="text-3xl font-bold text-white mb-1">
                 Centre de Contrôle Admin
               </h1>
-              <p className="text-blue-200">
-                Vue d'ensemble en temps réel de toute l'organisation
+              <p className="text-blue-200 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-green-400 animate-pulse" />
+                Données en temps réel • Actualisé toutes les 15s
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => loadDashboardData()}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl hover:bg-white/20 transition-all text-white font-semibold disabled:opacity-50"
-          >
-            <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-            Actualiser
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Indicateur utilisateurs en ligne */}
+            <div className="bg-green-500/20 border border-green-500/40 rounded-xl px-4 py-2 flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-green-300 font-semibold">{liveUsers.length} en ligne</span>
+            </div>
+
+            <button
+              onClick={() => loadDashboardData()}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl hover:bg-white/20 transition-all text-white font-semibold disabled:opacity-50"
+            >
+              <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              Actualiser
+            </button>
+          </div>
         </div>
 
-        {/* KPIs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        {/* NOUVELLE SECTION - Activité en temps réel */}
+        {liveUsers.length > 0 && (
+          <div className="mb-6 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-4">
+            <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+              <Headphones className="w-5 h-5 text-green-400" />
+              Commerciaux en Prospection
+              <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full animate-pulse">LIVE</span>
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {liveUsers.map((member) => (
+                <div key={member.user_id} className="bg-white/10 rounded-xl p-3 border border-white/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-sm animate-pulse">
+                      {member.first_name?.[0]}{member.last_name?.[0]}
+                    </div>
+                    <div>
+                      <p className="text-white font-medium text-sm">{member.first_name}</p>
+                      <p className="text-green-300 text-xs flex items-center gap-1">
+                        <PhoneCall className="w-3 h-3" /> En appel
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* KPIs Appels d'aujourd'hui */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+          {/* Temps d'appel aujourd'hui */}
+          <div className="bg-gradient-to-br from-purple-600/30 to-purple-800/30 backdrop-blur-md border border-purple-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-purple-500/30 rounded-xl">
+                <Timer className="w-6 h-6 text-purple-300" />
+              </div>
+              <span className="text-purple-200 text-sm font-medium">Temps Appels Aujourd'hui</span>
+            </div>
+            <p className="text-4xl font-bold text-white">{formatDuration(todayCallStats.totalSeconds)}</p>
+            <p className="text-xs text-purple-300 mt-1">{todayCallStats.activeSessions} sessions actives</p>
+          </div>
+
+          {/* Leads traités */}
+          <div className="bg-gradient-to-br from-blue-600/30 to-blue-800/30 backdrop-blur-md border border-blue-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-blue-500/30 rounded-xl">
+                <Target className="w-6 h-6 text-blue-300" />
+              </div>
+              <span className="text-blue-200 text-sm font-medium">Leads Traités</span>
+            </div>
+            <p className="text-4xl font-bold text-white">{todayCallStats.totalLeads}</p>
+            <p className="text-xs text-blue-300 mt-1">Aujourd'hui</p>
+          </div>
+
+          {/* Leads qualifiés */}
+          <div className="bg-gradient-to-br from-green-600/30 to-green-800/30 backdrop-blur-md border border-green-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-green-500/30 rounded-xl">
+                <UserCheck className="w-6 h-6 text-green-300" />
+              </div>
+              <span className="text-green-200 text-sm font-medium">Qualifiés</span>
+            </div>
+            <p className="text-4xl font-bold text-white">{todayCallStats.totalQualified}</p>
+            <p className="text-xs text-green-300 mt-1">Leads chauds</p>
+          </div>
+
+          {/* RDV planifiés */}
+          <div className="bg-gradient-to-br from-orange-600/30 to-orange-800/30 backdrop-blur-md border border-orange-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-orange-500/30 rounded-xl">
+                <Flame className="w-6 h-6 text-orange-300" />
+              </div>
+              <span className="text-orange-200 text-sm font-medium">RDV Planifiés</span>
+            </div>
+            <p className="text-4xl font-bold text-white">{todayCallStats.totalRdv}</p>
+            <p className="text-xs text-orange-300 mt-1">Aujourd'hui</p>
+          </div>
 
           {/* Total Leads */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-500/20 rounded-xl">
-                <Users className="w-6 h-6 text-blue-300" />
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-white/20 rounded-xl">
+                <Users className="w-6 h-6 text-white" />
               </div>
-              <ArrowUp className="w-5 h-5 text-green-400" />
+              <span className="text-white/70 text-sm font-medium">Total Leads</span>
             </div>
-            <p className="text-blue-200 text-sm font-medium mb-1">Total Leads</p>
             <p className="text-4xl font-bold text-white">{kpis.totalLeads || 0}</p>
-            <p className="text-xs text-blue-300 mt-2">Tous les prospects</p>
+            <p className="text-xs text-white/50 mt-1">Base complète</p>
           </div>
+        </div>
 
-          {/* Taux Conversion */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-500/20 rounded-xl">
-                <TrendingUp className="w-6 h-6 text-green-300" />
-              </div>
-              <span className="text-xs text-green-400 font-bold">+{kpis.conversionRate}%</span>
-            </div>
-            <p className="text-green-200 text-sm font-medium mb-1">Taux Conversion</p>
-            <p className="text-4xl font-bold text-white">{kpis.conversionRate}%</p>
-            <p className="text-xs text-green-300 mt-2">{kpis.convertedLeads} leads gagnés</p>
-          </div>
+        {/* TABLEAU DE BORD ÉQUIPE - Performance Appels par Utilisateur */}
+        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 mb-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-blue-300" />
+            Performance Équipe Aujourd'hui
+          </h3>
 
-          {/* Leads Qualifiés */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-500/20 rounded-xl">
-                <Target className="w-6 h-6 text-purple-300" />
-              </div>
+          {teamCallStats.length === 0 ? (
+            <div className="text-center py-8 text-white/60">
+              <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Aucune donnée d'équipe disponible</p>
             </div>
-            <p className="text-purple-200 text-sm font-medium mb-1">Leads Qualifiés</p>
-            <p className="text-4xl font-bold text-white">{kpis.qualifiedLeads || 0}</p>
-            <p className="text-xs text-purple-300 mt-2">Chauds et très chauds</p>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/20">
+                    <th className="text-left py-3 px-4 text-white/70 font-medium">Commercial</th>
+                    <th className="text-center py-3 px-4 text-white/70 font-medium">Statut</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">Temps Aujourd'hui</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">Objectif</th>
+                    <th className="text-center py-3 px-4 text-white/70 font-medium">Progression</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">Semaine</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">Mois</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">Leads</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">Qualifiés</th>
+                    <th className="text-right py-3 px-4 text-white/70 font-medium">RDV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamCallStats.map((member) => {
+                    const progress = getProgressPercent(member.today_seconds, member.daily_target_seconds);
 
-          {/* Campagnes */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-orange-500/20 rounded-xl">
-                <Zap className="w-6 h-6 text-orange-300" />
-              </div>
+                    return (
+                      <tr key={member.user_id} className="border-b border-white/10 hover:bg-white/5">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                              member.has_active_session ? 'bg-green-500 animate-pulse' : 'bg-gray-500'
+                            }`}>
+                              {member.first_name?.[0]}{member.last_name?.[0]}
+                            </div>
+                            <div>
+                              <p className="text-white font-medium">{member.first_name} {member.last_name}</p>
+                              <p className="text-white/50 text-xs">{member.role}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {member.has_active_session ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">
+                              <Wifi className="w-3 h-3" /> En ligne
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-full text-xs font-medium">
+                              <WifiOff className="w-3 h-3" /> Hors ligne
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-white font-bold">{formatDuration(member.today_seconds)}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-white/70">{formatDuration(member.daily_target_seconds)}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-white/10 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full transition-all ${
+                                  progress >= 100 ? 'bg-green-500' :
+                                  progress >= 75 ? 'bg-blue-500' :
+                                  progress >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${progress}%` }}
+                              ></div>
+                            </div>
+                            <span className={`text-xs font-bold ${
+                              progress >= 100 ? 'text-green-400' :
+                              progress >= 50 ? 'text-yellow-400' : 'text-red-400'
+                            }`}>{progress}%</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-blue-300">{formatDuration(member.week_seconds)}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-purple-300">{formatDuration(member.month_seconds)}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-white">{member.today_leads || 0}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-green-400 font-medium">{member.today_qualified || 0}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-orange-400 font-medium">{member.today_rdv || 0}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <p className="text-orange-200 text-sm font-medium mb-1">Campagnes</p>
-            <p className="text-4xl font-bold text-white">{kpis.activeCampaigns || 0}</p>
-            <p className="text-xs text-orange-300 mt-2">{kpis.totalCampaigns} au total</p>
-          </div>
-
-          {/* Équipe */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-pink-500/20 rounded-xl">
-                <Activity className="w-6 h-6 text-pink-300" />
-              </div>
-            </div>
-            <p className="text-pink-200 text-sm font-medium mb-1">Équipe Active</p>
-            <p className="text-4xl font-bold text-white">{kpis.activeUsers || 0}</p>
-            <p className="text-xs text-pink-300 mt-2">{kpis.totalUsers} commerciaux</p>
-          </div>
+          )}
         </div>
 
         {/* Graphiques principaux */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
           {/* Évolution des leads */}
           <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6">
@@ -348,7 +538,7 @@ export default function AdminDashboard() {
               <BarChart3 className="w-5 h-5 text-blue-300" />
               Évolution des Leads (30 derniers jours)
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={leadsEvolution}>
                 <defs>
                   <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
@@ -383,7 +573,7 @@ export default function AdminDashboard() {
               <TrendingUp className="w-5 h-5 text-green-300" />
               Funnel de Conversion
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={conversionData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
                 <XAxis type="number" stroke="#ffffff60" />
@@ -402,7 +592,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Deuxième ligne de graphiques */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
           {/* Répartition par secteur */}
           <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6">
@@ -410,7 +600,7 @@ export default function AdminDashboard() {
               <PieChart className="w-5 h-5 text-purple-300" />
               Par Secteur
             </h3>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={220}>
               <RePieChart>
                 <Pie
                   data={sectorDistribution}
@@ -435,9 +625,9 @@ export default function AdminDashboard() {
           <div className="lg:col-span-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <Award className="w-5 h-5 text-yellow-300" />
-              Performance par Commercial
+              Performance par Commercial (Leads)
             </h3>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={commercialPerformance.slice(0, 5)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
                 <XAxis dataKey="name" stroke="#ffffff60" />
@@ -466,7 +656,7 @@ export default function AdminDashboard() {
               <Activity className="w-5 h-5 text-blue-300" />
               Activités Récentes
             </h3>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            <div className="space-y-3 max-h-[350px] overflow-y-auto">
               {recentActivities.length === 0 ? (
                 <p className="text-white/60 text-center py-8">Aucune activité récente</p>
               ) : (
