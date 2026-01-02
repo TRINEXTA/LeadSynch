@@ -1,8 +1,23 @@
-import { log, error, warn } from "../../lib/logger.js";
-﻿import React from 'react'
-import { AlertCircle, CheckCircle, Info, XCircle } from 'lucide-react'
+import React from 'react'
+import { AlertCircle, CheckCircle, Info, XCircle, X } from 'lucide-react'
 
-export function Alert({ children, className = '', variant = 'default', ...props }) {
+/**
+ * Alert component with accessibility support
+ * @param {Object} props - Component props
+ * @param {React.ReactNode} props.children - Alert content
+ * @param {string} props.className - Additional CSS classes
+ * @param {'default'|'success'|'warning'|'error'|'info'} props.variant - Alert style variant
+ * @param {boolean} props.dismissible - Whether alert can be dismissed
+ * @param {Function} props.onDismiss - Callback when dismissed
+ */
+export function Alert({
+  children,
+  className = '',
+  variant = 'default',
+  dismissible = false,
+  onDismiss,
+  ...props
+}) {
   const variants = {
     default: 'bg-gray-50 border-gray-200 text-gray-800',
     success: 'bg-green-50 border-green-200 text-green-800',
@@ -19,21 +34,54 @@ export function Alert({ children, className = '', variant = 'default', ...props 
     info: Info
   }
 
+  // Map variants to ARIA roles
+  const roles = {
+    default: 'status',
+    success: 'status',
+    warning: 'alert',
+    error: 'alert',
+    info: 'status'
+  }
+
+  // Aria-live for dynamic content
+  const ariaLive = {
+    default: 'polite',
+    success: 'polite',
+    warning: 'assertive',
+    error: 'assertive',
+    info: 'polite'
+  }
+
   const Icon = icons[variant]
-  
+
   return (
     <div
+      role={roles[variant]}
+      aria-live={ariaLive[variant]}
       className={`relative rounded-lg border p-4 ${variants[variant]} ${className}`}
       {...props}
     >
-      <div className='flex items-start gap-3'>
-        <Icon className='w-5 h-5 flex-shrink-0 mt-0.5' />
-        <div className='flex-1'>{children}</div>
+      <div className="flex items-start gap-3">
+        <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <div className="flex-1">{children}</div>
+        {dismissible && onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex-shrink-0 p-1 rounded-md hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors"
+            aria-label="Fermer l'alerte"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
+/**
+ * Alert title component
+ */
 export function AlertTitle({ children, className = '', ...props }) {
   return (
     <h5 className={`font-semibold mb-1 ${className}`} {...props}>
@@ -42,6 +90,9 @@ export function AlertTitle({ children, className = '', ...props }) {
   )
 }
 
+/**
+ * Alert description component
+ */
 export function AlertDescription({ children, className = '', ...props }) {
   return (
     <div className={`text-sm ${className}`} {...props}>
