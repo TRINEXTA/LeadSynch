@@ -1,20 +1,20 @@
-import { log, error, warn } from "../lib/logger.js";
-﻿import React, { useState, useEffect } from 'react';
-import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle, Calendar, Briefcase } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import toast from 'react-hot-toast';
+import { toast } from '../lib/toast';
 import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
+import RDVSchedulerModal from '../components/pipeline/RDVSchedulerModal';
 
 const QUICK_QUALIFICATIONS = [
-  { id: 'tres_qualifie', label: '🔥 Très Chaud', color: 'bg-green-500', stage: 'tres_qualifie' },
+  { id: 'tres_qualifie', label: '🔥 Très Chaud / RDV', color: 'bg-green-500', stage: 'tres_qualifie', needsRDV: true },
   { id: 'qualifie', label: '👍 Qualifié', color: 'bg-blue-500', stage: 'qualifie' },
   { id: 'a_relancer', label: '⏰ À Relancer', color: 'bg-yellow-500', stage: 'relancer' },
   { id: 'nrp', label: '📵 NRP', color: 'bg-gray-500', stage: 'nrp' },
   { id: 'pas_interesse', label: '👎 Pas Intéressé', color: 'bg-red-500', stage: 'hors_scope' },
 ];
 
-export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
+export default function ProspectionMode({ leads = [], campaign, filterType, onExit, onLeadUpdated }) {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [notes, setNotes] = useState('');
@@ -28,6 +28,8 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   // Modals state
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationRequestType, setValidationRequestType] = useState('validation');
+  const [showRDVModal, setShowRDVModal] = useState(false);
+  const [pendingQualification, setPendingQualification] = useState(null);
 
   // Protection contre leads undefined ou vide
   const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
@@ -40,10 +42,23 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
   }, [leadStartTime]);
 
   const handleAction = async (qualification) => {
+    if (!currentLead) return;
+
+    // Si c'est "Très Chaud", ouvrir le modal RDV
+    if (qualification.needsRDV) {
+      setPendingQualification(qualification);
+      setShowRDVModal(true);
+      return;
+    }
+
+    // Sinon, qualifier directement
+    await qualifyLead(qualification);
+  };
+
+  const qualifyLead = async (qualification) => {
     try {
       if (!currentLead) return;
 
-      // ✅ CORRECTION : Utiliser la route /qualify qui déplace automatiquement le lead
       await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
         qualification: qualification.id,
         notes: notes.trim() || '',
@@ -63,20 +78,41 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
         setQualified(prev => prev + 1);
       }
 
-      // Reset et passer au suivant
-      setNotes('');
-      setLeadStartTime(Date.now());
-
-      if (currentIndex < leads.length - 1) {
-        setCurrentIndex(prev => prev + 1);
-      } else {
-        toast.success('✅ Tous les leads traités !', { duration: 4000 });
-        setTimeout(() => onExit(), 1000);
-      }
-    } catch (error) {
-      error('Erreur qualification:', error);
+      toast.success(`Lead qualifié : ${qualification.label}`);
+      moveToNextLead();
+    } catch (err) {
+      console.error('Erreur qualification:', err);
       toast.error('Erreur lors de la qualification');
     }
+  };
+
+  const moveToNextLead = () => {
+    setNotes('');
+    setLeadStartTime(Date.now());
+    setLeadDuration(0);
+
+    if (currentIndex < leads.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      toast.success('Tous les leads traités !');
+      setTimeout(() => onExit(), 1500);
+    }
+  };
+
+  const handleRDVSuccess = () => {
+    // Mettre à jour les stats
+    setProcessed(prev => prev + 1);
+    setQualified(prev => prev + 1);
+
+    // Notifier le parent
+    if (onLeadUpdated) {
+      onLeadUpdated();
+    }
+
+    // Fermer le modal et passer au suivant
+    setShowRDVModal(false);
+    setPendingQualification(null);
+    moveToNextLead();
   };
 
   const handleCall = () => {
@@ -210,7 +246,24 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
           <Target className="w-8 h-8 text-purple-600" />
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Mode Prospection 🚀</h1>
-            <p className="text-gray-600">Focus sur un lead à la fois</p>
+            <div className="flex items-center gap-2 text-gray-600">
+              {campaign && (
+                <span className="flex items-center gap-1">
+                  <Briefcase className="w-4 h-4" />
+                  {campaign.name}
+                </span>
+              )}
+              {filterType && filterType !== 'all' && (
+                <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-sm font-medium">
+                  {filterType === 'cold_call' && 'Appels à froid'}
+                  {filterType === 'relancer' && 'À relancer'}
+                  {filterType === 'nrp' && 'NRP'}
+                  {filterType === 'qualifie' && 'Qualifiés'}
+                  {filterType === 'tres_qualifie' && 'Très chauds'}
+                </span>
+              )}
+              {!campaign && !filterType && <span>Focus sur un lead à la fois</span>}
+            </div>
           </div>
         </div>
 
@@ -469,6 +522,20 @@ export default function ProspectionMode({ leads = [], onExit, onLeadUpdated }) {
           onClose={() => setShowValidationModal(false)}
           lead={currentLead}
           type={validationRequestType}
+        />
+      )}
+
+      {/* RDV Scheduler Modal */}
+      {showRDVModal && currentLead && (
+        <RDVSchedulerModal
+          isOpen={showRDVModal}
+          onClose={() => {
+            setShowRDVModal(false);
+            setPendingQualification(null);
+          }}
+          lead={currentLead}
+          onSuccess={handleRDVSuccess}
+          qualification={pendingQualification?.id}
         />
       )}
     </div>
