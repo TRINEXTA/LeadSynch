@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import { toast } from '../lib/toast';
+import { confirmDelete } from '../lib/confirmDialog';
 import {
   Calendar,
   ChevronLeft,
@@ -446,12 +448,12 @@ export default function Planning() {
     console.log('🚀 handleSubmit appelé avec formData:', formData);
 
     if (!formData.title.trim()) {
-      alert('Veuillez entrer un titre');
+      toast.warning('Veuillez entrer un titre');
       return;
     }
 
     if (!formData.start_date) {
-      alert('Veuillez sélectionner une date');
+      toast.warning('Veuillez sélectionner une date');
       return;
     }
 
@@ -468,9 +470,11 @@ export default function Planning() {
       if (selectedEvent) {
         const response = await api.put(`/planning/${selectedEvent.id}`, payload);
         console.log('✅ Réponse PUT:', response.data);
+        toast.success('Événement mis à jour');
       } else {
         const response = await api.post('/planning', payload);
         console.log('✅ Réponse POST:', response.data);
+        toast.success('Événement créé');
       }
 
       setShowModal(false);
@@ -490,20 +494,23 @@ export default function Planning() {
     } catch (err) {
       console.error('❌ Erreur sauvegarde événement:', err);
       console.error('❌ Response data:', err.response?.data);
-      alert(err.response?.data?.error || err.response?.data?.details || 'Erreur lors de la sauvegarde');
+      toast.error(err.response?.data?.error || err.response?.data?.details || 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (eventId) => {
-    if (!confirm('Supprimer cet événement ?')) return;
+    const confirmed = await confirmDelete('cet événement');
+    if (!confirmed) return;
 
     try {
       await api.delete(`/planning/${eventId}`);
+      toast.success('Événement supprimé');
       loadEvents();
     } catch (err) {
       console.error('Erreur suppression événement:', err);
+      toast.error('Erreur lors de la suppression');
     }
   };
 
