@@ -1,17 +1,15 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import pg from 'pg';
+import pg from 'pg';
 import dotenv from 'dotenv';
+import { getSSLConfig } from './ssl-config.js';
+
 dotenv.config();
 
 const { Pool } = pg;
 
-// Configuration SSL : désactiver si sslmode=disable dans l'URL ou VPS privé
-const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
-const sslDisabled = connectionString.includes('sslmode=disable');
-
-const sslConfig = sslDisabled
-  ? false  // SSL désactivé explicitement
-  : { rejectUnauthorized: false }; // Accepte certificats auto-signés (VPS privé)
+// Configuration SSL centralisée
+// Pour activer le mode strict en production, définir SSL_REJECT_UNAUTHORIZED=true
+const sslConfig = getSSLConfig();
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
