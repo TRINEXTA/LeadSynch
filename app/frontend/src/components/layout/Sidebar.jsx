@@ -31,7 +31,8 @@ import {
   Crown,
   Activity,
   FileText,
-  FileCheck
+  FileCheck,
+  Clock
 } from 'lucide-react'
 import { LogoDark } from '../branding/LeadSynchLogo'
 import { useAuth } from '../../context/AuthContext'
@@ -117,6 +118,7 @@ function Sidebar() {
         { name: 'Mes Tâches', href: '/my-tasks', icon: CheckCircle, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mes Rappels', href: '/FollowUps', icon: Calendar, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mode Prospection', href: '/ProspectingMode', icon: Phone, roles: ['commercial', 'admin', 'manager'] },
+        { name: 'Rapports Appels', href: '/call-reports', icon: Clock, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Pipeline Commercial', href: '/pipeline', icon: TrendingUp, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Mes Propositions', href: '/proposals', icon: FileText, roles: ['commercial', 'admin', 'manager'] },
         { name: 'Contrats', href: '/contracts', icon: FileCheck, roles: ['commercial', 'admin', 'manager'] },
