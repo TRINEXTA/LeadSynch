@@ -4,6 +4,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,7 +13,7 @@ dotenv.config();
 
 const client = new pg.Client({
   connectionString: process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: getSSLConfig()
 });
 
 async function runMigration() {

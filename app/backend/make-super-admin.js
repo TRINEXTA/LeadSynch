@@ -1,11 +1,15 @@
-import { log, error, warn } from "../lib/logger.js";
-﻿import pg from 'pg';
+import { log, error, warn } from "./lib/logger.js";
+import pg from 'pg';
 import dotenv from 'dotenv';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 dotenv.config();
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL,
+  ssl: getSSLConfig()
+});
 
 async function makeSuperAdmin() {
   try {

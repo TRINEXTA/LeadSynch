@@ -9,6 +9,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 dotenv.config();
 
@@ -22,9 +23,7 @@ async function runMigration(migrationFile) {
 
   const client = new Client({
     connectionString: process.env.POSTGRES_URL,
-    ssl: {
-      rejectUnauthorized: false // Neon nécessite SSL
-    }
+    ssl: getSSLConfig()
   });
 
   try {

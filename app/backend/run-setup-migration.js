@@ -2,6 +2,7 @@ import { log, error, warn } from "./lib/logger.js";
 import { readFileSync } from 'fs';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 dotenv.config();
 
@@ -11,7 +12,7 @@ log('========================================\n');
 
 const client = new pg.Client({
   connectionString: process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: getSSLConfig()
 });
 
 async function runSetupMigration() {

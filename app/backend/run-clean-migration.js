@@ -1,7 +1,8 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "./lib/logger.js";
 import { readFileSync } from 'fs';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ log('   - Initialiser les données par défaut\n');
 
 const client = new pg.Client({
   connectionString: process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: getSSLConfig()
 });
 
 async function runCleanMigration() {

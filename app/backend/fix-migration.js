@@ -1,4 +1,4 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "./lib/logger.js";
 // ================================================================
 // Script : Fix migration - Supprime les anciennes tables
 // Usage : node fix-migration.js
@@ -6,6 +6,7 @@ import { log, error, warn } from "../lib/logger.js";
 
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 dotenv.config();
 
@@ -14,9 +15,7 @@ const { Client } = pg;
 async function fixMigration() {
   const client = new Client({
     connectionString: process.env.POSTGRES_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
+    ssl: getSSLConfig()
   });
 
   try {

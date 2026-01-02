@@ -1,7 +1,8 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error, warn } from "./lib/logger.js";
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 import pg from 'pg';
+import { getSSLConfig } from './lib/ssl-config.js';
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -20,7 +21,7 @@ if (!connectionString) {
 
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false }
+  ssl: getSSLConfig()
 });
 
 async function applyMigration() {
