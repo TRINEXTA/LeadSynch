@@ -1,7 +1,7 @@
 import { log, error as logError, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key, Settings, Check } from 'lucide-react';
+import { Users as UsersIcon, Plus, Edit2, Trash2, Shield, User, Crown, Mail, Phone, Calendar, Search, Filter, X, AlertCircle, Lock, Unlock, Key, Settings, Check, Clock, BarChart3, Target, TrendingUp, Flame } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -34,6 +34,9 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  const [showCallStatsModal, setShowCallStatsModal] = useState(false);
+  const [selectedUserStats, setSelectedUserStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -81,6 +84,73 @@ export default function Users() {
     } catch (err) {
       logError('❌ Erreur teams:', err);
     }
+  };
+
+  const loadUserCallStats = async (user) => {
+    setLoadingStats(true);
+    setSelectedUserStats({ user, stats: null, objectives: null });
+    setShowCallStatsModal(true);
+
+    try {
+      // Charger les stats et objectifs en parallèle
+      const [statsRes, objectivesRes] = await Promise.all([
+        api.get('/call-sessions', { params: { action: 'stats', user_id: user.id, period: 'daily' } }),
+        api.get('/call-sessions', { params: { action: 'objectives', user_id: user.id } })
+      ]);
+
+      // Calculer les totaux
+      const stats = statsRes.data.stats || [];
+      const today = new Date().toISOString().split('T')[0];
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+      const monthStart = new Date();
+      monthStart.setDate(1);
+
+      const todayStats = stats.find(s => s.call_date === today) || {};
+      const weekStats = stats.filter(s => new Date(s.call_date) >= weekStart);
+      const monthStats = stats.filter(s => new Date(s.call_date) >= monthStart);
+
+      const totals = {
+        today: {
+          seconds: parseInt(todayStats.effective_seconds) || 0,
+          leads: parseInt(todayStats.leads_processed) || 0,
+          qualified: parseInt(todayStats.leads_qualified) || 0,
+          rdv: parseInt(todayStats.rdv_created) || 0
+        },
+        week: {
+          seconds: weekStats.reduce((sum, s) => sum + (parseInt(s.effective_seconds) || 0), 0),
+          leads: weekStats.reduce((sum, s) => sum + (parseInt(s.leads_processed) || 0), 0),
+          qualified: weekStats.reduce((sum, s) => sum + (parseInt(s.leads_qualified) || 0), 0),
+          rdv: weekStats.reduce((sum, s) => sum + (parseInt(s.rdv_created) || 0), 0)
+        },
+        month: {
+          seconds: monthStats.reduce((sum, s) => sum + (parseInt(s.effective_seconds) || 0), 0),
+          leads: monthStats.reduce((sum, s) => sum + (parseInt(s.leads_processed) || 0), 0),
+          qualified: monthStats.reduce((sum, s) => sum + (parseInt(s.leads_qualified) || 0), 0),
+          rdv: monthStats.reduce((sum, s) => sum + (parseInt(s.rdv_created) || 0), 0)
+        }
+      };
+
+      setSelectedUserStats({
+        user,
+        stats: totals,
+        dailyHistory: stats.slice(0, 14), // 2 dernières semaines
+        objectives: objectivesRes.data.objectives
+      });
+    } catch (err) {
+      logError('❌ Erreur chargement stats:', err);
+      toast.error('Erreur lors du chargement des statistiques');
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0m';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
   };
 
   const handleSubmit = async (e) => {
@@ -450,6 +520,15 @@ export default function Users() {
                     {(isAdmin || isManager) && (
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
+                          {/* Stats d'appels */}
+                          <button
+                            onClick={() => loadUserCallStats(user)}
+                            className="p-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-all"
+                            title="Voir les stats d'appels"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </button>
+
                           <button
                             onClick={() => handleEdit(user)}
                             className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all"
@@ -858,6 +937,202 @@ export default function Users() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Stats d'Appels */}
+      {showCallStatsModal && selectedUserStats && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-auto">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <BarChart3 className="w-8 h-8" />
+                <div>
+                  <h2 className="text-2xl font-bold">
+                    Stats d'Appels
+                  </h2>
+                  <p className="text-purple-100">
+                    {selectedUserStats.user.first_name} {selectedUserStats.user.last_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCallStatsModal(false);
+                  setSelectedUserStats(null);
+                }}
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {loadingStats ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="inline-block w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : selectedUserStats.stats ? (
+                <>
+                  {/* Objectif journalier */}
+                  {selectedUserStats.objectives && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                          <Target className="w-4 h-4 text-purple-600" />
+                          Objectif journalier : {formatDuration(selectedUserStats.objectives.daily_target_minutes * 60)}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {formatDuration(selectedUserStats.stats.today.seconds)} / {formatDuration(selectedUserStats.objectives.daily_target_minutes * 60)}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-4">
+                        <div
+                          className={`h-4 rounded-full transition-all ${
+                            (selectedUserStats.stats.today.seconds / (selectedUserStats.objectives.daily_target_minutes * 60)) >= 1
+                              ? 'bg-green-500'
+                              : (selectedUserStats.stats.today.seconds / (selectedUserStats.objectives.daily_target_minutes * 60)) >= 0.5
+                                ? 'bg-yellow-500'
+                                : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min((selectedUserStats.stats.today.seconds / (selectedUserStats.objectives.daily_target_minutes * 60)) * 100, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cards Stats par période */}
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    {/* Aujourd'hui */}
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-4">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                        <Clock className="w-5 h-5" />
+                        Aujourd'hui
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Temps</span>
+                          <span className="font-bold">{formatDuration(selectedUserStats.stats.today.seconds)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Leads</span>
+                          <span className="font-bold">{selectedUserStats.stats.today.leads}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Qualifiés</span>
+                          <span className="font-bold">{selectedUserStats.stats.today.qualified}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">RDV</span>
+                          <span className="font-bold">{selectedUserStats.stats.today.rdv}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Cette semaine */}
+                    <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-4">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5" />
+                        Cette Semaine
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Temps</span>
+                          <span className="font-bold">{formatDuration(selectedUserStats.stats.week.seconds)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Leads</span>
+                          <span className="font-bold">{selectedUserStats.stats.week.leads}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Qualifiés</span>
+                          <span className="font-bold">{selectedUserStats.stats.week.qualified}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">RDV</span>
+                          <span className="font-bold">{selectedUserStats.stats.week.rdv}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ce mois */}
+                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl p-4">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                        <Flame className="w-5 h-5" />
+                        Ce Mois
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Temps</span>
+                          <span className="font-bold">{formatDuration(selectedUserStats.stats.month.seconds)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Leads</span>
+                          <span className="font-bold">{selectedUserStats.stats.month.leads}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">Qualifiés</span>
+                          <span className="font-bold">{selectedUserStats.stats.month.qualified}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-80">RDV</span>
+                          <span className="font-bold">{selectedUserStats.stats.month.rdv}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Historique des 14 derniers jours */}
+                  {selectedUserStats.dailyHistory && selectedUserStats.dailyHistory.length > 0 && (
+                    <div>
+                      <h3 className="font-bold text-lg mb-3 text-gray-900">Historique récent</h3>
+                      <div className="bg-gray-50 rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-4 py-2 text-left font-semibold text-gray-700">Date</th>
+                              <th className="px-4 py-2 text-right font-semibold text-gray-700">Temps</th>
+                              <th className="px-4 py-2 text-right font-semibold text-gray-700">Leads</th>
+                              <th className="px-4 py-2 text-right font-semibold text-gray-700">Qualifiés</th>
+                              <th className="px-4 py-2 text-right font-semibold text-gray-700">RDV</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedUserStats.dailyHistory.map((day, idx) => (
+                              <tr key={idx} className="border-t border-gray-200">
+                                <td className="px-4 py-2 text-gray-900">
+                                  {new Date(day.call_date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                </td>
+                                <td className="px-4 py-2 text-right font-medium text-purple-600">
+                                  {formatDuration(day.effective_seconds)}
+                                </td>
+                                <td className="px-4 py-2 text-right">{day.leads_processed}</td>
+                                <td className="px-4 py-2 text-right text-green-600">{day.leads_qualified}</td>
+                                <td className="px-4 py-2 text-right text-orange-600">{day.rdv_created}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Message si pas de données */}
+                  {selectedUserStats.stats.month.seconds === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium">Aucune session de prospection enregistrée</p>
+                      <p className="text-sm">Les stats apparaîtront après utilisation du Mode Prospection</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Impossible de charger les statistiques</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

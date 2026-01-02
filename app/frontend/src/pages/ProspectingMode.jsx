@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle, Calendar, Briefcase } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Phone, Mail, ThumbsUp, ThumbsDown, ArrowRight, Timer, TrendingUp, Target, Sparkles, MessageSquare, Eye, CheckCircle, HelpCircle, Calendar, Briefcase, Pause, Play, Coffee, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { toast } from '../lib/toast';
@@ -20,10 +20,20 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   const [notes, setNotes] = useState('');
   const [processed, setProcessed] = useState(0);
   const [qualified, setQualified] = useState(0);
+  const [rdvCount, setRdvCount] = useState(0);
+  const [generating, setGenerating] = useState(false);
+
+  // Session state
+  const [sessionId, setSessionId] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [sessionStartTime] = useState(Date.now());
+  const [sessionDuration, setSessionDuration] = useState(0);
+  const [pauseDuration, setPauseDuration] = useState(0);
+  const pauseStartRef = useRef(null);
+
+  // Lead timer
   const [leadStartTime, setLeadStartTime] = useState(Date.now());
   const [leadDuration, setLeadDuration] = useState(0);
-  const [generating, setGenerating] = useState(false);
 
   // Modals state
   const [showValidationModal, setShowValidationModal] = useState(false);
@@ -34,12 +44,122 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   // Protection contre leads undefined ou vide
   const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
 
+  // Démarrer la session au montage
+  useEffect(() => {
+    startSession();
+    return () => {
+      // Ne pas terminer automatiquement - l'utilisateur doit cliquer sur Quitter
+    };
+  }, []);
+
+  // Timer pour la durée de session et du lead
   useEffect(() => {
     const interval = setInterval(() => {
-      setLeadDuration(Math.floor((Date.now() - leadStartTime) / 1000));
+      if (!isPaused) {
+        // Mettre à jour la durée du lead
+        setLeadDuration(Math.floor((Date.now() - leadStartTime) / 1000));
+
+        // Mettre à jour la durée de session (sans les pauses)
+        const totalElapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+        setSessionDuration(totalElapsed - pauseDuration);
+      }
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [leadStartTime]);
+  }, [leadStartTime, sessionStartTime, isPaused, pauseDuration]);
+
+  const startSession = async () => {
+    try {
+      const response = await api.post('/call-sessions', {
+        action: 'start',
+        campaign_id: campaign?.id,
+        filter_type: filterType || 'all'
+      });
+
+      if (response.data.success) {
+        setSessionId(response.data.session.id);
+      }
+    } catch (error) {
+      console.error('Erreur démarrage session:', error);
+      // Ne pas bloquer si la création échoue (peut être que la table n'existe pas encore)
+    }
+  };
+
+  const handlePause = async () => {
+    if (isPaused) {
+      // Reprendre
+      try {
+        if (sessionId) {
+          await api.post('/call-sessions', {
+            action: 'resume',
+            session_id: sessionId
+          });
+        }
+
+        // Calculer le temps passé en pause
+        if (pauseStartRef.current) {
+          const pauseTime = Math.floor((Date.now() - pauseStartRef.current) / 1000);
+          setPauseDuration(prev => prev + pauseTime);
+          pauseStartRef.current = null;
+        }
+
+        setIsPaused(false);
+        toast.success('Session reprise !', { icon: '▶️' });
+      } catch (error) {
+        console.error('Erreur reprise:', error);
+        setIsPaused(false);
+      }
+    } else {
+      // Mettre en pause
+      try {
+        if (sessionId) {
+          await api.post('/call-sessions', {
+            action: 'pause',
+            session_id: sessionId,
+            pause_reason: 'pause'
+          });
+        }
+
+        pauseStartRef.current = Date.now();
+        setIsPaused(true);
+        toast('Session en pause', { icon: '⏸️', duration: 2000 });
+      } catch (error) {
+        console.error('Erreur pause:', error);
+        setIsPaused(true);
+      }
+    }
+  };
+
+  const handleExit = async () => {
+    try {
+      if (sessionId) {
+        // Calculer la pause en cours si applicable
+        let finalPauseDuration = pauseDuration;
+        if (isPaused && pauseStartRef.current) {
+          finalPauseDuration += Math.floor((Date.now() - pauseStartRef.current) / 1000);
+        }
+
+        await api.post('/call-sessions', {
+          action: 'end',
+          session_id: sessionId
+        });
+
+        // Afficher le résumé
+        const effectiveTime = sessionDuration;
+        const minutes = Math.floor(effectiveTime / 60);
+        const seconds = effectiveTime % 60;
+
+        toast.success(
+          `Session terminée !\n${minutes}m ${seconds}s d'appels effectifs\n${processed} leads traités\n${qualified} leads qualifiés\n${rdvCount} RDV planifiés`,
+          { duration: 5000 }
+        );
+      }
+    } catch (error) {
+      console.error('Erreur fin session:', error);
+    }
+
+    onExit();
+  };
 
   const handleAction = async (qualification) => {
     if (!currentLead) return;
@@ -66,6 +186,24 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         next_action: '',
         scheduled_date: null
       });
+
+      // Logger l'appel dans la session
+      if (sessionId) {
+        try {
+          await api.post('/call-sessions', {
+            action: 'log-call',
+            session_id: sessionId,
+            lead_id: currentLead.lead_id,
+            pipeline_lead_id: currentLead.id,
+            duration: leadDuration,
+            qualification: qualification.id,
+            notes: notes.trim() || '',
+            outcome: qualification.id
+          });
+        } catch (e) {
+          console.error('Erreur log appel:', e);
+        }
+      }
 
       // Notifier le parent que le lead a été mis à jour
       if (onLeadUpdated) {
@@ -95,14 +233,35 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       setCurrentIndex(prev => prev + 1);
     } else {
       toast.success('Tous les leads traités !');
-      setTimeout(() => onExit(), 1500);
+      setTimeout(() => handleExit(), 1500);
     }
   };
 
-  const handleRDVSuccess = () => {
+  const handleRDVSuccess = async (rdvData) => {
     // Mettre à jour les stats
     setProcessed(prev => prev + 1);
     setQualified(prev => prev + 1);
+    setRdvCount(prev => prev + 1);
+
+    // Logger l'appel avec RDV
+    if (sessionId) {
+      try {
+        await api.post('/call-sessions', {
+          action: 'log-call',
+          session_id: sessionId,
+          lead_id: currentLead?.lead_id,
+          pipeline_lead_id: currentLead?.id,
+          duration: leadDuration,
+          qualification: 'tres_qualifie',
+          notes: notes.trim() || '',
+          outcome: 'rdv',
+          rdv_scheduled_at: rdvData?.date,
+          rdv_type: rdvData?.type
+        });
+      } catch (e) {
+        console.error('Erreur log appel RDV:', e);
+      }
+    }
 
     // Notifier le parent
     if (onLeadUpdated) {
@@ -157,30 +316,15 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
       }
     } catch (error) {
-      error('❌ Erreur génération email:', error);
+      console.error('Erreur génération email:', error);
       toast.error('Erreur lors de la génération de l\'email');
     } finally {
       setGenerating(false);
     }
   };
 
-  const nextLead = () => {
-    if (currentIndex < leads.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-      setNotes('');
-      setLeadStartTime(Date.now());
-      setLeadDuration(0);
-    } else {
-      // Fin de la session
-      toast.success(`🎉 Session terminée !\n\n${processed} leads traités • ${qualified} leads qualifiés`, {
-        duration: 5000
-      });
-      setTimeout(() => onExit(), 1500);
-    }
-  };
-
   const skipLead = () => {
-    nextLead();
+    moveToNextLead();
   };
 
   const handleViewDetails = () => {
@@ -199,25 +343,17 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     setShowValidationModal(true);
   };
 
-  const handlePause = () => {
-    toast('⏸️ Pause ! Prenez un café ☕', {
-      icon: '☕',
-      duration: 3000,
-      style: {
-        background: '#fbbf24',
-        color: '#1f2937',
-        fontWeight: 'bold',
-      },
-    });
-  };
-
   const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
+
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m ${secs}s`;
+    }
     return `${mins}m ${secs}s`;
   };
 
-  const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
   const avgTimePerLead = processed > 0 ? Math.floor(sessionDuration / processed) : 0;
   const qualificationRate = processed > 0 ? Math.round((qualified / processed) * 100) : 0;
 
@@ -239,9 +375,20 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-6">
+    <div className={`min-h-screen p-6 transition-all duration-300 ${isPaused ? 'bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100' : 'bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50'}`}>
+      {/* Overlay de pause */}
+      {isPaused && (
+        <div className="fixed inset-0 bg-yellow-900/20 z-40 flex items-center justify-center pointer-events-none">
+          <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-8 text-center shadow-2xl">
+            <Coffee className="w-16 h-16 text-yellow-500 mx-auto mb-4 animate-bounce" />
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Session en pause</h2>
+            <p className="text-gray-600">Cliquez sur "Reprendre" pour continuer</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 relative z-50">
         <div className="flex items-center gap-4">
           <Target className="w-8 h-8 text-purple-600" />
           <div>
@@ -268,16 +415,30 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Bouton Pause/Reprendre */}
           <button
             onClick={handlePause}
-            className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg"
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg ${
+              isPaused
+                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
+                : 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600'
+            }`}
           >
-            <Timer className="w-5 h-5" />
-            ⏸️ Pause
+            {isPaused ? (
+              <>
+                <Play className="w-5 h-5" />
+                ▶️ Reprendre
+              </>
+            ) : (
+              <>
+                <Pause className="w-5 h-5" />
+                ⏸️ Pause
+              </>
+            )}
           </button>
 
           <button
-            onClick={onExit}
+            onClick={handleExit}
             className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl font-bold hover:from-red-600 hover:to-red-700 transition-all shadow-lg"
           >
             <X className="w-5 h-5" />
@@ -324,6 +485,11 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
                 <p className="text-2xl font-bold text-green-700">{qualified}</p>
               </div>
 
+              <div className="bg-emerald-50 rounded-lg p-3">
+                <p className="text-xs text-gray-600">RDV planifiés</p>
+                <p className="text-2xl font-bold text-emerald-700">{rdvCount}</p>
+              </div>
+
               <div className="bg-purple-50 rounded-lg p-3">
                 <p className="text-xs text-gray-600">Taux de qualification</p>
                 <p className="text-2xl font-bold text-purple-700">{qualificationRate}%</p>
@@ -333,26 +499,42 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
                 <p className="text-xs text-gray-600">Temps moyen / lead</p>
                 <p className="text-2xl font-bold text-orange-700">{formatDuration(avgTimePerLead)}</p>
               </div>
-
-              <div className="bg-pink-50 rounded-lg p-3">
-                <p className="text-xs text-gray-600">Durée session</p>
-                <p className="text-2xl font-bold text-pink-700">{formatDuration(sessionDuration)}</p>
-              </div>
             </div>
           </div>
 
-          {/* Timer Lead actuel */}
-          <div className="bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-xl shadow-lg p-6">
+          {/* Timer Session */}
+          <div className={`rounded-xl shadow-lg p-6 transition-all ${
+            isPaused
+              ? 'bg-gradient-to-br from-yellow-500 to-orange-500 text-white'
+              : 'bg-gradient-to-br from-purple-600 to-pink-600 text-white'
+          }`}>
             <div className="flex items-center gap-3 mb-2">
-              <Timer className="w-6 h-6" />
-              <h3 className="font-bold text-lg">Lead actuel</h3>
+              <Clock className="w-6 h-6" />
+              <h3 className="font-bold text-lg">Temps effectif</h3>
             </div>
-            <p className="text-4xl font-bold">{formatDuration(leadDuration)}</p>
+            <p className="text-4xl font-bold">{formatDuration(sessionDuration)}</p>
+            {isPaused && (
+              <p className="text-yellow-100 mt-2 flex items-center gap-2">
+                <Coffee className="w-4 h-4" />
+                En pause...
+              </p>
+            )}
+          </div>
+
+          {/* Timer Lead actuel */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-purple-200">
+            <div className="flex items-center gap-3 mb-2">
+              <Timer className="w-6 h-6 text-purple-600" />
+              <h3 className="font-bold text-lg text-gray-900">Lead actuel</h3>
+            </div>
+            <p className={`text-4xl font-bold ${isPaused ? 'text-gray-400' : 'text-purple-600'}`}>
+              {formatDuration(leadDuration)}
+            </p>
           </div>
         </div>
 
         {/* Lead Card Column */}
-        <div className="col-span-2 space-y-4">
+        <div className={`col-span-2 space-y-4 ${isPaused ? 'opacity-50 pointer-events-none' : ''}`}>
           {/* Main Lead Card */}
           <div className="bg-white rounded-2xl shadow-2xl p-8 border-4 border-purple-200">
             <div className="flex items-start justify-between mb-6">
