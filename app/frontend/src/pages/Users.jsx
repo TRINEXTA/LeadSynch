@@ -21,6 +21,7 @@ import {
 const ROLES = [
   { value: 'admin', label: 'Administrateur', color: 'bg-red-100 text-red-700', icon: Shield },
   { value: 'manager', label: 'Manager', color: 'bg-purple-100 text-purple-700', icon: Crown },
+  { value: 'supervisor', label: 'Superviseur', color: 'bg-indigo-100 text-indigo-700', icon: Crown },
   { value: 'commercial', label: 'Commercial', color: 'bg-blue-100 text-blue-700', icon: User },
   { value: 'user', label: 'Utilisateur', color: 'bg-green-100 text-green-700', icon: User }
 ];
@@ -172,8 +173,8 @@ export default function Users() {
         team_id: formData.team_id || null
       };
 
-      // Ajouter les permissions pour les managers
-      if (formData.role === 'manager') {
+      // Ajouter les permissions pour les managers et superviseurs
+      if (['manager', 'supervisor'].includes(formData.role)) {
         dataToSend.permissions = formData.permissions || DEFAULT_MANAGER_PERMISSIONS;
         // Ajouter le niveau hiérarchique si défini
         if (formData.hierarchical_level) {
@@ -181,8 +182,8 @@ export default function Users() {
         }
       }
 
-      // Ajouter les données de commission (pour managers et commerciaux)
-      if (['manager', 'commercial'].includes(formData.role)) {
+      // Ajouter les données de commission (pour managers, superviseurs et commerciaux)
+      if (['manager', 'supervisor', 'commercial'].includes(formData.role)) {
         dataToSend.commission_rate = parseFloat(formData.commission_rate) || 0;
         dataToSend.team_commission_rate = parseFloat(formData.team_commission_rate) || 0;
         dataToSend.commission_type = formData.commission_type || 'percentage';
@@ -665,7 +666,7 @@ export default function Users() {
                       ...formData,
                       role: newRole,
                       // Reset permissions quand on change de rôle
-                      permissions: newRole === 'manager' ? { ...DEFAULT_MANAGER_PERMISSIONS } : {}
+                      permissions: ['manager', 'supervisor'].includes(newRole) ? { ...DEFAULT_MANAGER_PERMISSIONS } : {}
                     });
                   }}
                   required
@@ -709,8 +710,8 @@ export default function Users() {
                 </select>
               </div>
 
-              {/* Niveau hiérarchique - Visible seulement pour les managers */}
-              {formData.role === 'manager' && (isAdmin || isSuperAdmin) && (
+              {/* Niveau hiérarchique - Visible pour managers et superviseurs */}
+              {['manager', 'supervisor'].includes(formData.role) && (isAdmin || isSuperAdmin) && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Niveau hiérarchique
@@ -743,8 +744,8 @@ export default function Users() {
                 </div>
               )}
 
-              {/* Section Commission - Visible pour managers et commerciaux */}
-              {['manager', 'commercial'].includes(formData.role) && (isAdmin || isSuperAdmin) && (
+              {/* Section Commission - Visible pour managers, superviseurs et commerciaux */}
+              {['manager', 'supervisor', 'commercial'].includes(formData.role) && (isAdmin || isSuperAdmin) && (
                 <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-4">
                     <Settings className="w-5 h-5 text-green-600" />
@@ -785,8 +786,8 @@ export default function Users() {
                       />
                     </div>
 
-                    {/* Taux sur équipe - seulement pour managers */}
-                    {formData.role === 'manager' && (
+                    {/* Taux sur équipe - pour managers et superviseurs */}
+                    {['manager', 'supervisor'].includes(formData.role) && (
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Commission équipe (%)
@@ -824,8 +825,8 @@ export default function Users() {
                 </div>
               )}
 
-              {/* Section Permissions - Visible seulement pour les managers */}
-              {formData.role === 'manager' && (isAdmin || isSuperAdmin) && (
+              {/* Section Permissions - Visible pour managers et superviseurs */}
+              {['manager', 'supervisor'].includes(formData.role) && (isAdmin || isSuperAdmin) && (
                 <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-4">
                     <Settings className="w-5 h-5 text-purple-600" />
