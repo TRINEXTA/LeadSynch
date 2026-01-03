@@ -1,9 +1,8 @@
-import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import {
   Calendar, Clock, Plus, Check, X, AlertCircle,
   User, Phone, Mail, Building2, ChevronDown, Filter,
-  CheckCircle, XCircle, Clock3, TrendingUp, Users
+  CheckCircle, XCircle, Clock3, TrendingUp, Users, Shield
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -24,9 +23,21 @@ const FOLLOWUP_TYPES = [
   { value: 'other', label: 'Autre', icon: '📝' }
 ];
 
+const ROLE_LABELS = {
+  admin: { label: 'Administrateur', color: 'bg-purple-100 text-purple-700' },
+  manager: { label: 'Manager', color: 'bg-blue-100 text-blue-700' },
+  supervisor: { label: 'Superviseur', color: 'bg-indigo-100 text-indigo-700' },
+  commercial: { label: 'Commercial', color: 'bg-green-100 text-green-700' },
+  user: { label: 'Utilisateur', color: 'bg-gray-100 text-gray-700' }
+};
+
 export default function FollowUps() {
   const { user } = useAuth();
-  const isManager = user?.role === 'admin' || user?.role === 'manager';
+
+  // Permissions basées sur le rôle
+  const isAdmin = user?.role === 'admin';
+  const isManager = user?.role === 'manager' || user?.role === 'supervisor';
+  const canViewTeam = isAdmin || isManager;
 
   const [followups, setFollowups] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -36,6 +47,7 @@ export default function FollowUps() {
   const [selectedUser, setSelectedUser] = useState('all');
   const [filterStatus, setFilterStatus] = useState('upcoming');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [canViewAll, setCanViewAll] = useState(false);
 
   // États pour les modals
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -53,6 +65,7 @@ export default function FollowUps() {
 
   const [newFollowup, setNewFollowup] = useState({
     lead_id: '',
+    user_id: '', // Pour assigner à un membre de l'équipe
     type: 'call',
     priority: 'medium',
     scheduled_date: '',
@@ -62,21 +75,39 @@ export default function FollowUps() {
   });
 
   useEffect(() => {
-    fetchFollowups();
-    fetchLeads();
     fetchTeamMembers();
+    fetchLeads();
+  }, []);
+
+  useEffect(() => {
+    fetchFollowups();
   }, [selectedUser]);
 
   useEffect(() => {
     calculateStats();
   }, [followups]);
 
+  const fetchTeamMembers = async () => {
+    try {
+      const response = await api.get('/follow-ups/team-members');
+      const data = response.data;
+
+      if (data.success) {
+        setTeamMembers(data.members || []);
+        setCanViewAll(data.canViewAll);
+      }
+    } catch (err) {
+      console.error('Erreur chargement équipe:', err);
+    }
+  };
+
   const fetchFollowups = async () => {
     try {
       setLoading(true);
       let url = '/follow-ups';
 
-      if (isManager && selectedUser !== 'all') {
+      // Ajouter le filtre utilisateur seulement si on peut voir l'équipe
+      if (canViewTeam && selectedUser !== 'all') {
         url += `?user_id=${selectedUser}`;
       }
 
@@ -86,8 +117,8 @@ export default function FollowUps() {
       if (data.success) {
         setFollowups(data.followups || []);
       }
-    } catch (error) {
-      error('Erreur chargement rappels:', error);
+    } catch (err) {
+      console.error('Erreur chargement rappels:', err);
       toast.error('Erreur lors du chargement des rappels');
     } finally {
       setLoading(false);
@@ -100,26 +131,14 @@ export default function FollowUps() {
       const data = response.data;
 
       if (data.success) {
-        const filteredLeads = isManager
+        // Pour les commerciaux, filtrer les leads assignés
+        const filteredLeads = canViewTeam
           ? data.leads
           : data.leads.filter(lead => user && lead.assigned_to === user.id);
         setLeads(filteredLeads);
       }
-    } catch (error) {
-      error('Erreur chargement leads:', error);
-    }
-  };
-
-  const fetchTeamMembers = async () => {
-    try {
-      const response = await api.get('/users');
-      const data = response.data;
-
-      if (data.success) {
-        setTeamMembers(data.users);
-      }
-    } catch (error) {
-      error('Erreur chargement équipe:', error);
+    } catch (err) {
+      console.error('Erreur chargement leads:', err);
     }
   };
 
@@ -158,23 +177,31 @@ export default function FollowUps() {
     e.preventDefault();
 
     if (!newFollowup.lead_id || !newFollowup.scheduled_date) {
-      toast.error('⚠️ Lead et date sont requis');
+      toast.error('Lead et date sont requis');
       return;
     }
 
     const scheduledDateTime = `${newFollowup.scheduled_date}T${newFollowup.scheduled_time || '09:00'}:00`;
 
-    const promise = api.post('/follow-ups', {
-      lead_id: parseInt(newFollowup.lead_id),
+    const payload = {
+      lead_id: newFollowup.lead_id,
       type: newFollowup.type,
       priority: newFollowup.priority,
       scheduled_date: scheduledDateTime,
       notes: newFollowup.notes,
       title: newFollowup.title
-    }).then(() => {
+    };
+
+    // Ajouter user_id seulement si assignation à quelqu'un d'autre
+    if (canViewTeam && newFollowup.user_id && newFollowup.user_id !== user.id) {
+      payload.user_id = newFollowup.user_id;
+    }
+
+    const promise = api.post('/follow-ups', payload).then(() => {
       setShowModal(false);
       setNewFollowup({
         lead_id: '',
+        user_id: '',
         type: 'call',
         priority: 'medium',
         scheduled_date: '',
@@ -187,8 +214,8 @@ export default function FollowUps() {
 
     toast.promise(promise, {
       loading: 'Création du rappel...',
-      success: '✅ Rappel créé avec succès',
-      error: 'Erreur lors de la création',
+      success: 'Rappel créé avec succès',
+      error: (err) => err.response?.data?.error || 'Erreur lors de la création',
     });
   };
 
@@ -198,8 +225,8 @@ export default function FollowUps() {
 
     toast.promise(promise, {
       loading: 'Marquage comme terminé...',
-      success: '✅ Rappel marqué comme terminé',
-      error: 'Erreur lors de la complétion',
+      success: 'Rappel marqué comme terminé',
+      error: (err) => err.response?.data?.error || 'Erreur lors de la complétion',
     });
   };
 
@@ -209,8 +236,8 @@ export default function FollowUps() {
 
     toast.promise(promise, {
       loading: 'Suppression...',
-      success: '🗑️ Rappel supprimé',
-      error: 'Erreur lors de la suppression',
+      success: 'Rappel supprimé',
+      error: (err) => err.response?.data?.error || 'Erreur lors de la suppression',
     });
   };
 
@@ -233,8 +260,8 @@ export default function FollowUps() {
 
     toast.promise(promise, {
       loading: 'Reprogrammation...',
-      success: '📅 Rappel reprogrammé',
-      error: 'Erreur lors de la reprogrammation',
+      success: 'Rappel reprogrammé',
+      error: (err) => err.response?.data?.error || 'Erreur lors de la reprogrammation',
     });
   };
 
@@ -294,6 +321,10 @@ export default function FollowUps() {
     }
   };
 
+  const getRoleLabel = (role) => {
+    return ROLE_LABELS[role] || ROLE_LABELS.user;
+  };
+
   const filteredFollowups = getFilteredFollowups();
 
   if (loading) {
@@ -315,13 +346,27 @@ export default function FollowUps() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <Calendar className="w-8 h-8 text-blue-600" />
-              Mes Rappels
+              {canViewTeam ? 'Rappels' : 'Mes Rappels'}
             </h1>
-            <p className="text-gray-600 mt-1">
-              {isManager
-                ? 'Suivez les rappels de votre équipe'
-                : 'Gérez vos tâches et rendez-vous à venir'
-              }
+            <p className="text-gray-600 mt-1 flex items-center gap-2">
+              {isAdmin && (
+                <>
+                  <Shield className="w-4 h-4 text-purple-600" />
+                  <span className="text-purple-600 font-medium">Admin</span> - Accès à tous les rappels
+                </>
+              )}
+              {isManager && !isAdmin && (
+                <>
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span className="text-blue-600 font-medium">Manager</span> - Accès aux rappels de votre équipe
+                </>
+              )}
+              {!canViewTeam && (
+                <>
+                  <User className="w-4 h-4 text-green-600" />
+                  Vos rappels personnels
+                </>
+              )}
             </p>
           </div>
           <button
@@ -369,19 +414,25 @@ export default function FollowUps() {
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-lg p-4">
           <div className="flex items-center gap-4">
-            {isManager && (
+            {/* Filtre par utilisateur - seulement pour admin/manager */}
+            {canViewTeam && teamMembers.length > 1 && (
               <div className="flex-1">
                 <select
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
                 >
-                  <option value="all">📊 Tous les utilisateurs</option>
-                  {teamMembers.map(member => (
-                    <option key={member.id} value={member.id}>
-                      {member.first_name} {member.last_name}
-                    </option>
-                  ))}
+                  <option value="all">
+                    {isAdmin ? '👥 Tous les utilisateurs' : '👥 Mon équipe'}
+                  </option>
+                  {teamMembers.map(member => {
+                    const roleInfo = getRoleLabel(member.role);
+                    return (
+                      <option key={member.id} value={member.id}>
+                        {member.first_name} {member.last_name} ({roleInfo.label})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}
@@ -391,10 +442,10 @@ export default function FollowUps() {
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="all">📋 Tous</option>
-              <option value="upcoming">⏰ À venir</option>
-              <option value="overdue">⚠️ En retard</option>
-              <option value="completed">✅ Complétés</option>
+              <option value="all">Tous</option>
+              <option value="upcoming">À venir</option>
+              <option value="overdue">En retard</option>
+              <option value="completed">Complétés</option>
             </select>
 
             <select
@@ -402,10 +453,10 @@ export default function FollowUps() {
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
             >
-              <option value="all">🎯 Toutes priorités</option>
-              <option value="high">🔴 Haute</option>
-              <option value="medium">🟠 Moyenne</option>
-              <option value="low">🔵 Basse</option>
+              <option value="all">Toutes priorités</option>
+              <option value="high">Haute</option>
+              <option value="medium">Moyenne</option>
+              <option value="low">Basse</option>
             </select>
           </div>
         </div>
@@ -437,6 +488,7 @@ export default function FollowUps() {
             const typeInfo = getTypeInfo(followup.type);
             const priorityStyle = PRIORITY_COLORS[followup.priority] || PRIORITY_COLORS.medium;
             const overdue = isOverdue(followup.scheduled_date, followup.completed);
+            const isOwnFollowup = followup.user_id === user?.id;
 
             return (
               <div
@@ -458,9 +510,9 @@ export default function FollowUps() {
                         <h3 className="text-lg font-bold text-gray-900">
                           {followup.title || typeInfo.label}
                         </h3>
-                        <div className="flex items-center gap-3 mt-1">
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
                           <span className={`text-xs font-semibold px-2 py-1 rounded ${priorityStyle.badge} ${priorityStyle.text}`}>
-                            {followup.priority === 'high' ? '🔴 Haute' : followup.priority === 'medium' ? '🟠 Moyenne' : '🔵 Basse'}
+                            {followup.priority === 'high' ? 'Haute' : followup.priority === 'medium' ? 'Moyenne' : 'Basse'}
                           </span>
                           <span className={`text-sm font-medium flex items-center gap-1 ${
                             overdue ? 'text-red-600' : followup.completed ? 'text-green-600' : 'text-gray-600'
@@ -470,12 +522,12 @@ export default function FollowUps() {
                           </span>
                           {overdue && (
                             <span className="text-xs font-semibold px-2 py-1 bg-red-100 text-red-700 rounded">
-                              ⚠️ EN RETARD
+                              EN RETARD
                             </span>
                           )}
                           {followup.completed && (
                             <span className="text-xs font-semibold px-2 py-1 bg-green-100 text-green-700 rounded">
-                              ✅ COMPLÉTÉ
+                              COMPLÉTÉ
                             </span>
                           )}
                         </div>
@@ -484,7 +536,7 @@ export default function FollowUps() {
 
                     {/* Lead Info */}
                     <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-blue-600" />
                           <span className="font-semibold text-gray-900">{lead.company_name || 'Lead inconnu'}</span>
@@ -511,11 +563,21 @@ export default function FollowUps() {
                       </div>
                     )}
 
-                    {/* User (pour manager) */}
-                    {isManager && followup.user_name && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <User className="w-4 h-4" />
-                        <span>Assigné à : <strong>{followup.user_name}</strong></span>
+                    {/* User info (pour manager/admin) */}
+                    {canViewTeam && followup.user_name && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-600">Assigné à :</span>
+                        <span className={`font-medium px-2 py-0.5 rounded ${
+                          isOwnFollowup ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {isOwnFollowup ? 'Moi' : followup.user_name}
+                        </span>
+                        {followup.user_role && (
+                          <span className={`text-xs px-2 py-0.5 rounded ${getRoleLabel(followup.user_role).color}`}>
+                            {getRoleLabel(followup.user_role).label}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -529,7 +591,7 @@ export default function FollowUps() {
                           className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all"
                         >
                           <Check className="w-4 h-4" />
-                          Marquer terminé
+                          Terminé
                         </button>
                         <button
                           onClick={() => {
@@ -588,6 +650,31 @@ export default function FollowUps() {
                 </select>
               </div>
 
+              {/* Assignation - seulement pour manager/admin */}
+              {canViewTeam && teamMembers.length > 1 && (
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">
+                    Assigner à
+                    <span className="text-gray-500 font-normal ml-2">(optionnel)</span>
+                  </label>
+                  <select
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                    value={newFollowup.user_id}
+                    onChange={(e) => setNewFollowup({...newFollowup, user_id: e.target.value})}
+                  >
+                    <option value="">Moi-même</option>
+                    {teamMembers.filter(m => m.id !== user?.id).map(member => {
+                      const roleInfo = getRoleLabel(member.role);
+                      return (
+                        <option key={member.id} value={member.id}>
+                          {member.first_name} {member.last_name} ({roleInfo.label})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-semibold mb-2 text-gray-700">Titre du rappel</label>
                 <input
@@ -624,9 +711,9 @@ export default function FollowUps() {
                     value={newFollowup.priority}
                     onChange={(e) => setNewFollowup({...newFollowup, priority: e.target.value})}
                   >
-                    <option value="low">🔵 Basse</option>
-                    <option value="medium">🟠 Moyenne</option>
-                    <option value="high">🔴 Haute</option>
+                    <option value="low">Basse</option>
+                    <option value="medium">Moyenne</option>
+                    <option value="high">Haute</option>
                   </select>
                 </div>
               </div>
@@ -690,7 +777,7 @@ export default function FollowUps() {
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md">
-            <h3 className="text-xl font-bold mb-4 text-red-600">🗑️ Confirmer la suppression</h3>
+            <h3 className="text-xl font-bold mb-4 text-red-600">Confirmer la suppression</h3>
             <p className="text-gray-700 mb-6">
               Êtes-vous sûr de vouloir supprimer ce rappel ? Cette action est irréversible.
             </p>
@@ -719,7 +806,7 @@ export default function FollowUps() {
       {rescheduleModalId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4 text-orange-600">📅 Reprogrammer le rappel</h3>
+            <h3 className="text-xl font-bold mb-4 text-orange-600">Reprogrammer le rappel</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-2">Nouvelle date</label>
