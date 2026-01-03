@@ -330,6 +330,26 @@ async function handler(req, res) {
 
       const updatedUser = await queryOne(updateQuery, updateParams);
 
+      // Gérer l'équipe (team_members)
+      if (team_id !== undefined) {
+        // Supprimer l'ancienne association d'équipe
+        await execute(
+          'DELETE FROM team_members WHERE user_id = $1',
+          [userId]
+        );
+
+        // Ajouter la nouvelle équipe si spécifiée
+        if (team_id && team_id !== '') {
+          await execute(
+            `INSERT INTO team_members (id, team_id, user_id, role, joined_at)
+             VALUES (gen_random_uuid(), $1, $2, 'member', NOW())
+             ON CONFLICT (user_id, team_id) DO NOTHING`,
+            [team_id, userId]
+          );
+          log(`✅ Équipe ${team_id} assignée à l'utilisateur ${userId}`);
+        }
+      }
+
       log('✅ User modifié:', updatedUser.id);
 
       return res.status(200).json({

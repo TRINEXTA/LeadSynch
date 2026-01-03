@@ -62,6 +62,7 @@ function Sidebar() {
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
+  const isSupervisor = user?.role === 'supervisor'
   const isCommercial = user?.role === 'commercial'
   const isSuperAdmin = user?.is_super_admin === true
 
@@ -71,11 +72,19 @@ function Sidebar() {
     if (isAdmin || isSuperAdmin) return true
 
     // Si roles défini, vérifier le rôle de base
-    if (item.roles && !item.roles.includes(user?.role)) return false
+    // Note: supervisor est traité comme manager pour l'accès aux menus
+    if (item.roles) {
+      const userRole = user?.role;
+      const effectiveRoles = [...item.roles];
+      // Si manager est dans la liste, ajouter aussi supervisor
+      if (effectiveRoles.includes('manager') && !effectiveRoles.includes('supervisor')) {
+        effectiveRoles.push('supervisor');
+      }
+      if (!effectiveRoles.includes(userRole)) return false;
+    }
 
-    // Pour les managers, TOUJOURS vérifier les permissions si spécifiées
-    // Même si roles n'est pas défini sur l'item
-    if (isManager && item.permission) {
+    // Pour les managers et supervisors, TOUJOURS vérifier les permissions si spécifiées
+    if ((isManager || isSupervisor) && item.permission) {
       return hasPermission(user, item.permission)
     }
 
@@ -88,13 +97,13 @@ function Sidebar() {
     if (!item.roles) return true
 
     return true
-  }, [user, isAdmin, isSuperAdmin, isManager, isCommercial])
+  }, [user, isAdmin, isSuperAdmin, isManager, isSupervisor, isCommercial])
 
   const navigation = {
     main: [
       { name: 'Centre de Contrôle Admin', href: '/dashboard-admin', icon: Shield, roles: ['admin'], badge: 'ADMIN' },
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
-      { name: 'Dashboard Manager', href: '/dashboard-manager', icon: BarChart3, roles: ['manager', 'admin'] },
+      { name: 'Dashboard Manager', href: '/dashboard-manager', icon: BarChart3, roles: ['manager', 'supervisor', 'admin'] },
       { name: 'Mon Dashboard', href: '/CommercialDashboard', icon: Target, roles: ['commercial'] }
     ],
 
@@ -102,7 +111,7 @@ function Sidebar() {
       title: 'Leads & Prospects',
       icon: Database,
       items: [
-        { name: 'Mes Prospects', href: '/MyLeads', icon: UserCircle, roles: ['commercial', 'manager'] },
+        { name: 'Mes Prospects', href: '/MyLeads', icon: UserCircle, roles: ['commercial', 'manager', 'supervisor'] },
         { name: 'Tous les Leads', href: '/leads', icon: Database, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_ALL_LEADS },
         { name: 'Bases de Données', href: '/LeadDatabases', icon: FolderOpen, roles: ['admin', 'manager'], permission: PERMISSIONS.VIEW_DATABASES },
         { name: 'Bases Admin', href: '/LeadDatabasesAdmin', icon: Database, roles: ['admin'] },
@@ -170,7 +179,7 @@ function Sidebar() {
       roles: ['admin', 'manager'],
       items: [
         { name: 'Équipes', href: '/teams', icon: Users, roles: ['admin', 'manager'] },
-        { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin'], permission: PERMISSIONS.MANAGE_ALL_USERS },
+        { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin', 'manager', 'supervisor'], permission: PERMISSIONS.MANAGE_ALL_USERS },
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users, roles: ['admin', 'manager'] },
         { name: 'Config Business', href: '/BusinessSettings', icon: Package, roles: ['admin', 'manager'], permission: PERMISSIONS.BUSINESS_CONFIG },
         { name: 'Secteurs Géographiques', href: '/geographic-sectors', icon: MapPin, roles: ['admin', 'manager'] },
@@ -211,7 +220,12 @@ function Sidebar() {
 
   const hasAccess = useCallback((roles) => {
     if (!roles) return true
-    return roles.includes(user?.role)
+    // supervisor est traité comme manager pour l'accès aux sections
+    const effectiveRoles = [...roles];
+    if (effectiveRoles.includes('manager') && !effectiveRoles.includes('supervisor')) {
+      effectiveRoles.push('supervisor');
+    }
+    return effectiveRoles.includes(user?.role)
   }, [user?.role])
 
   const renderNavItem = (item) => {
@@ -236,9 +250,9 @@ function Sidebar() {
     if (section.roles && !hasAccess(section.roles)) return null
     if (section.requireSuperAdmin && !isSuperAdmin) return null
 
-    // Pour les managers, vérifier s'il y a au moins un item accessible
+    // Pour les managers et supervisors, vérifier s'il y a au moins un item accessible
     const accessibleItems = section.items.filter(item => checkAccess(item))
-    if (accessibleItems.length === 0 && isManager) return null
+    if (accessibleItems.length === 0 && (isManager || isSupervisor)) return null
 
     const Icon = section.icon
     const isExpanded = expandedSections[sectionKey]
