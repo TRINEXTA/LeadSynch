@@ -10,7 +10,7 @@ const createUserSchema = z.object({
   email: z.string().email('Email invalide'),
   first_name: z.string().min(1, 'Prénom requis'),
   last_name: z.string().min(1, 'Nom requis'),
-  role: z.enum(['admin', 'manager', 'user', 'commercial']).default('user'),
+  role: z.enum(['admin', 'manager', 'supervisor', 'user', 'commercial']).default('user'),
   phone: z.string().optional(),
   team_id: z.string().optional().nullable(),
   permissions: z.record(z.boolean()).optional(), // Permissions pour les managers
@@ -80,8 +80,8 @@ async function handler(req, res) {
         );
         log('✅ Admin - tous les users:', users.length);
       }
-      // Manager : voir uniquement les membres de ses équipes (où il est manager)
-      else if (userRole === 'manager') {
+      // Manager/Supervisor : voir uniquement les membres de ses équipes (où il est manager)
+      else if (userRole === 'manager' || userRole === 'supervisor') {
         users = await queryAll(
           `SELECT DISTINCT u.id, u.email, u.first_name, u.last_name, u.role,
                   u.phone, u.avatar_url, u.is_active, u.last_login, u.created_at,
@@ -132,7 +132,7 @@ async function handler(req, res) {
 
     // POST - Create user
     if (method === 'POST') {
-      if (!['admin', 'manager'].includes(req.user.role)) {
+      if (!['admin', 'manager', 'supervisor'].includes(req.user.role)) {
         return res.status(403).json({
           error: 'Permissions insuffisantes'
         });
@@ -159,8 +159,8 @@ async function handler(req, res) {
 
       // Déterminer les permissions selon le rôle
       let permissions = {};
-      if (data.role === 'manager') {
-        // Pour un manager, utiliser les permissions fournies ou les défauts
+      if (data.role === 'manager' || data.role === 'supervisor') {
+        // Pour un manager ou supervisor, utiliser les permissions fournies ou les défauts
         permissions = data.permissions || DEFAULT_MANAGER_PERMISSIONS;
       } else if (data.role === 'admin') {
         // Les admins ont toutes les permissions
@@ -219,7 +219,7 @@ async function handler(req, res) {
     if (method === 'PUT') {
       const userId = req.url.split('/').pop();
 
-      if (!['admin', 'manager'].includes(req.user.role)) {
+      if (!['admin', 'manager', 'supervisor'].includes(req.user.role)) {
         return res.status(403).json({
           error: 'Permissions insuffisantes'
         });
@@ -237,17 +237,17 @@ async function handler(req, res) {
         });
       }
 
-      // 🔒 Les managers ne peuvent PAS modifier les admins ou super admins
-      if (req.user.role === 'manager') {
+      // 🔒 Les managers/supervisors ne peuvent PAS modifier les admins ou super admins
+      if (req.user.role === 'manager' || req.user.role === 'supervisor') {
         if (targetUser.role === 'admin' || targetUser.is_super_admin === true) {
-          log(`🚫 Manager ${req.user.email} tentative modification admin/superadmin ${userId}`);
+          log(`🚫 ${req.user.role} ${req.user.email} tentative modification admin/superadmin ${userId}`);
           return res.status(403).json({
             error: 'Accès refusé',
             message: 'Vous ne pouvez pas modifier un compte administrateur'
           });
         }
 
-        // Vérifier que l'utilisateur cible fait partie de l'équipe du manager
+        // Vérifier que l'utilisateur cible fait partie de l'équipe du manager/supervisor
         const isInTeam = await queryOne(
           `SELECT 1 FROM team_members tm
            JOIN teams t ON tm.team_id = t.id
@@ -256,7 +256,7 @@ async function handler(req, res) {
         );
 
         if (!isInTeam && userId !== req.user.id) {
-          log(`🚫 Manager ${req.user.email} tentative modification user hors équipe ${userId}`);
+          log(`🚫 ${req.user.role} ${req.user.email} tentative modification user hors équipe ${userId}`);
           return res.status(403).json({
             error: 'Accès refusé',
             message: 'Cet utilisateur ne fait pas partie de votre équipe'
@@ -275,8 +275,8 @@ async function handler(req, res) {
         });
       }
 
-      // 🔒 Les managers ne peuvent PAS promouvoir quelqu'un en admin
-      if (req.user.role === 'manager' && role === 'admin') {
+      // 🔒 Les managers/supervisors ne peuvent PAS promouvoir quelqu'un en admin
+      if ((req.user.role === 'manager' || req.user.role === 'supervisor') && role === 'admin') {
         return res.status(403).json({
           error: 'Accès refusé',
           message: 'Vous ne pouvez pas promouvoir un utilisateur en administrateur'
@@ -292,7 +292,7 @@ async function handler(req, res) {
       }
 
       // Vérifier que le rôle est valide
-      const validRoles = ['admin', 'manager', 'user', 'commercial'];
+      const validRoles = ['admin', 'manager', 'supervisor', 'user', 'commercial'];
       if (!validRoles.includes(role)) {
         return res.status(400).json({
           error: 'Rôle invalide'
@@ -319,7 +319,7 @@ async function handler(req, res) {
         role,
         phone || null,
         permissions ? JSON.stringify(permissions) : null,
-        role === 'manager' ? (hierarchical_level || null) : null,
+        (role === 'manager' || role === 'supervisor') ? (hierarchical_level || null) : null,
         commission_rate !== undefined ? commission_rate : null,
         team_commission_rate !== undefined ? team_commission_rate : null,
         commission_type || null,
@@ -344,7 +344,7 @@ async function handler(req, res) {
       const userId = req.url.split('/')[3]; // /api/users/{userId}/action
       const action = req.url.split('/')[4]; // block, unblock, force-password-change
 
-      if (!['admin', 'manager'].includes(req.user.role)) {
+      if (!['admin', 'manager', 'supervisor'].includes(req.user.role)) {
         return res.status(403).json({
           error: 'Permissions insuffisantes'
         });
@@ -366,10 +366,10 @@ async function handler(req, res) {
         return res.status(404).json({ error: 'Utilisateur non trouvé' });
       }
 
-      // 🔒 Les managers ne peuvent PAS bloquer/modifier les admins ou super admins
-      if (req.user.role === 'manager') {
+      // 🔒 Les managers/supervisors ne peuvent PAS bloquer/modifier les admins ou super admins
+      if (req.user.role === 'manager' || req.user.role === 'supervisor') {
         if (targetUser.role === 'admin' || targetUser.is_super_admin === true) {
-          log(`🚫 Manager ${req.user.email} tentative ${action} sur admin/superadmin ${userId}`);
+          log(`🚫 ${req.user.role} ${req.user.email} tentative ${action} sur admin/superadmin ${userId}`);
           return res.status(403).json({
             error: 'Accès refusé',
             message: 'Vous ne pouvez pas effectuer cette action sur un compte administrateur'
@@ -512,11 +512,11 @@ async function handler(req, res) {
 
           log(`✅ ${totalLeads} leads transférés vers ${targetUser.id}`);
         } else {
-          // Dispatcher vers les managers/admins du tenant
+          // Dispatcher vers les managers/supervisors/admins du tenant
           const managers = await queryAll(
             `SELECT id FROM users
              WHERE tenant_id = $1
-             AND role IN ('admin', 'manager')
+             AND role IN ('admin', 'manager', 'supervisor')
              AND is_active = true
              AND id != $2
              ORDER BY RANDOM()
@@ -615,9 +615,9 @@ async function getTeamMembers(req, res) {
          ORDER BY u.first_name, u.last_name`,
         [tenantId]
       );
-    } else if (userRole === 'manager') {
-      // Manager voit les membres de ses équipes
-      // D'abord récupérer l'équipe du manager
+    } else if (userRole === 'manager' || userRole === 'supervisor') {
+      // Manager/Supervisor voit les membres de ses équipes
+      // D'abord récupérer l'équipe du manager/supervisor
       const managerTeam = await queryOne(
         `SELECT t.id, t.name FROM teams t WHERE t.manager_id = $1 AND t.tenant_id = $2`,
         [userId, tenantId]
