@@ -71,6 +71,14 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const isSuperAdmin = req.user?.is_super_admin;
+    const userRole = req.user?.role;
+    const userPermissions = req.user?.permissions || {};
+    const canViewDatabases = userPermissions.view_databases === true;
+
+    // Admin, supervisor avec permission, ou super admin peuvent voir les databases
+    const hasFullAccess = isSuperAdmin || userRole === 'admin' || canViewDatabases;
+
+    log(`📋 GET lead-databases - User: ${req.user?.email}, Role: ${userRole}, viewDatabases: ${canViewDatabases}`);
 
     // Paramètres de pagination et filtres
     const page = Math.max(1, parseInt(req.query.page) || 1);

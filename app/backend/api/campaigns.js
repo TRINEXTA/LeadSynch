@@ -54,11 +54,13 @@ router.get('/', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const isSuperAdmin = req.user?.is_super_admin === true;
+    const userPermissions = req.user?.permissions || {};
+    const canViewAllCampaigns = userPermissions.view_all_campaigns === true;
 
     let campaigns;
 
-    // Admin ou super admin : voir toutes les campagnes
-    if (isSuperAdmin || userRole === 'admin') {
+    // Admin, super admin, ou utilisateur avec permission view_all_campaigns : voir toutes les campagnes
+    if (isSuperAdmin || userRole === 'admin' || canViewAllCampaigns) {
       campaigns = await queryAll(
         `SELECT
           c.*,
@@ -121,13 +123,15 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const isSuperAdmin = req.user?.is_super_admin === true;
+    const userPermissions = req.user?.permissions || {};
+    const canViewAllCampaigns = userPermissions.view_all_campaigns === true;
 
-    log(`📋 Chargement campagnes pour user ${userId} (${userRole})`);
+    log(`📋 Chargement campagnes pour user ${userId} (${userRole}), permissions: ${JSON.stringify(userPermissions)}`);
 
     let campaigns;
 
-    // Admin ou super admin : toutes les campagnes
-    if (isSuperAdmin || userRole === 'admin') {
+    // Admin, super admin, ou permission view_all_campaigns : toutes les campagnes
+    if (isSuperAdmin || userRole === 'admin' || canViewAllCampaigns) {
       campaigns = await queryAll(
         `SELECT c.*,
                 ld.name as database_name,

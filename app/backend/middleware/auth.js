@@ -45,9 +45,18 @@ export function authMiddleware(handlerOrReq, res, next) {
         
         // Attacher les infos complètes à req.user
         req.user = rows[0];
-        
-        log('👤 User chargé:', req.user.first_name, req.user.last_name);
-        
+
+        // Parser les permissions si elles sont stockées comme string JSON
+        if (req.user.permissions && typeof req.user.permissions === 'string') {
+          try {
+            req.user.permissions = JSON.parse(req.user.permissions);
+          } catch (e) {
+            req.user.permissions = {};
+          }
+        }
+
+        log('👤 User chargé:', req.user.first_name, req.user.last_name, 'Role:', req.user.role, 'Permissions:', JSON.stringify(req.user.permissions || {}));
+
         return handler(req, res);
         
       } catch (error) {
@@ -92,9 +101,18 @@ export function authMiddleware(handlerOrReq, res, next) {
       
       // Attacher les infos complètes à req.user
       req.user = rows[0];
-      
-      log('👤 User chargé:', req.user.first_name, req.user.last_name);
-      
+
+      // Parser les permissions si elles sont stockées comme string JSON
+      if (req.user.permissions && typeof req.user.permissions === 'string') {
+        try {
+          req.user.permissions = JSON.parse(req.user.permissions);
+        } catch (e) {
+          req.user.permissions = {};
+        }
+      }
+
+      log('👤 User chargé:', req.user.first_name, req.user.last_name, 'Role:', req.user.role, 'Permissions:', JSON.stringify(req.user.permissions || {}));
+
       if (typeof next === 'function') {
         next();
       }
@@ -139,6 +157,15 @@ export async function verifyAuth(req) {
 
     const user = rows[0];
 
+    // Parser les permissions si elles sont stockées comme string JSON
+    if (user.permissions && typeof user.permissions === 'string') {
+      try {
+        user.permissions = JSON.parse(user.permissions);
+      } catch (e) {
+        user.permissions = {};
+      }
+    }
+
     return {
       authenticated: true,
       userId: user.id,
@@ -147,11 +174,11 @@ export async function verifyAuth(req) {
       user: user
     };
 
-  } catch (error) {
-    error('❌ Auth error:', error.message);
+  } catch (err) {
+    console.error('❌ Auth error:', err.message);
     return {
       authenticated: false,
-      error: error.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide'
+      error: err.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide'
     };
   }
 }
