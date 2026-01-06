@@ -28,6 +28,8 @@ const createCampaignSchema = z.object({
   cycle_interval_minutes: z.number().min(1).optional(),
   status: z.enum(['draft', 'active', 'paused', 'stopped', 'archived']).optional(),
   sectors: z.record(z.array(z.string())).optional(),
+  cities: z.array(z.string()).optional(), // Filtrage par villes
+  deduplicate_by_siret: z.boolean().optional(), // Dédoublonnage par SIRET
   attachments: z.array(z.any()).optional(),
   track_clicks: z.boolean().optional(),
   auto_distribute: z.boolean().optional()
@@ -251,26 +253,28 @@ router.post('/', authenticateToken, async (req, res) => {
       name, type, objective, subject, goal_description, message, link,
       database_id, template_id, assigned_users, supervisor_id, send_days,
       send_time_start, send_time_end, start_date, start_time,
-      emails_per_cycle, cycle_interval_minutes, status, sectors,
-      attachments, track_clicks, auto_distribute
+      emails_per_cycle, cycle_interval_minutes, status, sectors, cities,
+      deduplicate_by_siret, attachments, track_clicks, auto_distribute
     } = validatedData;
 
-    log('📥 Données validées:', { name, type, database_id, supervisor_id });
+    log('📥 Données validées:', { name, type, database_id, supervisor_id, cities: cities?.length, deduplicate_by_siret });
 
     let leads = [];
     let leadsExcludedNoPhone = 0;
+
+    // Construction de la requête de base
+    let baseConditions = `l.tenant_id = $1 AND ldr.database_id = $2`;
+    const params = [tenantId, database_id];
+    let paramIndex = 3;
 
     // Pour les campagnes PHONE, on filtre uniquement les leads avec téléphone valide
     const phoneFilter = type === 'phone'
       ? "AND l.phone IS NOT NULL AND TRIM(l.phone) != ''"
       : '';
 
+    // Filtre par secteurs
     if (sectors && Object.keys(sectors).length > 0) {
-      // Construction sécurisée avec paramètres
       const sectorConditions = [];
-      const params = [tenantId, database_id];
-      let paramIndex = 3;
-
       Object.entries(sectors)
         .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
         .forEach(([dbId, sectorList]) => {
@@ -280,48 +284,55 @@ router.post('/', authenticateToken, async (req, res) => {
         });
 
       if (sectorConditions.length > 0) {
-        leads = await queryAll(
-          `SELECT DISTINCT l.*
-           FROM leads l
-           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')}) ${phoneFilter}`,
-          params
-        );
-
-        // Compter les leads exclus pour campagnes phone
-        if (type === 'phone') {
-          const excludedResult = await queryOne(
-            `SELECT COUNT(DISTINCT l.id) as count
-             FROM leads l
-             JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-             WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')})
-             AND (l.phone IS NULL OR TRIM(l.phone) = '')`,
-            params
-          );
-          leadsExcludedNoPhone = parseInt(excludedResult?.count || 0, 10);
-        }
+        baseConditions += ` AND (${sectorConditions.join(' OR ')})`;
       }
+    }
+
+    // Filtre par villes
+    if (cities && cities.length > 0) {
+      baseConditions += ` AND COALESCE(NULLIF(TRIM(l.city), ''), 'Non renseigné') = ANY($${paramIndex})`;
+      params.push(cities);
+      paramIndex++;
+    }
+
+    // Sélection des leads (avec ou sans dédoublonnage)
+    if (deduplicate_by_siret) {
+      // Dédoublonnage: prendre un seul lead par SIRET (le plus récent)
+      leads = await queryAll(
+        `SELECT DISTINCT ON (COALESCE(NULLIF(l.siret, ''), l.id::text)) l.*
+         FROM leads l
+         JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+         WHERE ${baseConditions} ${phoneFilter}
+         ORDER BY COALESCE(NULLIF(l.siret, ''), l.id::text), l.created_at DESC`,
+        params
+      );
+      log(`📊 ${leads.length} leads après dédoublonnage SIRET`);
     } else {
       leads = await queryAll(
         `SELECT DISTINCT l.*
          FROM leads l
          JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-         WHERE l.tenant_id = $1 AND ldr.database_id = $2 ${phoneFilter}`,
-        [tenantId, database_id]
+         WHERE ${baseConditions} ${phoneFilter}`,
+        params
       );
+    }
 
-      // Compter les leads exclus pour campagnes phone
-      if (type === 'phone') {
-        const excludedResult = await queryOne(
-          `SELECT COUNT(DISTINCT l.id) as count
+    // Compter les leads exclus pour campagnes phone
+    if (type === 'phone') {
+      const excludedQuery = deduplicate_by_siret
+        ? `SELECT COUNT(DISTINCT COALESCE(NULLIF(l.siret, ''), l.id::text)) as count
            FROM leads l
            JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-           WHERE l.tenant_id = $1 AND ldr.database_id = $2
-           AND (l.phone IS NULL OR TRIM(l.phone) = '')`,
-          [tenantId, database_id]
-        );
-        leadsExcludedNoPhone = parseInt(excludedResult?.count || 0, 10);
-      }
+           WHERE ${baseConditions.replace(phoneFilter, '')}
+           AND (l.phone IS NULL OR TRIM(l.phone) = '')`
+        : `SELECT COUNT(DISTINCT l.id) as count
+           FROM leads l
+           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+           WHERE ${baseConditions.replace(phoneFilter, '')}
+           AND (l.phone IS NULL OR TRIM(l.phone) = '')`;
+
+      const excludedResult = await queryOne(excludedQuery, params);
+      leadsExcludedNoPhone = parseInt(excludedResult?.count || 0, 10);
     }
 
     log(`📊 ${leads.length} leads trouvés${type === 'phone' ? ` (${leadsExcludedNoPhone} exclus sans téléphone)` : ''}`);
@@ -413,6 +424,108 @@ router.post('/', authenticateToken, async (req, res) => {
 
   } catch (err) {
     error('❌ Erreur création campagne:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== COUNT LEADS WITH FILTERS (SECTOR + CITY + DEDUP) ====================
+// Endpoint avancé pour compter les leads avec filtrage secteur, ville et option dédoublonnage
+router.post('/count-leads-filtered', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { database_id, sectors, cities, deduplicate_by_siret } = req.body;
+
+    if (!database_id) {
+      return res.status(400).json({ error: 'database_id requis' });
+    }
+
+    log(`📊 Comptage leads filtré: DB=${database_id}, secteurs=${sectors?.length || 0}, villes=${cities?.length || 0}, dedup=${deduplicate_by_siret}`);
+
+    // Base query
+    let baseConditions = `l.tenant_id = $1`;
+    let joinClause = `JOIN lead_database_relations ldr ON l.id = ldr.lead_id`;
+    const params = [tenantId, database_id];
+    let paramIndex = 3;
+
+    baseConditions += ` AND ldr.database_id = $2`;
+
+    // Filtre secteurs
+    if (sectors && Object.keys(sectors).length > 0) {
+      const sectorConditions = [];
+      Object.entries(sectors)
+        .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
+        .forEach(([dbId, sectorList]) => {
+          sectorConditions.push(`(ldr.database_id = $${paramIndex} AND l.sector = ANY($${paramIndex + 1}))`);
+          params.push(dbId, sectorList);
+          paramIndex += 2;
+        });
+
+      if (sectorConditions.length > 0) {
+        baseConditions += ` AND (${sectorConditions.join(' OR ')})`;
+      }
+    }
+
+    // Filtre villes
+    if (cities && cities.length > 0) {
+      baseConditions += ` AND COALESCE(NULLIF(TRIM(l.city), ''), 'Non renseigné') = ANY($${paramIndex})`;
+      params.push(cities);
+      paramIndex++;
+    }
+
+    // Comptage total
+    const totalQuery = deduplicate_by_siret
+      ? `SELECT COUNT(DISTINCT COALESCE(NULLIF(l.siret, ''), l.id::text)) as count FROM leads l ${joinClause} WHERE ${baseConditions}`
+      : `SELECT COUNT(DISTINCT l.id) as count FROM leads l ${joinClause} WHERE ${baseConditions}`;
+
+    const totalResult = await queryOne(totalQuery, params);
+    const total = parseInt(totalResult?.count || 0, 10);
+
+    // Comptage avec téléphone
+    const phoneQuery = deduplicate_by_siret
+      ? `SELECT COUNT(DISTINCT COALESCE(NULLIF(l.siret, ''), l.id::text)) as count FROM leads l ${joinClause} WHERE ${baseConditions} AND l.phone IS NOT NULL AND TRIM(l.phone) != ''`
+      : `SELECT COUNT(DISTINCT l.id) as count FROM leads l ${joinClause} WHERE ${baseConditions} AND l.phone IS NOT NULL AND TRIM(l.phone) != ''`;
+
+    const phoneResult = await queryOne(phoneQuery, params);
+    const with_phone = parseInt(phoneResult?.count || 0, 10);
+
+    // Comptage avec email
+    const emailQuery = deduplicate_by_siret
+      ? `SELECT COUNT(DISTINCT COALESCE(NULLIF(l.siret, ''), l.id::text)) as count FROM leads l ${joinClause} WHERE ${baseConditions} AND l.email IS NOT NULL AND TRIM(l.email) != ''`
+      : `SELECT COUNT(DISTINCT l.id) as count FROM leads l ${joinClause} WHERE ${baseConditions} AND l.email IS NOT NULL AND TRIM(l.email) != ''`;
+
+    const emailResult = await queryOne(emailQuery, params);
+    const with_email = parseInt(emailResult?.count || 0, 10);
+
+    // Comptage potentiels doublons SIRET
+    let duplicates_count = 0;
+    if (deduplicate_by_siret) {
+      const dupQuery = `
+        SELECT COUNT(*) as count FROM (
+          SELECT siret FROM leads l ${joinClause}
+          WHERE ${baseConditions} AND l.siret IS NOT NULL AND TRIM(l.siret) != ''
+          GROUP BY siret HAVING COUNT(*) > 1
+        ) dups
+      `;
+      const dupResult = await queryOne(dupQuery, params);
+      duplicates_count = parseInt(dupResult?.count || 0, 10);
+    }
+
+    log(`✅ Comptage: total=${total}, tel=${with_phone}, email=${with_email}, doublons=${duplicates_count}`);
+
+    res.json({
+      success: true,
+      counts: {
+        total,
+        with_phone,
+        without_phone: total - with_phone,
+        with_email,
+        without_email: total - with_email,
+        duplicates_removed: deduplicate_by_siret ? duplicates_count : 0
+      }
+    });
+
+  } catch (err) {
+    error('❌ Erreur count-leads-filtered:', err);
     return res.status(500).json({ error: err.message });
   }
 });

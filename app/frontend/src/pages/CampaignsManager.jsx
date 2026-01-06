@@ -32,7 +32,12 @@ export default function CampaignsManager() {
   const [selectedDatabases, setSelectedDatabases] = useState([]);
   const [selectedSectors, setSelectedSectors] = useState({});
   const [databaseSectors, setDatabaseSectors] = useState({});
+  const [databaseCities, setDatabaseCities] = useState({});
+  const [selectedCities, setSelectedCities] = useState({});
+  const [databaseStats, setDatabaseStats] = useState({});
+  const [deduplicateBySiret, setDeduplicateBySiret] = useState(false);
   const [leadsCount, setLeadsCount] = useState(0);
+  const [detailedCounts, setDetailedCounts] = useState({ total: 0, with_phone: 0, with_email: 0, duplicates_removed: 0 });
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -162,7 +167,7 @@ export default function CampaignsManager() {
 
   useEffect(() => {
     calculateLeadsCount();
-  }, [selectedDatabases, selectedSectors]);
+  }, [selectedDatabases, selectedSectors, selectedCities, deduplicateBySiret]);
 
   useEffect(() => {
     calculateEstimatedDuration();
@@ -207,8 +212,35 @@ export default function CampaignsManager() {
         ...prev,
         [databaseId]: response.data.sectors || []
       }));
-    } catch (error) {
+    } catch (err) {
       setDatabaseSectors(prev => ({ ...prev, [databaseId]: [] }));
+    }
+  };
+
+  const loadCitiesForDatabase = async (databaseId, sector = null) => {
+    try {
+      const url = sector
+        ? `/lead-databases/${databaseId}/cities?sector=${encodeURIComponent(sector)}`
+        : `/lead-databases/${databaseId}/cities`;
+      const response = await api.get(url);
+      setDatabaseCities(prev => ({
+        ...prev,
+        [databaseId]: response.data.cities || []
+      }));
+    } catch (err) {
+      setDatabaseCities(prev => ({ ...prev, [databaseId]: [] }));
+    }
+  };
+
+  const loadStatsForDatabase = async (databaseId) => {
+    try {
+      const response = await api.get(`/lead-databases/${databaseId}/stats-detailed`);
+      setDatabaseStats(prev => ({
+        ...prev,
+        [databaseId]: response.data.stats || {}
+      }));
+    } catch (err) {
+      setDatabaseStats(prev => ({ ...prev, [databaseId]: {} }));
     }
   };
 
@@ -218,9 +250,14 @@ export default function CampaignsManager() {
       const newSectors = { ...selectedSectors };
       delete newSectors[dbId];
       setSelectedSectors(newSectors);
+      const newCities = { ...selectedCities };
+      delete newCities[dbId];
+      setSelectedCities(newCities);
     } else {
       setSelectedDatabases([...selectedDatabases, dbId]);
       loadSectorsForDatabase(dbId);
+      loadCitiesForDatabase(dbId);
+      loadStatsForDatabase(dbId);
     }
   };
 
@@ -229,47 +266,96 @@ export default function CampaignsManager() {
     const newSectors = currentSectors.includes(sector)
       ? currentSectors.filter(s => s !== sector)
       : [...currentSectors, sector];
-    
+
     setSelectedSectors({ ...selectedSectors, [dbId]: newSectors });
+
+    // Recharger les villes si un secteur est sélectionné
+    if (newSectors.length > 0) {
+      loadCitiesForDatabase(dbId, newSectors[0]);
+    } else {
+      loadCitiesForDatabase(dbId);
+    }
+  };
+
+  const handleCityToggle = (dbId, city) => {
+    const currentCities = selectedCities[dbId] || [];
+    const newCities = currentCities.includes(city)
+      ? currentCities.filter(c => c !== city)
+      : [...currentCities, city];
+
+    setSelectedCities({ ...selectedCities, [dbId]: newCities });
+  };
+
+  const handleSelectAllCities = (dbId) => {
+    const allCities = (databaseCities[dbId] || []).map(c => c.city);
+    const currentlySelected = selectedCities[dbId] || [];
+
+    if (currentlySelected.length === allCities.length) {
+      // Tout deselectionner
+      setSelectedCities({ ...selectedCities, [dbId]: [] });
+    } else {
+      // Tout selectionner
+      setSelectedCities({ ...selectedCities, [dbId]: allCities });
+    }
   };
 
 const calculateLeadsCount = async () => {
   if (selectedDatabases.length === 0) {
     setLeadsCount(0);
+    setDetailedCounts({ total: 0, with_phone: 0, with_email: 0, duplicates_removed: 0 });
     return;
   }
 
   setLoadingLeads(true);
 
   try {
-    const filters = selectedDatabases.map(dbId => {
-      const sectors = selectedSectors[dbId] || [];
+    // Utiliser le nouvel endpoint avec filtrage avance
+    const dbId = selectedDatabases[0];
+    const sectors = {};
+    const allCities = [];
 
-      return {
-        database_id: dbId,
-        sectors: sectors.length > 0 ? sectors : undefined
-      };
+    // Construire l'objet sectors pour chaque base de donnees
+    selectedDatabases.forEach(id => {
+      if (selectedSectors[id] && selectedSectors[id].length > 0) {
+        sectors[id] = selectedSectors[id];
+      }
+      // Collecter les villes selectionnees
+      if (selectedCities[id] && selectedCities[id].length > 0) {
+        allCities.push(...selectedCities[id]);
+      }
     });
 
-    log('📊 Comptage leads avec filtres:', filters);
+    log('📊 Comptage leads avec filtres:', { database_id: dbId, sectors, cities: allCities, dedup: deduplicateBySiret });
 
-    const response = await api.post('/leads-count-multi/count-multi', { filters });
+    const response = await api.post('/campaigns/count-leads-filtered', {
+      database_id: dbId,
+      sectors: Object.keys(sectors).length > 0 ? sectors : undefined,
+      cities: allCities.length > 0 ? allCities : undefined,
+      deduplicate_by_siret: deduplicateBySiret
+    });
 
-    log('✅ Réponse count:', response.data);
+    log('✅ Reponse count:', response.data);
 
-    const totalCount = response.data.count || 0;  // ✅ Utilise "count" comme le backend envoie
-    setLeadsCount(totalCount);
-
-    log('🎯 Total leads:', totalCount);
-
-    // Pour les campagnes phoning, charger aussi les compteurs avec/sans téléphone
-    if (campaignType?.id === 'phoning' && selectedDatabases.length > 0) {
-      await loadPhoneLeadsCounts();
+    if (response.data.success) {
+      const counts = response.data.counts;
+      setLeadsCount(counts.total);
+      setDetailedCounts(counts);
+      log('🎯 Total leads:', counts.total, 'avec tel:', counts.with_phone);
     }
 
-  } catch (error) {
-    error('❌ Erreur comptage leads:', error);
+    // Pour les campagnes phoning, mettre a jour les compteurs telephone
+    if (campaignType?.id === 'phoning') {
+      setPhoneLeadsCounts({
+        with_phone: response.data.counts?.with_phone || 0,
+        without_phone: response.data.counts?.without_phone || 0,
+        total: response.data.counts?.total || 0
+      });
+    }
+
+  } catch (err) {
+    error('❌ Erreur comptage leads:', err);
     setLeadsCount(0);
+    setDetailedCounts({ total: 0, with_phone: 0, with_email: 0, duplicates_removed: 0 });
   } finally {
     setLoadingLeads(false);
   }
@@ -432,11 +518,21 @@ const loadPhoneLeadsCounts = async () => {
   };
 
   const handleSaveDraft = async () => {
+    // Collecter toutes les villes selectionnees
+    const allSelectedCities = [];
+    Object.values(selectedCities).forEach(cities => {
+      if (cities && cities.length > 0) {
+        allSelectedCities.push(...cities);
+      }
+    });
+
     const campaignData = {
       ...formData,
       type: formData.type === 'phoning' ? 'phone' : formData.type, // Mapping: 'phoning' → 'phone' (backend validation)
       database_id: selectedDatabases[0],
       sectors: selectedSectors,
+      cities: allSelectedCities.length > 0 ? allSelectedCities : undefined,
+      deduplicate_by_siret: deduplicateBySiret,
       attachments: attachments.map(a => a.id),
       status: 'draft',
       // Transform empty strings to null (Zod validation requirement)
@@ -464,11 +560,21 @@ const loadPhoneLeadsCounts = async () => {
   };
 
   const handleCreateCampaign = async (startNow = false) => {
+    // Collecter toutes les villes selectionnees
+    const allSelectedCities = [];
+    Object.values(selectedCities).forEach(cities => {
+      if (cities && cities.length > 0) {
+        allSelectedCities.push(...cities);
+      }
+    });
+
     const campaignData = {
       ...formData,
       type: formData.type === 'phoning' ? 'phone' : formData.type, // Mapping: 'phoning' → 'phone' (backend validation)
       database_id: selectedDatabases[0],
       sectors: selectedSectors,
+      cities: allSelectedCities.length > 0 ? allSelectedCities : undefined,
+      deduplicate_by_siret: deduplicateBySiret,
       attachments: attachments.map(a => a.id),
       status: startNow ? 'active' : 'scheduled',
       // Transform empty strings to null (Zod validation requirement)
@@ -570,7 +676,7 @@ const loadPhoneLeadsCounts = async () => {
   };
 
   const handleBackToTypeSelection = () => {
-    toast('Changement de type - données réinitialisées', { icon: '⚠️' });
+    toast('Changement de type - donnees reinitialisees', { icon: '⚠️' });
     setStep(0);
     setCampaignType(null);
     // Reset follow-up state
@@ -580,6 +686,12 @@ const loadPhoneLeadsCounts = async () => {
     setFollowUpTemplates([]);
     // Reset phone counts
     setPhoneLeadsCounts({ with_phone: 0, without_phone: 0, total: 0 });
+    // Reset city and dedup selection
+    setSelectedCities({});
+    setDatabaseCities({});
+    setDatabaseStats({});
+    setDeduplicateBySiret(false);
+    setDetailedCounts({ total: 0, with_phone: 0, with_email: 0, duplicates_removed: 0 });
     setFormData({
       name: '',
       type: '',
@@ -799,51 +911,183 @@ const loadPhoneLeadsCounts = async () => {
             </div>
           )}
 
-          {/* STEP 2: Bases + Secteurs */}
+          {/* STEP 2: Bases + Secteurs + Villes */}
           {step === 2 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Selection des bases</h2>
-                <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl font-bold">
-                  {loadingLeads ? 'Calcul...' : `${leadsCount} leads`}
+                <h2 className="text-2xl font-bold text-gray-900">Selection des bases et filtrage</h2>
+                <div className="flex items-center gap-3">
+                  {/* Stats detaillees */}
+                  {leadsCount > 0 && (
+                    <div className="flex gap-2 text-sm">
+                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-lg" title="Leads avec telephone">
+                        Tel: {detailedCounts.with_phone}
+                      </span>
+                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg" title="Leads avec email">
+                        Email: {detailedCounts.with_email}
+                      </span>
+                    </div>
+                  )}
+                  <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl font-bold">
+                    {loadingLeads ? 'Calcul...' : `${leadsCount} leads`}
+                  </div>
                 </div>
+              </div>
+
+              {/* Option dedoublonnage SIRET */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-amber-600" />
+                      Dedoublonnage par SIRET
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Exclure automatiquement les doublons d'entreprises (meme numero SIRET)
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={deduplicateBySiret}
+                      onChange={(e) => setDeduplicateBySiret(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                  </label>
+                </div>
+                {deduplicateBySiret && detailedCounts.duplicates_removed > 0 && (
+                  <p className="text-sm text-amber-700 mt-2">
+                    {detailedCounts.duplicates_removed} doublons potentiels detectes et exclus
+                  </p>
+                )}
               </div>
 
               <div className="space-y-4">
                 {databases.map(db => (
-                  <div key={db.id} className="border-2 border-gray-200 rounded-xl p-4">
+                  <div key={db.id} className={`border-2 rounded-xl p-4 transition-all ${
+                    selectedDatabases.includes(db.id) ? 'border-purple-400 bg-purple-50' : 'border-gray-200'
+                  }`}>
                     <div className="flex items-center gap-3 mb-3">
                       <input
                         type="checkbox"
                         checked={selectedDatabases.includes(db.id)}
                         onChange={() => handleDatabaseSelect(db.id)}
-                        className="w-5 h-5"
+                        className="w-5 h-5 accent-purple-600"
                       />
                       <Database className="w-5 h-5 text-purple-600" />
                       <span className="font-bold text-gray-900">{db.name}</span>
-                      <span className="text-sm text-gray-500">({db.leads_count || 0} leads)</span>
+                      <span className="text-sm text-gray-500">({db.lead_count || db.leads_count || 0} leads)</span>
+
+                      {/* Stats rapides de la base */}
+                      {selectedDatabases.includes(db.id) && databaseStats[db.id] && (
+                        <div className="flex gap-2 ml-auto text-xs">
+                          <span className="bg-green-100 text-green-700 px-2 py-1 rounded" title="Avec telephone">
+                            {databaseStats[db.id].phone_rate}% tel
+                          </span>
+                          <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded" title="Avec email">
+                            {databaseStats[db.id].email_rate}% email
+                          </span>
+                          {databaseStats[db.id].potential_duplicates > 0 && (
+                            <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded" title="Doublons potentiels">
+                              {databaseStats[db.id].potential_duplicates} doublons
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
+                    {/* Secteurs */}
                     {selectedDatabases.includes(db.id) && databaseSectors[db.id] && databaseSectors[db.id].length > 0 && (
-                      <div className="ml-8 mt-3 flex flex-wrap gap-2">
-                        {databaseSectors[db.id].map((sectorObj, index) => (
-  <button
-    key={index}
-    onClick={() => handleSectorToggle(db.id, sectorObj.sector)}
-    className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
-      (selectedSectors[db.id] || []).includes(sectorObj.sector)
-        ? 'bg-purple-600 text-white'
-        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-    }`}
-  >
-    {sectorObj.sector} ({sectorObj.lead_count})  {/* ✅ CORRECTION ICI */}
-  </button>
-))}
+                      <div className="ml-8 mt-3">
+                        <p className="text-sm font-semibold text-gray-700 mb-2">Secteurs d'activite:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {databaseSectors[db.id].map((sectorObj, index) => (
+                            <button
+                              key={index}
+                              onClick={() => handleSectorToggle(db.id, sectorObj.sector)}
+                              className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
+                                (selectedSectors[db.id] || []).includes(sectorObj.sector)
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {sectorObj.sector} ({sectorObj.lead_count})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Villes */}
+                    {selectedDatabases.includes(db.id) && databaseCities[db.id] && databaseCities[db.id].length > 0 && (
+                      <div className="ml-8 mt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-semibold text-gray-700">Zones geographiques (villes):</p>
+                          <button
+                            onClick={() => handleSelectAllCities(db.id)}
+                            className="text-xs text-purple-600 hover:text-purple-700 font-semibold"
+                          >
+                            {(selectedCities[db.id] || []).length === databaseCities[db.id].length
+                              ? 'Tout deselectionner'
+                              : 'Tout selectionner'}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                          {databaseCities[db.id].slice(0, 50).map((cityObj, index) => (
+                            <button
+                              key={index}
+                              onClick={() => handleCityToggle(db.id, cityObj.city)}
+                              className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
+                                (selectedCities[db.id] || []).includes(cityObj.city)
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {cityObj.city} ({cityObj.lead_count})
+                            </button>
+                          ))}
+                          {databaseCities[db.id].length > 50 && (
+                            <span className="text-xs text-gray-500 self-center">
+                              +{databaseCities[db.id].length - 50} autres villes
+                            </span>
+                          )}
+                        </div>
+                        {(selectedCities[db.id] || []).length > 0 && (
+                          <p className="text-xs text-blue-600 mt-2">
+                            {(selectedCities[db.id] || []).length} ville(s) selectionnee(s)
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
                 ))}
               </div>
+
+              {/* Resume de la selection */}
+              {selectedDatabases.length > 0 && leadsCount > 0 && (
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-xl p-4">
+                  <h3 className="font-bold text-gray-900 mb-2">Resume de votre selection</h3>
+                  <div className="grid grid-cols-4 gap-4 text-center">
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-purple-600">{leadsCount}</p>
+                      <p className="text-xs text-gray-600">Leads total</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-green-600">{detailedCounts.with_phone}</p>
+                      <p className="text-xs text-gray-600">Avec telephone</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-blue-600">{detailedCounts.with_email}</p>
+                      <p className="text-xs text-gray-600">Avec email</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-amber-600">{detailedCounts.duplicates_removed}</p>
+                      <p className="text-xs text-gray-600">Doublons exclus</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
