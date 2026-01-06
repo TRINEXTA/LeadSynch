@@ -25,6 +25,13 @@ async function handler(req, res) {
       return res.status(404).json({ error: 'Campagne introuvable' });
     }
     
+    // Récupérer les infos du tenant pour l'expéditeur
+    const tenant = await queryOne(
+      'SELECT company_name FROM tenants WHERE id = $1',
+      [tenant_id]
+    );
+    const senderName = tenant?.company_name || 'Support';
+
     // IMPORTANT: Exclure les leads désinscrits pour conformité RGPD
     const leads = await queryAll(
       `SELECT cl.*, l.email, l.company_name, l.contact_name
@@ -67,11 +74,15 @@ async function handler(req, res) {
       }
     }
 
-    // Configuration email expéditeur
-    const fromEmail = process.env.EMAIL_FROM || 'contact@leadsynch.com';
+    // Configuration email expéditeur (SANS fallback hardcodé leadsynch.com)
+    const fromEmail = process.env.EMAIL_FROM;
     const replyToEmail = process.env.EMAIL_REPLY_TO || fromEmail;
-    
-    log('📧 Email expéditeur:', fromEmail);
+
+    if (!fromEmail) {
+      return res.status(500).json({ error: 'Configuration EMAIL_FROM manquante' });
+    }
+
+    log(`📧 Email expéditeur: ${fromEmail} (${senderName})`);
     
     let sent = 0;
     let failed = 0;
@@ -117,13 +128,14 @@ async function handler(req, res) {
         const personalizedSubject = personalizeContent(campaign.subject || template.subject || 'Sans objet');
         const personalizedBody = personalizeContent(template.html_body || template.html_content || '');
         
-        // Envoi de l'email via Elastic Email
+        // Envoi de l'email via Elastic Email avec le nom du tenant
         const emailResult = await sendEmail({
           from: fromEmail,
           to: lead.email,
           subject: personalizedSubject,
           htmlBody: personalizedBody,
           replyTo: replyToEmail,
+          fromName: senderName,
           leadId: lead.lead_id,
           campaignId: campaign_id
         });

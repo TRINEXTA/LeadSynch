@@ -239,10 +239,13 @@ const processFollowUp = async (campaign, followUp) => {
     }
 
     // Récupérer les emails à envoyer
+    // IMPORTANT: Joindre tenants pour récupérer le nom de l'entreprise expéditrice
     const emailsToSend = await queryAll(`
-      SELECT fq.*, l.email, l.company, l.contact_name
+      SELECT fq.*, l.email, l.company, l.contact_name,
+             t.company_name as tenant_company_name
       FROM follow_up_queue fq
       JOIN leads l ON fq.lead_id = l.id
+      JOIN tenants t ON fq.tenant_id = t.id
       WHERE fq.follow_up_id = $1
       AND fq.status = 'pending'
       ORDER BY fq.created_at ASC
@@ -510,23 +513,26 @@ const sendFollowUpEmails = async (campaign, followUp, emailsToSend) => {
 
     // Ajouter tracking si activé
     if (campaign.track_clicks) {
-      const appUrl = process.env.APP_URL || 'https://leadsynch.com';
+      // Utiliser l'URL de l'API backend pour le tracking (SANS fallback leadsynch.com)
+      const trackingUrl = process.env.API_URL || process.env.APP_URL;
 
-      // 1. Wrapper tous les liens pour le click tracking
-      result = result.replace(
-        /href=["']([^"']+)["']/gi,
-        (match, url) => {
-          // Ne pas tracker les liens de désinscription ou mailto
-          if (url.includes('unsubscribe') || url.startsWith('mailto:') || url.startsWith('#')) {
-            return match;
+      if (trackingUrl) {
+        // 1. Wrapper tous les liens pour le click tracking
+        result = result.replace(
+          /href=["']([^"']+)["']/gi,
+          (match, url) => {
+            // Ne pas tracker les liens de désinscription ou mailto
+            if (url.includes('unsubscribe') || url.startsWith('mailto:') || url.startsWith('#')) {
+              return match;
+            }
+            const trackedUrl = `${trackingUrl}/api/track/click?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}&url=${encodeURIComponent(url)}`;
+            return `href="${trackedUrl}"`;
           }
-          const trackedUrl = `${appUrl}/api/track/click?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}&url=${encodeURIComponent(url)}`;
-          return `href="${trackedUrl}"`;
-        }
-      );
+        );
 
-      // 2. Ajouter le pixel de tracking pour les ouvertures
-      result += `<img src="${appUrl}/api/track/open?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}" width="1" height="1" style="display:none;" />`;
+        // 2. Ajouter le pixel de tracking pour les ouvertures
+        result += `<img src="${trackingUrl}/api/track/open?lead_id=${emailData.lead_id}&campaign_id=${campaign.id}&follow_up_id=${followUp.id}" width="1" height="1" style="display:none;" />`;
+      }
     }
 
     return result;
@@ -544,7 +550,7 @@ const sendFollowUpEmails = async (campaign, followUp, emailsToSend) => {
           to: emailData.recipient_email,
           subject: followUp.subject,
           htmlBody: htmlBody,
-          fromName: 'LeadSync'
+          fromName: emailData.tenant_company_name || 'Support'
         });
 
         return emailData.id;
