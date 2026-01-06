@@ -68,6 +68,7 @@ import profileRoute from '../api/profile.js';
 import commissionsRoute from '../api/commissions.js';
 import planningRoute from '../api/planning.js';
 import callSessionsRoute from '../api/call-sessions.js';
+import activityRoute from '../api/activity.js';
 import aiGenerateTemplateRoute from '../api/ai-generate-template.js';
 import checkBlacklistRoute from '../api/check-blacklist.js';
 import campaignFollowUpsRoute from '../api/campaigns-follow-ups.js';
@@ -237,6 +238,9 @@ export function setupRoutes(app) {
   // ========== CALL SESSIONS (PROSPECTION TRACKING) ==========
   app.all('/api/call-sessions', authMiddleware, callSessionsRoute);
   app.all('/api/call-sessions/*', authMiddleware, callSessionsRoute);
+
+  // Activity tracking & user presence
+  app.use('/api/activity', activityRoute);
 
   log('✅ Routes configurées');
 }

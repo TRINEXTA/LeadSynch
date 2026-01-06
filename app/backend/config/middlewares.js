@@ -38,7 +38,7 @@ const corsOptions = {
 // ========= Rate Limiters =========
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 100 : 500,
+  max: process.env.NODE_ENV === 'production' ? 500 : 1000,
   message: 'Trop de requêtes, veuillez réessayer plus tard',
   standardHeaders: true,
   legacyHeaders: false
@@ -46,7 +46,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 5 : 50,
+  max: process.env.NODE_ENV === 'production' ? 10 : 50,
   skipSuccessfulRequests: true,
   message: 'Trop de tentatives de connexion, réessayez dans 15 minutes'
 });
@@ -55,6 +55,15 @@ const trackingLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   message: 'Too many tracking requests',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Limiter permissif pour les heartbeats d'activité
+const activityLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60, // 1 requête par seconde max
+  message: 'Too many activity requests',
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -96,13 +105,15 @@ export function setupMiddlewares(app) {
   // Rate limiting
   app.use('/api/', globalLimiter);
   app.use('/api/track/', trackingLimiter);
+  app.use('/api/activity/', activityLimiter);
 
   // Request logging
   app.use(requestLogger);
 
   log('🔒 Sécurité activée: Helmet + Rate Limiting');
-  log(`   Global: ${process.env.NODE_ENV === 'production' ? '100' : '500'} req/15min`);
-  log(`   Auth: ${process.env.NODE_ENV === 'production' ? '5' : '50'} req/15min`);
+  log(`   Global: ${process.env.NODE_ENV === 'production' ? '500' : '1000'} req/15min`);
+  log(`   Auth: ${process.env.NODE_ENV === 'production' ? '10' : '50'} req/15min`);
+  log(`   Activity: 60 req/min`);
 }
 
-export { authLimiter, allowedOrigins };
+export { authLimiter, activityLimiter, allowedOrigins };
