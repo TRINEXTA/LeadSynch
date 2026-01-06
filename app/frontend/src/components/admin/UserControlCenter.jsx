@@ -6,6 +6,7 @@ import {
   TrendingUp, UserCheck, UserX, AlertCircle
 } from 'lucide-react';
 
+// User Control Center - Professional Admin Dashboard Component
 const ITEMS_PER_PAGE = 10;
 
 export default function UserControlCenter({
