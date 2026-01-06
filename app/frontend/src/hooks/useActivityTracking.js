@@ -85,8 +85,8 @@ export const useActivityTracking = (isAuthenticated) => {
     // Premier heartbeat immédiat
     sendHeartbeat();
 
-    // Heartbeat toutes les 30 secondes
-    heartbeatInterval.current = setInterval(sendHeartbeat, 30000);
+    // Heartbeat toutes les 60 secondes (réduit pour éviter rate limiting)
+    heartbeatInterval.current = setInterval(sendHeartbeat, 60000);
 
     // Cleanup
     return () => {
