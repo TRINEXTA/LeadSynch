@@ -12,28 +12,24 @@ function isValidUUID(str) {
 }
 
 // ========== VALIDATION URL SÉCURISÉE ==========
-const ALLOWED_REDIRECT_DOMAINS = [
-  'leadsynch.com',
-  'www.leadsynch.com',
-  'app.leadsynch.com',
-  'trinexta.fr',
-  'www.trinexta.fr'
-];
+// IMPORTANT: On permet tous les domaines HTTP/HTTPS légitimes
+// car les liens dans les emails peuvent pointer vers n'importe quel site client
 
 function isValidRedirectUrl(urlString) {
   if (!urlString) return false;
 
   try {
     const url = new URL(urlString);
-    // Vérifier que le protocole est HTTPS ou HTTP
+    // Vérifier que le protocole est HTTPS ou HTTP (pas javascript:, data:, etc.)
     if (!['http:', 'https:'].includes(url.protocol)) {
       return false;
     }
-    // Vérifier que le domaine est dans la liste autorisée
+    // Bloquer les tentatives de redirect vers localhost ou IP privées
     const hostname = url.hostname.toLowerCase();
-    return ALLOWED_REDIRECT_DOMAINS.some(domain =>
-      hostname === domain || hostname.endsWith('.' + domain)
-    );
+    if (hostname === 'localhost' || hostname.startsWith('127.') || hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -131,14 +127,20 @@ router.get("/click", async (req, res) => {
 
     // SÉCURITÉ: Valider l'URL de redirection pour éviter Open Redirect
     if (decodedUrl && !isValidRedirectUrl(decodedUrl)) {
-      warn(`[SECURITY] Blocked redirect to unauthorized URL: ${decodedUrl}`);
-      return res.redirect("https://leadsynch.com");
+      warn(`[SECURITY] Blocked redirect to invalid URL: ${decodedUrl}`);
+      return res.status(400).send('Lien invalide');
+    }
+
+    // Si pas d'URL fournie, renvoyer une erreur
+    if (!decodedUrl) {
+      return res.status(400).send('Lien manquant');
     }
 
     // Vérifier que le lead et la campagne existent et appartiennent au même tenant
     const lead = await queryOne('SELECT tenant_id FROM leads WHERE id = $1', [lead_id]);
     if (!lead) {
-      return res.redirect(decodedUrl || "https://leadsynch.com");
+      // Rediriger vers l'URL demandée même si le lead n'existe pas
+      return res.redirect(decodedUrl);
     }
 
     const campaign = await queryOne(
@@ -147,7 +149,8 @@ router.get("/click", async (req, res) => {
     );
 
     if (!campaign) {
-      return res.redirect(decodedUrl || "https://leadsynch.com");
+      // Rediriger vers l'URL demandée même si la campagne n'existe pas
+      return res.redirect(decodedUrl);
     }
 
     // Enregistrer le clic (avec follow_up_id si relance)
@@ -194,10 +197,19 @@ router.get("/click", async (req, res) => {
     }
 
     // Redirection vers le lien réel (validé)
-    res.redirect(decodedUrl || "https://leadsynch.com");
+    res.redirect(decodedUrl);
   } catch (err) {
     error('Track click error:', err.message);
-    res.redirect("https://leadsynch.com");
+    // En cas d'erreur, rediriger vers l'URL si disponible, sinon erreur
+    if (req.query.url) {
+      try {
+        const fallbackUrl = decodeURIComponent(req.query.url);
+        if (isValidRedirectUrl(fallbackUrl)) {
+          return res.redirect(fallbackUrl);
+        }
+      } catch {}
+    }
+    res.status(500).send('Erreur de redirection');
   }
 });
 

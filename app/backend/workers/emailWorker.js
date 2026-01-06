@@ -168,10 +168,13 @@ const processCampaign = async (campaign) => {
     log(`✅ [EMAIL WORKER] Template trouvé: ${template.name}`);
 
     // Récupérer les emails en attente (EXCLURE les désinscrits - RGPD)
+    // IMPORTANT: Joindre tenants pour récupérer le nom de l'entreprise expéditrice
     const emailsToSend = await queryAll(
-      `SELECT eq.*, l.email, l.company, l.contact_name
+      `SELECT eq.*, l.email, l.company, l.contact_name,
+              t.company_name as tenant_company_name
        FROM email_queue eq
        JOIN leads l ON eq.lead_id = l.id
+       JOIN tenants t ON eq.tenant_id = t.id
        WHERE eq.campaign_id = $1
        AND eq.status = 'pending'
        AND (l.unsubscribed = false OR l.unsubscribed IS NULL)
@@ -229,7 +232,11 @@ const processCampaign = async (campaign) => {
         .replace(/  +/g, ' ');
 
       if (campaign.track_clicks) {
-        result += `<img src="${process.env.APP_URL || 'https://leadsynch.com'}/api/track/open/${emailData.id}" width="1" height="1" style="display:none;" />`;
+        // Utiliser l'URL de l'API backend pour le tracking
+        const trackingUrl = process.env.API_URL || process.env.APP_URL;
+        if (trackingUrl) {
+          result += `<img src="${trackingUrl}/api/track/open/${emailData.id}" width="1" height="1" style="display:none;" />`;
+        }
       }
 
       return result;
@@ -251,7 +258,7 @@ const processCampaign = async (campaign) => {
             to: emailData.recipient_email,
             subject: campaign.subject || template.subject,
             htmlBody: htmlBody,
-            fromName: 'LeadSync'
+            fromName: emailData.tenant_company_name || 'Support'
           });
 
           return emailData.id;

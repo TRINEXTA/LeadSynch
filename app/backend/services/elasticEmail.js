@@ -2,11 +2,14 @@ import { log, error, warn } from "../lib/logger.js";
 import fetch from 'node-fetch';
 
 const ELASTIC_EMAIL_API_KEY = process.env.ELASTIC_EMAIL_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM || 'b2b@trinexta.fr';
+// IMPORTANT: EMAIL_FROM doit être configuré dans les variables d'environnement
+// Plus de fallback hardcodé vers trinexta.fr ou leadsynch.com
+const EMAIL_FROM = process.env.EMAIL_FROM;
 const ELASTIC_EMAIL_API_URL = 'https://api.elasticemail.com/v2/email/send';
 
 // ==================== SEND EMAIL ====================
-export const sendEmail = async ({ to, subject, htmlBody, textBody, fromName = 'LeadSync' }) => {
+// fromName doit être fourni par l'appelant (tenant company_name)
+export const sendEmail = async ({ to, subject, htmlBody, textBody, fromName }) => {
   try {
     log(`📧 Envoi email à ${to}...`);
 
@@ -14,10 +17,18 @@ export const sendEmail = async ({ to, subject, htmlBody, textBody, fromName = 'L
       throw new Error('ELASTIC_EMAIL_API_KEY non configurée');
     }
 
+    if (!EMAIL_FROM) {
+      throw new Error('EMAIL_FROM non configurée dans les variables d\'environnement');
+    }
+
+    if (!fromName) {
+      warn('⚠️ fromName non fourni, utilisation de "Support" par défaut');
+    }
+
     const params = new URLSearchParams({
       apikey: ELASTIC_EMAIL_API_KEY,
       from: EMAIL_FROM,
-      fromName: fromName,
+      fromName: fromName || 'Support',
       to: to,
       subject: subject,
       bodyHtml: htmlBody || '',
@@ -84,14 +95,14 @@ export const sendBulkEmails = async (emails) => {
 };
 
 // ==================== SEND TEST EMAIL ====================
-export const sendTestEmail = async ({ to, templateHtml, subject }) => {
+export const sendTestEmail = async ({ to, templateHtml, subject, fromName }) => {
   log(`🧪 Envoi email de test à ${to}...`);
 
   return await sendEmail({
     to,
     subject: `[TEST] ${subject}`,
     htmlBody: templateHtml,
-    fromName: 'LeadSync - Test'
+    fromName: fromName ? `${fromName} - Test` : 'Test'
   });
 };
 
