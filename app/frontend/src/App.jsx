@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
+import ActivityTracker from './components/ActivityTracker';
 
 // ✅ IMPORTS STATIQUES : Seulement les pages critiques pour le chargement initial
 import Login from './pages/Login';
@@ -151,6 +152,9 @@ function App() {
             },
           }}
         />
+
+        {/* Activity tracking (invisible component) */}
+        <ActivityTracker />
 
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
