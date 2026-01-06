@@ -97,7 +97,10 @@ export default function AdminDashboard() {
         api.get('/follow-ups'),
         api.get('/validation-requests?status=pending'),
         api.get('/call-sessions', { params: { action: 'team-summary' } }).catch(() => ({ data: { team: [] } })),
-        api.get('/activity/users-status').catch(() => ({ data: { users: [], stats: {} } }))
+        api.get('/activity/users-status').catch(err => {
+          console.error('[AdminDashboard] Activity API error:', err.response?.data || err.message);
+          return { data: { users: [], stats: {}, error: err.response?.data?.error || err.message } };
+        })
       ]);
 
       const leads = leadsRes.data.leads || [];
@@ -108,9 +111,13 @@ export default function AdminDashboard() {
       const teamStats = callStatsRes.data.team || [];
 
       // === USER ACTIVITY STATUS (nouveau système) ===
+      if (activityRes.data?.error) {
+        console.warn('[AdminDashboard] Activity API returned error:', activityRes.data.error);
+      }
       if (activityRes.data?.users) {
         setUserActivityStatus(activityRes.data.users);
         setUserActivityStats(activityRes.data.stats || { online: 0, idle: 0, offline: 0, total: 0 });
+        console.log('[AdminDashboard] Loaded', activityRes.data.users.length, 'users for activity tracking');
       }
 
       // === STATS D'APPELS EN TEMPS RÉEL ===
