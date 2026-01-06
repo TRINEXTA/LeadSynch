@@ -366,6 +366,189 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// 🆕 GET /lead-databases/:id/cities - Liste des villes avec comptage
+router.get('/:id/cities', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { id } = req.params;
+    const { sector } = req.query; // Optionnel: filtrer par secteur
+
+    log(`📊 Récupération villes pour base ${id}${sector ? ` (secteur: ${sector})` : ''}`);
+
+    // Vérifier que la base existe
+    const { rows: dbRows } = await q(
+      'SELECT id FROM lead_databases WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId]
+    );
+
+    if (!dbRows.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
+    }
+
+    // Construire la requête avec filtre secteur optionnel
+    let query = `
+      SELECT
+        COALESCE(NULLIF(TRIM(city), ''), 'Non renseigné') as city,
+        COUNT(*) as lead_count
+      FROM leads
+      WHERE id IN (
+        SELECT id FROM leads WHERE database_id = $1
+        UNION
+        SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+      )
+    `;
+    const params = [id];
+
+    if (sector) {
+      query += ` AND sector = $2`;
+      params.push(sector);
+    }
+
+    query += `
+      GROUP BY COALESCE(NULLIF(TRIM(city), ''), 'Non renseigné')
+      ORDER BY lead_count DESC
+    `;
+
+    const { rows } = await q(query, params);
+
+    log(`✅ ${rows.length} villes trouvées`);
+
+    return res.json({
+      success: true,
+      cities: rows,
+      total: rows.reduce((sum, c) => sum + parseInt(c.lead_count), 0)
+    });
+  } catch (error) {
+    error('❌ Erreur GET cities:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 🆕 GET /lead-databases/:id/stats-detailed - Stats détaillées (secteurs + villes + doublons)
+router.get('/:id/stats-detailed', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { id } = req.params;
+
+    log(`📊 Récupération stats détaillées pour base ${id}`);
+
+    // Vérifier que la base existe
+    const { rows: dbRows } = await q(
+      'SELECT id, name FROM lead_databases WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId]
+    );
+
+    if (!dbRows.length) {
+      return res.status(404).json({ error: 'Base non trouvée' });
+    }
+
+    // Total leads
+    const totalResult = await q(
+      `SELECT COUNT(DISTINCT id) as total
+       FROM (
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         SELECT lead_id as id FROM lead_database_relations WHERE database_id = $1
+       ) combined`,
+      [id]
+    );
+
+    // Leads avec téléphone
+    const phoneResult = await q(
+      `SELECT COUNT(DISTINCT l.id) as with_phone
+       FROM leads l
+       WHERE l.id IN (
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+       )
+       AND l.phone IS NOT NULL AND TRIM(l.phone) != ''`,
+      [id]
+    );
+
+    // Leads avec email
+    const emailResult = await q(
+      `SELECT COUNT(DISTINCT l.id) as with_email
+       FROM leads l
+       WHERE l.id IN (
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+       )
+       AND l.email IS NOT NULL AND TRIM(l.email) != ''`,
+      [id]
+    );
+
+    // Leads avec SIRET (pour dédoublonnage)
+    const siretResult = await q(
+      `SELECT COUNT(DISTINCT l.id) as with_siret
+       FROM leads l
+       WHERE l.id IN (
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+       )
+       AND l.siret IS NOT NULL AND TRIM(l.siret) != ''`,
+      [id]
+    );
+
+    // Compter les potentiels doublons par SIRET
+    const duplicatesResult = await q(
+      `SELECT COUNT(*) as duplicates
+       FROM (
+         SELECT siret, COUNT(*) as cnt
+         FROM leads l
+         WHERE l.id IN (
+           SELECT id FROM leads WHERE database_id = $1
+           UNION
+           SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+         )
+         AND l.siret IS NOT NULL AND TRIM(l.siret) != ''
+         GROUP BY siret
+         HAVING COUNT(*) > 1
+       ) dups`,
+      [id]
+    );
+
+    // Leads uniques par SIRET (dédoublonnés)
+    const uniqueBysiretResult = await q(
+      `SELECT COUNT(DISTINCT siret) as unique_siret
+       FROM leads l
+       WHERE l.id IN (
+         SELECT id FROM leads WHERE database_id = $1
+         UNION
+         SELECT lead_id FROM lead_database_relations WHERE database_id = $1
+       )
+       AND l.siret IS NOT NULL AND TRIM(l.siret) != ''`,
+      [id]
+    );
+
+    const stats = {
+      total_leads: parseInt(totalResult.rows[0]?.total || 0),
+      with_phone: parseInt(phoneResult.rows[0]?.with_phone || 0),
+      with_email: parseInt(emailResult.rows[0]?.with_email || 0),
+      with_siret: parseInt(siretResult.rows[0]?.with_siret || 0),
+      unique_by_siret: parseInt(uniqueBysiretResult.rows[0]?.unique_siret || 0),
+      potential_duplicates: parseInt(duplicatesResult.rows[0]?.duplicates || 0)
+    };
+
+    // Calculer les pourcentages
+    stats.phone_rate = stats.total_leads > 0 ? Math.round((stats.with_phone / stats.total_leads) * 100) : 0;
+    stats.email_rate = stats.total_leads > 0 ? Math.round((stats.with_email / stats.total_leads) * 100) : 0;
+    stats.siret_rate = stats.total_leads > 0 ? Math.round((stats.with_siret / stats.total_leads) * 100) : 0;
+
+    log(`✅ Stats détaillées: ${stats.total_leads} leads, ${stats.unique_by_siret} SIRET uniques`);
+
+    return res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    error('❌ Erreur GET stats-detailed:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /lead-databases/:id/add-lead - Ajouter un lead à une base (migration)
 router.post('/:id/add-lead', authenticateToken, async (req, res) => {
   try {
