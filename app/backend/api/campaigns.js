@@ -90,16 +90,16 @@ router.get('/', authenticateToken, async (req, res) => {
             -- Campagnes où l'utilisateur est dans assigned_users (JSON)
             c.assigned_users::jsonb ? $2::text
             -- Ou campagnes créées par l'utilisateur
-            OR c.created_by = $2
+            OR c.created_by = $2::uuid
             -- Ou campagnes où il a des leads dans le pipeline
             OR EXISTS (
               SELECT 1 FROM pipeline_leads pl
-              WHERE pl.campaign_id = c.id AND pl.assigned_user_id = $2
+              WHERE pl.campaign_id = c.id AND pl.assigned_user_id = $2::uuid
             )
             -- Ou campagnes où il est dans campaign_assignments
             OR EXISTS (
               SELECT 1 FROM campaign_assignments ca
-              WHERE ca.campaign_id = c.id AND ca.user_id = $2
+              WHERE ca.campaign_id = c.id AND ca.user_id = $2::uuid
             )
           )
         ORDER BY c.created_at DESC`,
