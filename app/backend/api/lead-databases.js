@@ -278,9 +278,9 @@ router.get('/:id/sectors', authenticateToken, async (req, res) => {
       sectors: rows,
       total: rows.reduce((sum, s) => sum + parseInt(s.lead_count), 0)
     });
-  } catch (error) {
-    error('❌ Erreur GET sectors:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET sectors:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -304,9 +304,9 @@ router.post('/', authenticateToken, async (req, res) => {
 
     log('✅ Base créée:', rows[0].id);
     return res.status(201).json({ success: true, database: rows[0] });
-  } catch (error) {
-    error('❌ Erreur POST lead-database:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur POST lead-database:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -333,9 +333,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     log('✅ Base mise à jour:', id);
     return res.json({ success: true, database: rows[0] });
-  } catch (error) {
-    error('❌ Erreur PUT lead-database:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur PUT lead-database:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -360,9 +360,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     log('✅ Base supprimée:', id);
     return res.json({ success: true, message: 'Base supprimée' });
-  } catch (error) {
-    error('❌ Erreur DELETE lead-database:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur DELETE lead-database:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -418,9 +418,9 @@ router.get('/:id/cities', authenticateToken, async (req, res) => {
       cities: rows,
       total: rows.reduce((sum, c) => sum + parseInt(c.lead_count), 0)
     });
-  } catch (error) {
-    error('❌ Erreur GET cities:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET cities:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -543,9 +543,9 @@ router.get('/:id/stats-detailed', authenticateToken, async (req, res) => {
       success: true,
       stats
     });
-  } catch (error) {
-    error('❌ Erreur GET stats-detailed:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET stats-detailed:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -603,9 +603,9 @@ router.post('/:id/add-lead', authenticateToken, async (req, res) => {
 
     log(`✅ Lead ${lead_id} ajouté à la base ${databaseId}`);
     return res.json({ success: true, message: 'Lead ajouté à la base' });
-  } catch (error) {
-    error('❌ Erreur POST add-lead:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur POST add-lead:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
