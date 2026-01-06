@@ -237,9 +237,24 @@ router.get('/users-status', authenticateToken, async (req, res) => {
     const tenantId = req.user.tenant_id;
     const userRole = req.user.role;
 
+    log(`[Activity] users-status called by user ${req.user.id} (role: ${userRole}, tenant: ${tenantId})`);
+
     // Seuls admin et manager peuvent voir
     if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
+      log(`[Activity] Access denied for role: ${userRole}`);
       return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    // Vérifier si les colonnes existent (migration appliquée?)
+    try {
+      await q(`SELECT last_activity, presence_status, current_page FROM users LIMIT 1`);
+    } catch (colErr) {
+      error('[Activity] Migration not applied - missing columns:', colErr.message);
+      return res.status(500).json({
+        error: 'Migration non appliquée',
+        details: 'Les colonnes last_activity, presence_status, current_page n\'existent pas. Exécutez la migration.',
+        sql_error: colErr.message
+      });
     }
 
     // D'abord, mettre à jour les statuts de présence
@@ -253,76 +268,135 @@ router.get('/users-status', authenticateToken, async (req, res) => {
       WHERE tenant_id = $1
     `, [tenantId]);
 
-    // Récupérer tous les utilisateurs avec leur statut
-    const { rows } = await q(`
-      SELECT
-        u.id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.role,
-        u.is_active,
-        u.last_login,
-        u.last_activity,
-        u.presence_status,
-        u.current_page,
-        u.created_at,
+    // Vérifier si les tables de sessions et logs existent
+    let hasSessionsTable = true;
+    let hasLogsTable = true;
 
-        -- Session active ?
-        EXISTS(
-          SELECT 1 FROM user_sessions us
-          WHERE us.user_id = u.id AND us.status = 'active'
-        ) as has_active_session,
+    try {
+      await q(`SELECT 1 FROM user_sessions LIMIT 1`);
+    } catch (e) {
+      warn('[Activity] user_sessions table does not exist');
+      hasSessionsTable = false;
+    }
 
-        -- Dernière session
-        (SELECT json_build_object(
-          'login_at', us.login_at,
-          'device', us.device_type,
-          'browser', us.browser,
-          'ip', us.ip_address
-        ) FROM user_sessions us
-        WHERE us.user_id = u.id
-        ORDER BY us.login_at DESC LIMIT 1) as last_session,
+    try {
+      await q(`SELECT 1 FROM activity_logs LIMIT 1`);
+    } catch (e) {
+      warn('[Activity] activity_logs table does not exist');
+      hasLogsTable = false;
+    }
 
-        -- Temps connecté aujourd'hui
-        COALESCE((
-          SELECT SUM(
-            CASE
-              WHEN us.logout_at IS NOT NULL THEN EXTRACT(EPOCH FROM (us.logout_at - us.login_at))
-              WHEN us.status = 'active' THEN EXTRACT(EPOCH FROM (NOW() - us.login_at))
-              ELSE 0
-            END
-          )::INTEGER
-          FROM user_sessions us
+    let rows = [];
+
+    if (hasSessionsTable && hasLogsTable) {
+      // Version complète avec toutes les données
+      log('[Activity] Using full query with sessions and logs');
+      const result = await q(`
+        SELECT
+          u.id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.role,
+          u.is_active,
+          u.last_login,
+          u.last_activity,
+          u.presence_status,
+          u.current_page,
+          u.created_at,
+
+          -- Session active ?
+          EXISTS(
+            SELECT 1 FROM user_sessions us
+            WHERE us.user_id = u.id AND us.status = 'active'
+          ) as has_active_session,
+
+          -- Dernière session
+          (SELECT json_build_object(
+            'login_at', us.login_at,
+            'device', us.device_type,
+            'browser', us.browser,
+            'ip', us.ip_address
+          ) FROM user_sessions us
           WHERE us.user_id = u.id
-          AND DATE(us.login_at) = CURRENT_DATE
-        ), 0) as time_online_today,
+          ORDER BY us.login_at DESC LIMIT 1) as last_session,
 
-        -- Actions aujourd'hui
-        (SELECT COUNT(*) FROM activity_logs al
-         WHERE al.user_id = u.id AND DATE(al.created_at) = CURRENT_DATE) as actions_today,
+          -- Temps connecté aujourd'hui
+          COALESCE((
+            SELECT SUM(
+              CASE
+                WHEN us.logout_at IS NOT NULL THEN EXTRACT(EPOCH FROM (us.logout_at - us.login_at))
+                WHEN us.status = 'active' THEN EXTRACT(EPOCH FROM (NOW() - us.login_at))
+                ELSE 0
+              END
+            )::INTEGER
+            FROM user_sessions us
+            WHERE us.user_id = u.id
+            AND DATE(us.login_at) = CURRENT_DATE
+          ), 0) as time_online_today,
 
-        -- Dernière action
-        (SELECT json_build_object(
-          'action', al.action,
-          'category', al.category,
-          'resource_name', al.resource_name,
-          'created_at', al.created_at
-        ) FROM activity_logs al
-        WHERE al.user_id = u.id
-        ORDER BY al.created_at DESC LIMIT 1) as last_action
+          -- Actions aujourd'hui
+          (SELECT COUNT(*) FROM activity_logs al
+           WHERE al.user_id = u.id AND DATE(al.created_at) = CURRENT_DATE) as actions_today,
 
-      FROM users u
-      WHERE u.tenant_id = $1
-      AND u.role != 'super_admin'
-      ORDER BY
-        CASE u.presence_status
-          WHEN 'online' THEN 1
-          WHEN 'idle' THEN 2
-          ELSE 3
-        END,
-        u.last_activity DESC NULLS LAST
-    `, [tenantId]);
+          -- Dernière action
+          (SELECT json_build_object(
+            'action', al.action,
+            'category', al.category,
+            'resource_name', al.resource_name,
+            'created_at', al.created_at
+          ) FROM activity_logs al
+          WHERE al.user_id = u.id
+          ORDER BY al.created_at DESC LIMIT 1) as last_action
+
+        FROM users u
+        WHERE u.tenant_id = $1
+        AND u.role != 'super_admin'
+        ORDER BY
+          CASE u.presence_status
+            WHEN 'online' THEN 1
+            WHEN 'idle' THEN 2
+            ELSE 3
+          END,
+          u.last_activity DESC NULLS LAST
+      `, [tenantId]);
+      rows = result.rows;
+    } else {
+      // Version simplifiée sans les tables de session/logs
+      log('[Activity] Using simplified query (missing tables)');
+      const result = await q(`
+        SELECT
+          u.id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.role,
+          u.is_active,
+          u.last_login,
+          u.last_activity,
+          u.presence_status,
+          u.current_page,
+          u.created_at,
+          false as has_active_session,
+          null as last_session,
+          0 as time_online_today,
+          0 as actions_today,
+          null as last_action
+        FROM users u
+        WHERE u.tenant_id = $1
+        AND u.role != 'super_admin'
+        ORDER BY
+          CASE u.presence_status
+            WHEN 'online' THEN 1
+            WHEN 'idle' THEN 2
+            ELSE 3
+          END,
+          u.last_activity DESC NULLS LAST
+      `, [tenantId]);
+      rows = result.rows;
+    }
+
+    log(`[Activity] Found ${rows.length} users for tenant ${tenantId}`);
 
     // Compter par statut
     const stats = {
