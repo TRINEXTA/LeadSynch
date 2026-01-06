@@ -116,9 +116,9 @@ router.post('/detect', async (req, res) => {
       total: duplicateGroups.length,
       duplicates: duplicateGroups
     });
-  } catch (error) {
-    error('Erreur détection doublons POST:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur détection doublons POST:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -208,9 +208,9 @@ router.get('/detect', async (req, res) => {
         by_name_city: duplicates.by_name_city.length
       }
     });
-  } catch (error) {
-    error('Erreur détection doublons:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur détection doublons:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -259,9 +259,9 @@ router.get('/group/:type/:value', async (req, res) => {
       count: rows.length,
       leads: rows
     });
-  } catch (error) {
-    error('Erreur récupération groupe doublons:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur récupération groupe doublons:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -363,9 +363,9 @@ router.post('/merge', async (req, res) => {
       primary_lead_id,
       merged_count: duplicate_lead_ids.length
     });
-  } catch (error) {
-    error('Erreur fusion doublons:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur fusion doublons:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -449,9 +449,9 @@ router.post('/merge-auto', async (req, res) => {
       primary_lead_id,
       merged_count: duplicate_ids.length
     });
-  } catch (error) {
-    error('Erreur fusion automatique:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur fusion automatique:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -487,9 +487,9 @@ router.post('/ignore', async (req, res) => {
       message: `${lead_ids.length} leads marqués comme non-doublons`,
       lead_ids
     });
-  } catch (error) {
-    error('Erreur ignore doublons:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur ignore doublons:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
@@ -519,9 +519,9 @@ router.delete('/:id', async (req, res) => {
       message: 'Lead supprimé avec succès',
       id
     });
-  } catch (error) {
-    error('Erreur suppression lead:', error);
-    res.status(500).json({ error: 'Erreur serveur', message: error.message });
+  } catch (err) {
+    error('Erreur suppression lead:', err);
+    res.status(500).json({ error: 'Erreur serveur', message: err.message });
   }
 });
 
