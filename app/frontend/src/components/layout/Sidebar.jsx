@@ -178,6 +178,7 @@ function Sidebar() {
       icon: Settings,
       roles: ['admin', 'manager'],
       items: [
+        { name: 'Rapports Utilisateurs', href: '/user-reports', icon: FileText, roles: ['admin', 'manager'] },
         { name: 'Équipes', href: '/teams', icon: Users, roles: ['admin', 'manager'] },
         { name: 'Utilisateurs', href: '/users', icon: UserCircle, roles: ['admin', 'manager', 'supervisor'], permission: PERMISSIONS.MANAGE_ALL_USERS },
         { name: 'Gestion Équipe', href: '/ManageTeam', icon: Users, roles: ['admin', 'manager'] },

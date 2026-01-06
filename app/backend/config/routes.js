@@ -69,6 +69,7 @@ import commissionsRoute from '../api/commissions.js';
 import planningRoute from '../api/planning.js';
 import callSessionsRoute from '../api/call-sessions.js';
 import activityRoute from '../api/activity.js';
+import userReportsRoute from '../api/user-reports.js';
 import aiGenerateTemplateRoute from '../api/ai-generate-template.js';
 import checkBlacklistRoute from '../api/check-blacklist.js';
 import campaignFollowUpsRoute from '../api/campaigns-follow-ups.js';
@@ -241,6 +242,9 @@ export function setupRoutes(app) {
 
   // Activity tracking & user presence
   app.use('/api/activity', activityRoute);
+
+  // User reports (for admin reports)
+  app.use('/api/user-reports', userReportsRoute);
 
   log('✅ Routes configurées');
 }

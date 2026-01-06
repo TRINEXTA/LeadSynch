@@ -21,6 +21,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DashboardUniversel = lazy(() => import('./pages/DashboardUniversel'));
 const DashboardManager = lazy(() => import('./pages/DashboardManager'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const UserReports = lazy(() => import('./pages/UserReports'));
 const Leads = lazy(() => import('./pages/Leads'));
 const Users = lazy(() => import('./pages/Users'));
 
@@ -175,6 +176,7 @@ function App() {
               <Route path="/dashboard-classic" element={<Dashboard />} />
               <Route path="/dashboard-manager" element={<DashboardManager />} />
               <Route path="/dashboard-admin" element={<AdminDashboard />} />
+              <Route path="/user-reports" element={<UserReports />} />
               <Route path="/CommercialDashboard" element={<CommercialDashboard />} />
 
               <Route path="/leads" element={<Leads />} />
