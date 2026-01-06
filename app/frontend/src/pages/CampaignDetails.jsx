@@ -290,6 +290,13 @@ export default function CampaignDetails() {
                   {campaign.name}
                 </h1>
                 <p className="text-gray-600">{campaign.goal_description || campaign.description || 'Campagne email'}</p>
+                {campaign.supervisor_first_name && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium flex items-center gap-1">
+                      Superviseur: {campaign.supervisor_first_name} {campaign.supervisor_last_name}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

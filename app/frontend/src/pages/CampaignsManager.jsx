@@ -68,6 +68,7 @@ export default function CampaignsManager() {
     link: '',
     template_id: '',
     assigned_users: [],
+    supervisor_id: '', // Superviseur/Manager de la campagne
     send_days: [1, 2, 3, 4, 5],
     send_time_start: '08:00',
     send_time_end: '18:00',
@@ -77,6 +78,14 @@ export default function CampaignsManager() {
     cycle_interval_minutes: 10,
     status: 'draft'
   });
+
+  // Compteurs de leads avec/sans téléphone (pour campagnes phoning)
+  const [phoneLeadsCounts, setPhoneLeadsCounts] = useState({
+    with_phone: 0,
+    without_phone: 0,
+    total: 0
+  });
+  const [loadingPhoneCounts, setLoadingPhoneCounts] = useState(false);
 
   useEffect(() => {
     loadDatabases();
@@ -117,6 +126,7 @@ export default function CampaignsManager() {
         link: campaign.link || '',
         template_id: campaign.template_id || '',
         assigned_users: campaign.assigned_users || [],
+        supervisor_id: campaign.supervisor_id || '',
         send_days: campaign.send_days || [1, 2, 3, 4, 5],
         send_time_start: campaign.send_time_start || '08:00',
         send_time_end: campaign.send_time_end || '18:00',
@@ -230,11 +240,11 @@ const calculateLeadsCount = async () => {
   }
 
   setLoadingLeads(true);
-  
+
   try {
     const filters = selectedDatabases.map(dbId => {
       const sectors = selectedSectors[dbId] || [];
-      
+
       return {
         database_id: dbId,
         sectors: sectors.length > 0 ? sectors : undefined
@@ -244,19 +254,62 @@ const calculateLeadsCount = async () => {
     log('📊 Comptage leads avec filtres:', filters);
 
     const response = await api.post('/leads-count-multi/count-multi', { filters });
-    
+
     log('✅ Réponse count:', response.data);
-    
+
     const totalCount = response.data.count || 0;  // ✅ Utilise "count" comme le backend envoie
     setLeadsCount(totalCount);
-    
+
     log('🎯 Total leads:', totalCount);
-    
+
+    // Pour les campagnes phoning, charger aussi les compteurs avec/sans téléphone
+    if (campaignType?.id === 'phoning' && selectedDatabases.length > 0) {
+      await loadPhoneLeadsCounts();
+    }
+
   } catch (error) {
     error('❌ Erreur comptage leads:', error);
     setLeadsCount(0);
   } finally {
     setLoadingLeads(false);
+  }
+};
+
+// Fonction pour charger les compteurs de leads avec/sans téléphone
+const loadPhoneLeadsCounts = async () => {
+  if (selectedDatabases.length === 0) {
+    setPhoneLeadsCounts({ with_phone: 0, without_phone: 0, total: 0 });
+    return;
+  }
+
+  setLoadingPhoneCounts(true);
+
+  try {
+    // Utiliser la première base sélectionnée (le backend ne gère qu'une seule base à la fois)
+    const dbId = selectedDatabases[0];
+    const sectors = {};
+
+    // Construire l'objet sectors pour chaque base de données
+    selectedDatabases.forEach(id => {
+      if (selectedSectors[id] && selectedSectors[id].length > 0) {
+        sectors[id] = selectedSectors[id];
+      }
+    });
+
+    const response = await api.post('/campaigns/count-leads-phone', {
+      database_id: dbId,
+      sectors: Object.keys(sectors).length > 0 ? sectors : undefined
+    });
+
+    if (response.data.success) {
+      setPhoneLeadsCounts(response.data.counts);
+      log('📞 Compteurs téléphone:', response.data.counts);
+    }
+  } catch (err) {
+    log('❌ Erreur comptage téléphone:', err);
+    setPhoneLeadsCounts({ with_phone: 0, without_phone: 0, total: 0 });
+  } finally {
+    setLoadingPhoneCounts(false);
   }
 };
 
@@ -422,6 +475,7 @@ const calculateLeadsCount = async () => {
       link: formData.link === '' ? null : formData.link,
       start_date: formData.start_date === '' ? null : formData.start_date,
       template_id: formData.template_id === '' ? null : formData.template_id,
+      supervisor_id: formData.supervisor_id === '' ? null : formData.supervisor_id,
       // Follow-up configuration
       follow_ups_enabled: followUpEnabled,
       follow_ups_count: followUpCount,
@@ -524,6 +578,8 @@ const calculateLeadsCount = async () => {
     setFollowUpCount(1);
     setFollowUpDelayDays(3);
     setFollowUpTemplates([]);
+    // Reset phone counts
+    setPhoneLeadsCounts({ with_phone: 0, without_phone: 0, total: 0 });
     setFormData({
       name: '',
       type: '',
@@ -534,6 +590,7 @@ const calculateLeadsCount = async () => {
       link: '',
       template_id: '',
       assigned_users: [],
+      supervisor_id: '',
       send_days: [1, 2, 3, 4, 5],
       send_time_start: '08:00',
       send_time_end: '18:00',
@@ -874,16 +931,80 @@ const calculateLeadsCount = async () => {
           {/* STEP 4 (ou 3 pour phoning): Commerciaux */}
           {((step === 4 && campaignType.id === 'email') || (step === 3 && campaignType.id !== 'email')) && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Affectation commerciaux</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Affectation equipe</h2>
+
+              {/* Sélection du Superviseur/Manager */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-xl p-6 mb-6">
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-600" />
+                  Superviseur de la campagne
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Le superviseur aura une vue d'ensemble sur les activites des commerciaux et pourra interagir avec la campagne.
+                </p>
+                <select
+                  value={formData.supervisor_id}
+                  onChange={(e) => setFormData({...formData, supervisor_id: e.target.value})}
+                  className="w-full border-2 border-purple-200 rounded-lg p-3 bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="">-- Selectionner un superviseur (optionnel) --</option>
+                  {users.filter(u => u.role === 'manager' || u.role === 'admin').map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.first_name} {user.last_name} ({user.role})
+                    </option>
+                  ))}
+                </select>
+                {formData.supervisor_id && (
+                  <p className="text-xs text-purple-600 mt-2">
+                    Le superviseur pourra voir les activites de tous les commerciaux assignes.
+                  </p>
+                )}
+              </div>
+
+              {/* Affichage info leads téléphone pour campagnes phoning */}
+              {campaignType?.id === 'phoning' && phoneLeadsCounts.total > 0 && (
+                <div className={`border-2 rounded-xl p-4 mb-4 ${
+                  phoneLeadsCounts.without_phone > 0
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-green-50 border-green-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Phone className="w-5 h-5 text-amber-600" />
+                    <span className="font-semibold text-gray-900">Information leads telephone</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-green-600">{phoneLeadsCounts.with_phone}</p>
+                      <p className="text-xs text-gray-600">Avec telephone</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-red-600">{phoneLeadsCounts.without_phone}</p>
+                      <p className="text-xs text-gray-600">Sans telephone</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <p className="text-2xl font-bold text-gray-900">{phoneLeadsCounts.total}</p>
+                      <p className="text-xs text-gray-600">Total</p>
+                    </div>
+                  </div>
+                  {phoneLeadsCounts.without_phone > 0 && (
+                    <p className="text-sm text-amber-700 mt-3">
+                      <strong>{phoneLeadsCounts.without_phone}</strong> leads seront exclus de la campagne car ils n'ont pas de numero de telephone.
+                      Seuls les <strong>{phoneLeadsCounts.with_phone}</strong> leads avec telephone seront inclus.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <h3 className="font-bold text-gray-900 mb-2">Commerciaux assignes</h3>
 {/* DEBUG INFO */}
               {users.length === 0 && (
                 <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-4">
                   <AlertCircle className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
                   <p className="text-sm font-bold text-center text-gray-900">
-                    ⚠️ Aucun utilisateur chargé
+                    Aucun utilisateur charge
                   </p>
                   <p className="text-xs text-center text-gray-600 mt-2">
-                    Vérifiez la console (F12) pour voir les logs de chargement
+                    Verifiez la console (F12) pour voir les logs de chargement
                   </p>
                 </div>
               )}
