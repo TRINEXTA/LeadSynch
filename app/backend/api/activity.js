@@ -278,17 +278,26 @@ router.get('/users-status', authenticateToken, async (req, res) => {
     try {
       await q(`SELECT 1 FROM user_sessions LIMIT 1`);
       hasSessionsTable = true;
-      log(`[Activity] TEST 3a: ✅ user_sessions table exists`);
+      log(`[Activity] TEST 3a: ✅ user_sessions table exists and accessible`);
     } catch (e) {
-      warn(`[Activity] TEST 3a: ❌ user_sessions table does not exist`);
+      // Check if it's a permission error (42501) or table doesn't exist (42P01)
+      if (e.code === '42501') {
+        warn(`[Activity] TEST 3a: ⚠️ user_sessions table exists but permission denied - run GRANT ALL PRIVILEGES ON TABLE user_sessions TO your_db_user;`);
+      } else {
+        warn(`[Activity] TEST 3a: ❌ user_sessions table does not exist`);
+      }
     }
 
     try {
       await q(`SELECT 1 FROM activity_logs LIMIT 1`);
       hasLogsTable = true;
-      log(`[Activity] TEST 3b: ✅ activity_logs table exists`);
+      log(`[Activity] TEST 3b: ✅ activity_logs table exists and accessible`);
     } catch (e) {
-      warn(`[Activity] TEST 3b: ❌ activity_logs table does not exist`);
+      if (e.code === '42501') {
+        warn(`[Activity] TEST 3b: ⚠️ activity_logs table exists but permission denied - run GRANT ALL PRIVILEGES ON TABLE activity_logs TO your_db_user;`);
+      } else {
+        warn(`[Activity] TEST 3b: ❌ activity_logs table does not exist`);
+      }
     }
 
     let rows = [];

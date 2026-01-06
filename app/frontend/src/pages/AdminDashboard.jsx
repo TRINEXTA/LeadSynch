@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import UserControlCenter from '../components/admin/UserControlCenter';
 import {
   Users, TrendingUp, Target, DollarSign, Activity, RefreshCw,
   BarChart3, PieChart, Calendar, Clock, Mail, Phone, CheckCircle,
@@ -406,138 +407,15 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* NOUVELLE SECTION - Centre de Contrôle des Utilisateurs */}
-        <div className="mb-6 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <Users className="w-6 h-6 text-indigo-400" />
-              Centre de Contrôle Utilisateurs
-              <span className="ml-2 px-2 py-0.5 bg-indigo-500 text-white text-xs rounded-full">TEMPS RÉEL</span>
-            </h3>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 rounded-lg">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-green-300 text-sm font-medium">{userActivityStats.online} en ligne</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/20 rounded-lg">
-                <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                <span className="text-yellow-300 text-sm font-medium">{userActivityStats.idle} inactifs</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-500/20 rounded-lg">
-                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                <span className="text-gray-300 text-sm font-medium">{userActivityStats.offline} hors ligne</span>
-              </div>
-            </div>
-          </div>
-
-          {userActivityStatus.length === 0 ? (
-            <div className="text-center py-8 text-white/60">
-              <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Aucune donnée d'activité disponible</p>
-              <p className="text-xs mt-1">Exécutez la migration de base de données pour activer cette fonctionnalité</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/20">
-                    <th className="text-left py-3 px-4 text-white/70 font-medium">Utilisateur</th>
-                    <th className="text-center py-3 px-4 text-white/70 font-medium">Statut</th>
-                    <th className="text-left py-3 px-4 text-white/70 font-medium">Page actuelle</th>
-                    <th className="text-left py-3 px-4 text-white/70 font-medium">Dernière activité</th>
-                    <th className="text-left py-3 px-4 text-white/70 font-medium">Dernière connexion</th>
-                    <th className="text-center py-3 px-4 text-white/70 font-medium">Temps connecté (auj.)</th>
-                    <th className="text-center py-3 px-4 text-white/70 font-medium">Actions (auj.)</th>
-                    <th className="text-center py-3 px-4 text-white/70 font-medium">Détails</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userActivityStatus.map((userActivity) => (
-                    <tr key={userActivity.id} className="border-b border-white/10 hover:bg-white/5">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                              userActivity.presence_status === 'online' ? 'bg-gradient-to-br from-green-500 to-emerald-600' :
-                              userActivity.presence_status === 'idle' ? 'bg-gradient-to-br from-yellow-500 to-orange-500' :
-                              'bg-gradient-to-br from-gray-500 to-gray-600'
-                            }`}>
-                              {userActivity.first_name?.[0]}{userActivity.last_name?.[0]}
-                            </div>
-                            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-gray-900 ${getStatusColor(userActivity.presence_status)} ${userActivity.presence_status === 'online' ? 'animate-pulse' : ''}`}></div>
-                          </div>
-                          <div>
-                            <p className="text-white font-medium">{userActivity.first_name} {userActivity.last_name}</p>
-                            <p className="text-white/50 text-xs">{userActivity.email}</p>
-                            <p className="text-indigo-300 text-xs capitalize">{userActivity.role}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-                          userActivity.presence_status === 'online' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-                          userActivity.presence_status === 'idle' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
-                          'bg-gray-500/20 text-gray-400 border border-gray-500/30'
-                        }`}>
-                          {userActivity.presence_status === 'online' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                          {getStatusLabel(userActivity.presence_status)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {userActivity.current_page ? (
-                          <span className="text-blue-300 text-sm bg-blue-500/10 px-2 py-1 rounded">
-                            {userActivity.current_page}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 text-sm">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`text-sm ${
-                          userActivity.presence_status === 'online' ? 'text-green-300' :
-                          userActivity.presence_status === 'idle' ? 'text-yellow-300' :
-                          'text-gray-400'
-                        }`}>
-                          {formatRelativeTime(userActivity.last_activity)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-white/70 text-sm">
-                          {userActivity.last_login ? new Date(userActivity.last_login).toLocaleString('fr-FR', {
-                            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                          }) : 'Jamais'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-purple-300 font-medium">
-                          {formatDuration(userActivity.time_online_today)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`text-sm font-bold ${
-                          userActivity.actions_today > 50 ? 'text-green-400' :
-                          userActivity.actions_today > 20 ? 'text-blue-400' :
-                          userActivity.actions_today > 0 ? 'text-white' :
-                          'text-gray-500'
-                        }`}>
-                          {userActivity.actions_today || 0}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => loadUserHistory(userActivity.id, `${userActivity.first_name} ${userActivity.last_name}`)}
-                          className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white"
-                          title="Voir l'historique"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        {/* Centre de Contrôle Utilisateurs - Composant Professionnel */}
+        <div className="mb-6">
+          <UserControlCenter
+            users={userActivityStatus}
+            stats={userActivityStats}
+            onViewHistory={loadUserHistory}
+            formatRelativeTime={formatRelativeTime}
+            formatDuration={formatDuration}
+          />
         </div>
 
         {/* Modal Historique Utilisateur */}
