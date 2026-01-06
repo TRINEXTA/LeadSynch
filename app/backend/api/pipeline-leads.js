@@ -20,7 +20,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const isSuperAdmin = req.user?.is_super_admin === true;
     const limit = Math.min(parseInt(req.query.limit) || 500, 1000);
 
-    // Requête optimisée sans subqueries
+    // Requête optimisée avec colonnes d'activité
     let query = `
       SELECT
         pl.id,
@@ -31,6 +31,22 @@ router.get('/', authenticateToken, async (req, res) => {
         pl.deal_value,
         pl.created_at,
         pl.updated_at,
+        -- Colonnes d'activité pour affichage sur les cartes
+        COALESCE(pl.emails_sent, 0) as emails_sent,
+        COALESCE(pl.calls_made, 0) as calls_made,
+        COALESCE(pl.proposal_status, 'not_sent') as proposal_status,
+        COALESCE(pl.contract_status, 'not_sent') as contract_status,
+        pl.last_email_date,
+        pl.proposal_sent_date,
+        pl.contract_sent_date,
+        pl.won_date,
+        pl.notes,
+        -- Vérifier si demande en cours
+        EXISTS(
+          SELECT 1 FROM validation_requests vr
+          WHERE vr.lead_id = pl.lead_id AND vr.status = 'pending'
+        ) as has_pending_request,
+        -- Infos du lead
         l.company_name,
         l.contact_name,
         l.email,
@@ -129,13 +145,35 @@ router.post('/:id/action', authenticateToken, async (req, res) => {
       ]
     );
 
-    // Mettre à jour last_activity_at
-    await q(
-      `UPDATE pipeline_leads 
-       SET updated_at = NOW() 
-       WHERE id = $1`,
-      [id]
-    );
+    // Mettre à jour les compteurs selon le type d'action
+    if (action_type === 'email') {
+      await q(
+        `UPDATE pipeline_leads
+         SET emails_sent = COALESCE(emails_sent, 0) + 1,
+             last_email_date = NOW(),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [id]
+      );
+      log(`📧 Email comptabilisé pour lead ${id}`);
+    } else if (action_type === 'call') {
+      await q(
+        `UPDATE pipeline_leads
+         SET calls_made = COALESCE(calls_made, 0) + 1,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [id]
+      );
+      log(`📞 Appel comptabilisé pour lead ${id}`);
+    } else {
+      // Autres types d'action : juste mettre à jour updated_at
+      await q(
+        `UPDATE pipeline_leads
+         SET updated_at = NOW()
+         WHERE id = $1`,
+        [id]
+      );
+    }
 
     log(`✅ Action ${action_type} enregistrée pour lead ${id}`);
 
@@ -146,10 +184,102 @@ router.post('/:id/action', authenticateToken, async (req, res) => {
 
   } catch (error) {
     error('❌ Erreur enregistrement action:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Erreur lors de l\'enregistrement de l\'action'
     });
+  }
+});
+
+// =============================
+// 🆕 PATCH /pipeline-leads/:id/proposal-status
+// Mettre à jour le statut du devis
+// =============================
+router.patch('/:id/proposal-status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'not_sent', 'sent', 'viewed', 'accepted', 'rejected'
+    const tenant_id = req.user.tenant_id;
+
+    const validStatuses = ['not_sent', 'sent', 'viewed', 'accepted', 'rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Statut invalide' });
+    }
+
+    const updateFields = ['proposal_status = $1', 'updated_at = NOW()'];
+    const params = [status, id, tenant_id];
+
+    // Ajouter proposal_sent_date si le statut passe à 'sent'
+    if (status === 'sent') {
+      updateFields.push('proposal_sent_date = NOW()');
+    }
+
+    const { rows } = await q(
+      `UPDATE pipeline_leads
+       SET ${updateFields.join(', ')}
+       WHERE id = $2 AND tenant_id = $3
+       RETURNING *`,
+      params
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'Lead non trouvé' });
+    }
+
+    log(`📄 Statut devis mis à jour: ${status} pour lead ${id}`);
+    res.json({ success: true, lead: rows[0] });
+  } catch (err) {
+    error('❌ Erreur mise à jour statut devis:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// =============================
+// 🆕 PATCH /pipeline-leads/:id/contract-status
+// Mettre à jour le statut du contrat
+// =============================
+router.patch('/:id/contract-status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'not_sent', 'sent', 'signed', 'rejected'
+    const tenant_id = req.user.tenant_id;
+
+    const validStatuses = ['not_sent', 'sent', 'signed', 'rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Statut invalide' });
+    }
+
+    const updateFields = ['contract_status = $1', 'updated_at = NOW()'];
+    const params = [status, id, tenant_id];
+
+    // Ajouter contract_sent_date si le statut passe à 'sent'
+    if (status === 'sent') {
+      updateFields.push('contract_sent_date = NOW()');
+    }
+
+    // Si signé, potentiellement passer le lead en "gagne"
+    if (status === 'signed') {
+      updateFields.push('won_date = NOW()');
+      updateFields.push("stage = 'gagne'");
+    }
+
+    const { rows } = await q(
+      `UPDATE pipeline_leads
+       SET ${updateFields.join(', ')}
+       WHERE id = $2 AND tenant_id = $3
+       RETURNING *`,
+      params
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'Lead non trouvé' });
+    }
+
+    log(`📝 Statut contrat mis à jour: ${status} pour lead ${id}`);
+    res.json({ success: true, lead: rows[0] });
+  } catch (err) {
+    error('❌ Erreur mise à jour statut contrat:', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -614,12 +744,16 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       }
     }
 
+    // Mise à jour du stage + won_date si gagné
     const { rows } = await q(
-      `UPDATE pipeline_leads 
-       SET stage = $1, updated_at = NOW()
+      `UPDATE pipeline_leads
+       SET stage = $1,
+           updated_at = NOW(),
+           won_date = CASE WHEN $1 = 'gagne' THEN NOW() ELSE won_date END,
+           deal_value = COALESCE($4, deal_value)
        WHERE id = $2 AND tenant_id = $3
        RETURNING *`,
-      [newStage, id, tenantId]
+      [newStage, id, tenantId, deal_value]
     );
 
     if (pipelineLead.lead_id) {
