@@ -183,7 +183,23 @@ export default function CampaignDetailsPhoning() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
                   {campaign.name}
                 </h1>
-                <p className="text-gray-600">{campaign.goal_description || 'Campagne de prospection téléphonique'}</p>
+                <p className="text-gray-600">{campaign.goal_description || 'Campagne de prospection telephonique'}</p>
+                {campaign.supervisor_first_name && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium flex items-center gap-1">
+                      <Users className="w-4 h-4" />
+                      Superviseur: {campaign.supervisor_first_name} {campaign.supervisor_last_name}
+                    </span>
+                  </div>
+                )}
+                {campaign.leads_excluded_no_phone > 0 && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {campaign.leads_excluded_no_phone} leads exclus (sans telephone)
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             

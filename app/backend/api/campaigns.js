@@ -18,6 +18,7 @@ const createCampaignSchema = z.object({
   link: z.string().url().optional().nullable(),
   template_id: z.string().uuid().optional().nullable(),
   assigned_users: z.array(z.string().uuid()).optional(),
+  supervisor_id: z.string().uuid().optional().nullable(), // Superviseur/Manager de la campagne
   send_days: z.array(z.number().min(1).max(7)).optional(),
   send_time_start: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
   send_time_end: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
@@ -75,7 +76,7 @@ router.get('/', authenticateToken, async (req, res) => {
       );
       log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
     }
-    // Manager ou commercial : voir uniquement les campagnes où ils sont assignés
+    // Manager ou commercial : voir uniquement les campagnes où ils sont assignés ou superviseur
     else {
       campaigns = await queryAll(
         `SELECT DISTINCT
@@ -91,6 +92,8 @@ router.get('/', authenticateToken, async (req, res) => {
             c.assigned_users::jsonb ? $2::text
             -- Ou campagnes créées par l'utilisateur
             OR c.created_by = $2::uuid
+            -- Ou campagnes où l'utilisateur est superviseur
+            OR c.supervisor_id = $2::uuid
             -- Ou campagnes où il a des leads dans le pipeline
             OR EXISTS (
               SELECT 1 FROM pipeline_leads pl
@@ -167,6 +170,7 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
            AND (
              c.assigned_users::jsonb ? $2::text
              OR c.created_by = $2
+             OR c.supervisor_id = $2::uuid
              OR EXISTS (
                SELECT 1 FROM pipeline_leads pl2
                WHERE pl2.campaign_id = c.id AND pl2.assigned_user_id = $2
@@ -196,24 +200,28 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const campaignId = req.params.id;
-    
+
     const campaign = await queryOne(
-      `SELECT 
+      `SELECT
         c.*,
         ld.name as database_name,
         et.name as template_name,
-        et.html_body as template_html
+        et.html_body as template_html,
+        su.first_name as supervisor_first_name,
+        su.last_name as supervisor_last_name,
+        su.email as supervisor_email
       FROM campaigns c
       LEFT JOIN lead_databases ld ON c.database_id = ld.id
       LEFT JOIN email_templates et ON c.template_id = et.id
+      LEFT JOIN users su ON c.supervisor_id = su.id
       WHERE c.id = $1 AND c.tenant_id = $2`,
       [campaignId, tenantId]
     );
-    
+
     if (!campaign) {
       return res.status(404).json({ error: 'Campagne non trouvée' });
     }
-    
+
     return res.json({ success: true, campaign });
     
   } catch (err) {
@@ -241,16 +249,22 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const {
       name, type, objective, subject, goal_description, message, link,
-      database_id, template_id, assigned_users, send_days,
+      database_id, template_id, assigned_users, supervisor_id, send_days,
       send_time_start, send_time_end, start_date, start_time,
       emails_per_cycle, cycle_interval_minutes, status, sectors,
       attachments, track_clicks, auto_distribute
     } = validatedData;
 
-    log('📥 Données validées:', { name, type, database_id });
+    log('📥 Données validées:', { name, type, database_id, supervisor_id });
 
     let leads = [];
-    
+    let leadsExcludedNoPhone = 0;
+
+    // Pour les campagnes PHONE, on filtre uniquement les leads avec téléphone valide
+    const phoneFilter = type === 'phone'
+      ? "AND l.phone IS NOT NULL AND TRIM(l.phone) != ''"
+      : '';
+
     if (sectors && Object.keys(sectors).length > 0) {
       // Construction sécurisée avec paramètres
       const sectorConditions = [];
@@ -270,24 +284,53 @@ router.post('/', authenticateToken, async (req, res) => {
           `SELECT DISTINCT l.*
            FROM leads l
            JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')})`,
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')}) ${phoneFilter}`,
           params
         );
+
+        // Compter les leads exclus pour campagnes phone
+        if (type === 'phone') {
+          const excludedResult = await queryOne(
+            `SELECT COUNT(DISTINCT l.id) as count
+             FROM leads l
+             JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+             WHERE l.tenant_id = $1 AND ldr.database_id = $2 AND (${sectorConditions.join(' OR ')})
+             AND (l.phone IS NULL OR TRIM(l.phone) = '')`,
+            params
+          );
+          leadsExcludedNoPhone = parseInt(excludedResult?.count || 0, 10);
+        }
       }
     } else {
       leads = await queryAll(
-        `SELECT DISTINCT l.* 
+        `SELECT DISTINCT l.*
          FROM leads l
          JOIN lead_database_relations ldr ON l.id = ldr.lead_id
-         WHERE l.tenant_id = $1 AND ldr.database_id = $2`,
+         WHERE l.tenant_id = $1 AND ldr.database_id = $2 ${phoneFilter}`,
         [tenantId, database_id]
       );
+
+      // Compter les leads exclus pour campagnes phone
+      if (type === 'phone') {
+        const excludedResult = await queryOne(
+          `SELECT COUNT(DISTINCT l.id) as count
+           FROM leads l
+           JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+           WHERE l.tenant_id = $1 AND ldr.database_id = $2
+           AND (l.phone IS NULL OR TRIM(l.phone) = '')`,
+          [tenantId, database_id]
+        );
+        leadsExcludedNoPhone = parseInt(excludedResult?.count || 0, 10);
+      }
     }
 
-    log(`📊 ${leads.length} leads trouvés`);
+    log(`📊 ${leads.length} leads trouvés${type === 'phone' ? ` (${leadsExcludedNoPhone} exclus sans téléphone)` : ''}`);
 
     if (leads.length === 0) {
-      return res.status(400).json({ error: 'Aucun lead trouvé dans cette base' });
+      const errorMsg = type === 'phone'
+        ? `Aucun lead avec numéro de téléphone trouvé dans cette base (${leadsExcludedNoPhone} leads sans téléphone exclus)`
+        : 'Aucun lead trouvé dans cette base';
+      return res.status(400).json({ error: errorMsg, leads_excluded_no_phone: leadsExcludedNoPhone });
     }
 	const campaign = await queryOne(
       `INSERT INTO campaigns (
@@ -296,9 +339,10 @@ router.post('/', authenticateToken, async (req, res) => {
         send_time_start, send_time_end, start_date,
         emails_per_cycle, cycle_interval_minutes, assigned_users,
         total_leads, track_clicks, auto_distribute,
-        created_by, created_at, updated_at
+        created_by, supervisor_id, leads_excluded_no_phone,
+        created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW()
       ) RETURNING *`,
       [
         tenantId, name, type, type, objective || 'leads', subject || null,
@@ -308,7 +352,8 @@ router.post('/', authenticateToken, async (req, res) => {
         send_time_start || '08:00', send_time_end || '18:00', start_date || null,
         emails_per_cycle || 50, cycle_interval_minutes || 10,
         JSON.stringify(assigned_users || []), leads.length,
-        track_clicks !== false, auto_distribute !== false, userId
+        track_clicks !== false, auto_distribute !== false, userId,
+        supervisor_id || null, leadsExcludedNoPhone
       ]
     );
 
@@ -372,6 +417,75 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== COUNT LEADS WITH/WITHOUT PHONE ====================
+// Endpoint pour compter les leads avec et sans téléphone avant création campagne
+router.post('/count-leads-phone', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const { database_id, sectors } = req.body;
+
+    if (!database_id) {
+      return res.status(400).json({ error: 'database_id requis' });
+    }
+
+    let baseQuery = `
+      FROM leads l
+      JOIN lead_database_relations ldr ON l.id = ldr.lead_id
+      WHERE l.tenant_id = $1 AND ldr.database_id = $2
+    `;
+    const params = [tenantId, database_id];
+
+    // Construire le filtre secteur si fourni
+    if (sectors && Object.keys(sectors).length > 0) {
+      const sectorConditions = [];
+      let paramIndex = 3;
+
+      Object.entries(sectors)
+        .filter(([_, sectorList]) => sectorList && sectorList.length > 0)
+        .forEach(([dbId, sectorList]) => {
+          sectorConditions.push(`(ldr.database_id = $${paramIndex} AND l.sector = ANY($${paramIndex + 1}))`);
+          params.push(dbId, sectorList);
+          paramIndex += 2;
+        });
+
+      if (sectorConditions.length > 0) {
+        baseQuery += ` AND (${sectorConditions.join(' OR ')})`;
+      }
+    }
+
+    // Compter les leads avec téléphone
+    const withPhoneResult = await queryOne(
+      `SELECT COUNT(DISTINCT l.id) as count ${baseQuery} AND l.phone IS NOT NULL AND TRIM(l.phone) != ''`,
+      params
+    );
+
+    // Compter les leads sans téléphone
+    const withoutPhoneResult = await queryOne(
+      `SELECT COUNT(DISTINCT l.id) as count ${baseQuery} AND (l.phone IS NULL OR TRIM(l.phone) = '')`,
+      params
+    );
+
+    // Total
+    const totalResult = await queryOne(
+      `SELECT COUNT(DISTINCT l.id) as count ${baseQuery}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      counts: {
+        with_phone: parseInt(withPhoneResult?.count || 0, 10),
+        without_phone: parseInt(withoutPhoneResult?.count || 0, 10),
+        total: parseInt(totalResult?.count || 0, 10)
+      }
+    });
+
+  } catch (err) {
+    error('❌ Erreur count-leads-phone:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== UPDATE CAMPAIGN ====================
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
@@ -425,6 +539,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (updates.assigned_users !== undefined) {
       updateFields.push(`assigned_users = $${paramIndex++}`);
       values.push(JSON.stringify(updates.assigned_users));
+    }
+    if (updates.supervisor_id !== undefined) {
+      updateFields.push(`supervisor_id = $${paramIndex++}`);
+      values.push(updates.supervisor_id || null);
     }
 
     // Toujours mettre à jour updated_at
