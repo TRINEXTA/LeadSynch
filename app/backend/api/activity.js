@@ -236,61 +236,106 @@ router.get('/users-status', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const userRole = req.user.role;
+    const userId = req.user.id;
 
-    log(`[Activity] users-status called by user ${req.user.id} (role: ${userRole}, tenant: ${tenantId})`);
+    log(`[Activity] ======= USERS-STATUS API CALLED =======`);
+    log(`[Activity] User ID: ${userId}`);
+    log(`[Activity] User Role: ${userRole}`);
+    log(`[Activity] Tenant ID: ${tenantId}`);
 
     // Seuls admin et manager peuvent voir
     if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
-      log(`[Activity] Access denied for role: ${userRole}`);
+      log(`[Activity] ❌ Access denied for role: ${userRole}`);
       return res.status(403).json({ error: 'Non autorisé' });
     }
 
-    // Vérifier si les colonnes existent (migration appliquée?)
+    log(`[Activity] ✅ Access granted`);
+
+    // TEST 1: Vérifier si on peut lire la table users
     try {
-      await q(`SELECT last_activity, presence_status, current_page FROM users LIMIT 1`);
-    } catch (colErr) {
-      error('[Activity] Migration not applied - missing columns:', colErr.message);
-      return res.status(500).json({
-        error: 'Migration non appliquée',
-        details: 'Les colonnes last_activity, presence_status, current_page n\'existent pas. Exécutez la migration.',
-        sql_error: colErr.message
-      });
+      const testQuery = await q(`SELECT COUNT(*) as total FROM users WHERE tenant_id = $1`, [tenantId]);
+      log(`[Activity] TEST 1: Found ${testQuery.rows[0]?.total || 0} users for tenant ${tenantId}`);
+    } catch (testErr) {
+      error(`[Activity] TEST 1 FAILED: Cannot query users table:`, testErr.message);
     }
 
-    // D'abord, mettre à jour les statuts de présence
-    await q(`
-      UPDATE users
-      SET presence_status = CASE
-        WHEN last_activity >= NOW() - INTERVAL '5 minutes' THEN 'online'
-        WHEN last_activity >= NOW() - INTERVAL '15 minutes' THEN 'idle'
-        ELSE 'offline'
-      END
-      WHERE tenant_id = $1
-    `, [tenantId]);
+    // TEST 2: Vérifier si les colonnes existent
+    let columnsExist = false;
+    try {
+      await q(`SELECT last_activity, presence_status, current_page FROM users LIMIT 1`);
+      columnsExist = true;
+      log(`[Activity] TEST 2: ✅ Migration columns exist`);
+    } catch (colErr) {
+      error(`[Activity] TEST 2 FAILED: Migration columns missing:`, colErr.message);
+      // Retourner les utilisateurs sans les colonnes de migration
+      log(`[Activity] Falling back to basic user query without migration columns`);
+    }
 
-    // Vérifier si les tables de sessions et logs existent
-    let hasSessionsTable = true;
-    let hasLogsTable = true;
+    // TEST 3: Vérifier si les tables existent
+    let hasSessionsTable = false;
+    let hasLogsTable = false;
 
     try {
       await q(`SELECT 1 FROM user_sessions LIMIT 1`);
+      hasSessionsTable = true;
+      log(`[Activity] TEST 3a: ✅ user_sessions table exists`);
     } catch (e) {
-      warn('[Activity] user_sessions table does not exist');
-      hasSessionsTable = false;
+      warn(`[Activity] TEST 3a: ❌ user_sessions table does not exist`);
     }
 
     try {
       await q(`SELECT 1 FROM activity_logs LIMIT 1`);
+      hasLogsTable = true;
+      log(`[Activity] TEST 3b: ✅ activity_logs table exists`);
     } catch (e) {
-      warn('[Activity] activity_logs table does not exist');
-      hasLogsTable = false;
+      warn(`[Activity] TEST 3b: ❌ activity_logs table does not exist`);
     }
 
     let rows = [];
 
-    if (hasSessionsTable && hasLogsTable) {
+    // Si les colonnes n'existent pas, utiliser une requête très basique
+    if (!columnsExist) {
+      log(`[Activity] Using BASIC query (no migration columns)`);
+      const result = await q(`
+        SELECT
+          u.id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.role,
+          u.is_active,
+          u.last_login,
+          u.created_at,
+          'offline' as presence_status,
+          NULL as last_activity,
+          NULL as current_page,
+          false as has_active_session,
+          NULL as last_session,
+          0 as time_online_today,
+          0 as actions_today,
+          NULL as last_action
+        FROM users u
+        WHERE u.tenant_id = $1
+        AND u.role != 'super_admin'
+        ORDER BY u.last_login DESC NULLS LAST
+      `, [tenantId]);
+      rows = result.rows;
+      log(`[Activity] BASIC query returned ${rows.length} users`);
+    } else if (hasSessionsTable && hasLogsTable) {
       // Version complète avec toutes les données
-      log('[Activity] Using full query with sessions and logs');
+      log(`[Activity] Using FULL query with sessions and logs`);
+
+      // D'abord, mettre à jour les statuts de présence
+      await q(`
+        UPDATE users
+        SET presence_status = CASE
+          WHEN last_activity >= NOW() - INTERVAL '5 minutes' THEN 'online'
+          WHEN last_activity >= NOW() - INTERVAL '15 minutes' THEN 'idle'
+          ELSE 'offline'
+        END
+        WHERE tenant_id = $1
+      `, [tenantId]);
+
       const result = await q(`
         SELECT
           u.id,
@@ -305,13 +350,11 @@ router.get('/users-status', authenticateToken, async (req, res) => {
           u.current_page,
           u.created_at,
 
-          -- Session active ?
           EXISTS(
             SELECT 1 FROM user_sessions us
             WHERE us.user_id = u.id AND us.status = 'active'
           ) as has_active_session,
 
-          -- Dernière session
           (SELECT json_build_object(
             'login_at', us.login_at,
             'device', us.device_type,
@@ -321,7 +364,6 @@ router.get('/users-status', authenticateToken, async (req, res) => {
           WHERE us.user_id = u.id
           ORDER BY us.login_at DESC LIMIT 1) as last_session,
 
-          -- Temps connecté aujourd'hui
           COALESCE((
             SELECT SUM(
               CASE
@@ -335,11 +377,9 @@ router.get('/users-status', authenticateToken, async (req, res) => {
             AND DATE(us.login_at) = CURRENT_DATE
           ), 0) as time_online_today,
 
-          -- Actions aujourd'hui
           (SELECT COUNT(*) FROM activity_logs al
            WHERE al.user_id = u.id AND DATE(al.created_at) = CURRENT_DATE) as actions_today,
 
-          -- Dernière action
           (SELECT json_build_object(
             'action', al.action,
             'category', al.category,
@@ -361,9 +401,22 @@ router.get('/users-status', authenticateToken, async (req, res) => {
           u.last_activity DESC NULLS LAST
       `, [tenantId]);
       rows = result.rows;
+      log(`[Activity] FULL query returned ${rows.length} users`);
     } else {
-      // Version simplifiée sans les tables de session/logs
-      log('[Activity] Using simplified query (missing tables)');
+      // Version simplifiée (colonnes OK mais pas les tables)
+      log(`[Activity] Using SIMPLIFIED query (columns OK, but missing tables)`);
+
+      // Mettre à jour les statuts de présence
+      await q(`
+        UPDATE users
+        SET presence_status = CASE
+          WHEN last_activity >= NOW() - INTERVAL '5 minutes' THEN 'online'
+          WHEN last_activity >= NOW() - INTERVAL '15 minutes' THEN 'idle'
+          ELSE 'offline'
+        END
+        WHERE tenant_id = $1
+      `, [tenantId]);
+
       const result = await q(`
         SELECT
           u.id,
@@ -378,10 +431,10 @@ router.get('/users-status', authenticateToken, async (req, res) => {
           u.current_page,
           u.created_at,
           false as has_active_session,
-          null as last_session,
+          NULL as last_session,
           0 as time_online_today,
           0 as actions_today,
-          null as last_action
+          NULL as last_action
         FROM users u
         WHERE u.tenant_id = $1
         AND u.role != 'super_admin'
@@ -394,22 +447,25 @@ router.get('/users-status', authenticateToken, async (req, res) => {
           u.last_activity DESC NULLS LAST
       `, [tenantId]);
       rows = result.rows;
+      log(`[Activity] SIMPLIFIED query returned ${rows.length} users`);
     }
-
-    log(`[Activity] Found ${rows.length} users for tenant ${tenantId}`);
 
     // Compter par statut
     const stats = {
       online: rows.filter(u => u.presence_status === 'online').length,
       idle: rows.filter(u => u.presence_status === 'idle').length,
-      offline: rows.filter(u => u.presence_status === 'offline').length,
+      offline: rows.filter(u => u.presence_status === 'offline' || !u.presence_status).length,
       total: rows.length
     };
 
+    log(`[Activity] ======= RESPONSE =======`);
+    log(`[Activity] Returning ${rows.length} users`);
+    log(`[Activity] Stats: ${JSON.stringify(stats)}`);
+
     res.json({ success: true, users: rows, stats });
   } catch (err) {
-    error('Users status error:', err);
-    res.status(500).json({ error: err.message });
+    error('[Activity] ❌ CRITICAL ERROR in users-status:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
