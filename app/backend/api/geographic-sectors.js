@@ -59,9 +59,9 @@ router.get('/', authMiddleware, async (req, res) => {
       success: true,
       sectors
     });
-  } catch (error) {
-    error('❌ Erreur liste secteurs:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur liste secteurs:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -99,9 +99,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
       success: true,
       sector
     });
-  } catch (error) {
-    error('❌ Erreur get secteur:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur get secteur:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -180,9 +180,9 @@ router.post('/', authMiddleware, async (req, res) => {
       success: true,
       sector
     });
-  } catch (error) {
-    error('❌ Erreur création secteur:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur création secteur:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -241,9 +241,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
       success: true,
       sector
     });
-  } catch (error) {
-    error('❌ Erreur update secteur:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur update secteur:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -284,9 +284,9 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     log(`✅ Secteur supprimé: ${id}`);
 
     res.json({ success: true });
-  } catch (error) {
-    error('❌ Erreur suppression secteur:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur suppression secteur:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -376,9 +376,9 @@ router.post('/:sector_id/assign', authMiddleware, async (req, res) => {
       assignment,
       message: `${user.first_name} ${user.last_name} assigné(e) au secteur ${sector.name}`
     });
-  } catch (error) {
-    error('❌ Erreur assignation secteur:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur assignation secteur:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -407,9 +407,9 @@ router.delete('/:sector_id/assign/:user_id', authMiddleware, async (req, res) =>
     log(`✅ Assignation retirée: user ${user_id} du secteur ${sector_id}`);
 
     res.json({ success: true });
-  } catch (error) {
-    error('❌ Erreur retrait assignation:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur retrait assignation:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -436,9 +436,9 @@ router.get('/user/:user_id/assignments', authMiddleware, async (req, res) => {
       success: true,
       assignments
     });
-  } catch (error) {
-    error('❌ Erreur get assignations user:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur get assignations user:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -471,9 +471,9 @@ router.get('/:id/stats', authMiddleware, async (req, res) => {
       success: true,
       stats
     });
-  } catch (error) {
-    error('❌ Erreur stats secteur:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    error('❌ Erreur stats secteur:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

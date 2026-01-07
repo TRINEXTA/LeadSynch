@@ -187,12 +187,12 @@ export default function Campaigns() {
 
   const getProgressPercentage = (campaign) => {
     if (!campaign.total_leads || campaign.total_leads === 0) return 0;
-    
+
     // Pour campagnes phoning: utiliser leads_contacted
-    if (campaign.type === 'phoning' || campaign.campaign_type === 'phone') {
+    if (campaign.type === 'phone' || campaign.type === 'phoning' || campaign.campaign_type === 'phone') {
       return Math.round((campaign.leads_contacted || 0) / campaign.total_leads * 100);
     }
-    
+
     // Pour campagnes email: utiliser sent_count
     return Math.round((campaign.sent_count || 0) / campaign.total_leads * 100);
   };
@@ -489,8 +489,8 @@ export default function Campaigns() {
                                 <button
                                   onClick={() => {
                                     setShowActionMenu(null);
-                                    // Rediriger selon le type de campagne
-                                    if (campaign.type === 'phoning' || campaign.campaign_type === 'phone') {
+                                    // Rediriger selon le type de campagne (phone, phoning ou campaign_type)
+                                    if (campaign.type === 'phone' || campaign.type === 'phoning' || campaign.campaign_type === 'phone') {
                                       navigate(`/CampaignDetailsPhoning?id=${campaign.id}`);
                                     } else {
                                       navigate(`/CampaignDetails?id=${campaign.id}`);
@@ -666,6 +666,29 @@ export default function Campaigns() {
                       </div>
                     )}
 
+                    {/* Stats pour campagnes phoning */}
+                    {(campaign.type === 'phone' || campaign.type === 'phoning') && campaign.status !== 'draft' && campaign.total_leads > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-gray-600 mb-1 font-semibold">📋 Total leads</p>
+                          <p className="text-2xl font-bold text-blue-600">{campaign.total_leads || 0}</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                          <p className="text-xs text-gray-600 mb-1 font-semibold">📞 Contactés</p>
+                          <p className="text-2xl font-bold text-green-600">{campaign.leads_contacted || 0}</p>
+                          <p className="text-xs text-gray-500">{campaign.total_leads > 0 ? Math.round((campaign.leads_contacted || 0) / campaign.total_leads * 100) : 0}%</p>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                          <p className="text-xs text-gray-600 mb-1 font-semibold">📅 RDV obtenus</p>
+                          <p className="text-2xl font-bold text-purple-600">{campaign.meetings_count || 0}</p>
+                        </div>
+                        <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                          <p className="text-xs text-gray-600 mb-1 font-semibold">⭐ Qualifiés</p>
+                          <p className="text-2xl font-bold text-orange-600">{campaign.qualified_count || 0}</p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Barre de progression */}
                     {(campaign.status === 'active' || campaign.status === 'paused' || campaign.status === 'completed') && campaign.total_leads > 0 && (
                       <div>
@@ -679,7 +702,12 @@ export default function Campaigns() {
                             style={{ width: `${progress}%` }}
                           >
                             {progress > 10 && (
-                              <span className="text-white text-xs font-bold">{campaign.sent_count}/{campaign.total_leads}</span>
+                              <span className="text-white text-xs font-bold">
+                                {(campaign.type === 'phone' || campaign.type === 'phoning')
+                                  ? `${campaign.leads_contacted || 0}/${campaign.total_leads}`
+                                  : `${campaign.sent_count || 0}/${campaign.total_leads}`
+                                }
+                              </span>
                             )}
                           </div>
                         </div>
@@ -729,7 +757,7 @@ export default function Campaigns() {
                 {selectedCampaign.type === 'email' && (
                   <div className="space-y-4">
                     <h3 className="text-xl font-bold text-gray-900">📊 Statistiques détaillées</h3>
-                    
+
                     <div className="grid grid-cols-3 gap-4">
                       <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
                         <p className="text-sm text-gray-600 mb-2">Total envoyés</p>
@@ -744,6 +772,30 @@ export default function Campaigns() {
                       <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
                         <p className="text-sm text-gray-600 mb-2">Taux ouverture</p>
                         <p className="text-3xl font-bold text-purple-600">{getOpenRate(selectedCampaign)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(selectedCampaign.type === 'phone' || selectedCampaign.type === 'phoning') && (
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-gray-900">📞 Statistiques phoning</h3>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                        <p className="text-sm text-gray-600 mb-2">Total leads</p>
+                        <p className="text-3xl font-bold text-blue-600">{selectedCampaign.total_leads || 0}</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-4 border-2 border-green-200">
+                        <p className="text-sm text-gray-600 mb-2">Leads contactés</p>
+                        <p className="text-3xl font-bold text-green-600">{selectedCampaign.leads_contacted || 0}</p>
+                        <p className="text-xs text-gray-500">
+                          {selectedCampaign.total_leads > 0 ? Math.round((selectedCampaign.leads_contacted || 0) / selectedCampaign.total_leads * 100) : 0}%
+                        </p>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
+                        <p className="text-sm text-gray-600 mb-2">RDV obtenus</p>
+                        <p className="text-3xl font-bold text-purple-600">{selectedCampaign.meetings_count || 0}</p>
                       </div>
                     </div>
                   </div>
