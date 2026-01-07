@@ -71,9 +71,14 @@ router.get('/', authenticateToken, async (req, res) => {
     if (isSuperAdmin || userRole === 'admin') {
       // Pas de filtre supplémentaire
     }
-    // Manager : voir ses leads + ceux assignés
+    // Manager : voir ses leads + ceux de ses subordonnés (commerciaux sous sa supervision)
     else if (userRole === 'manager') {
-      query += ` AND (pl.assigned_user_id = $${paramIndex} OR l.assigned_to = $${paramIndex})`;
+      query += ` AND (
+        pl.assigned_user_id = $${paramIndex}
+        OR l.assigned_to = $${paramIndex}
+        OR pl.assigned_user_id IN (SELECT id FROM users WHERE manager_id = $${paramIndex})
+        OR l.assigned_to IN (SELECT id FROM users WHERE manager_id = $${paramIndex})
+      )`;
       params.push(userId);
       paramIndex++;
     }
