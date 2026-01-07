@@ -10,7 +10,7 @@ const q = (text, params=[]) => db.query(text, params);
 // =============================
 // GET /pipeline-leads
 // Récupère les leads du pipeline pour l'utilisateur connecté
-// OPTIMISÉ: Sans subqueries, avec LIMIT
+// OPTIMISÉ: LEFT JOIN au lieu de EXISTS, avec pagination
 // =============================
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -18,9 +18,18 @@ router.get('/', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const isSuperAdmin = req.user?.is_super_admin === true;
-    const limit = Math.min(parseInt(req.query.limit) || 500, 1000);
 
-    // Requête optimisée avec colonnes d'activité
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(parseInt(req.query.limit) || 100, 200);
+    const offset = (page - 1) * limit;
+
+    // Filtre optionnel par campagne
+    const campaignFilter = req.query.campaign_id;
+    // Filtre optionnel par stage
+    const stageFilter = req.query.stage;
+
+    // Requête optimisée avec LEFT JOIN au lieu de EXISTS
     let query = `
       SELECT
         pl.id,
@@ -31,7 +40,6 @@ router.get('/', authenticateToken, async (req, res) => {
         pl.deal_value,
         pl.created_at,
         pl.updated_at,
-        -- Colonnes d'activité pour affichage sur les cartes
         COALESCE(pl.emails_sent, 0) as emails_sent,
         COALESCE(pl.calls_made, 0) as calls_made,
         COALESCE(pl.proposal_status, 'not_sent') as proposal_status,
@@ -41,12 +49,8 @@ router.get('/', authenticateToken, async (req, res) => {
         pl.contract_sent_date,
         pl.won_date,
         pl.notes,
-        -- Vérifier si demande en cours
-        EXISTS(
-          SELECT 1 FROM validation_requests vr
-          WHERE vr.lead_id = pl.lead_id AND vr.status = 'pending'
-        ) as has_pending_request,
-        -- Infos du lead
+        -- LEFT JOIN plus performant que EXISTS
+        CASE WHEN vr.id IS NOT NULL THEN true ELSE false END as has_pending_request,
         l.company_name,
         l.contact_name,
         l.email,
@@ -61,11 +65,30 @@ router.get('/', authenticateToken, async (req, res) => {
       JOIN leads l ON l.id = pl.lead_id
       LEFT JOIN campaigns c ON c.id = pl.campaign_id
       LEFT JOIN users u ON pl.assigned_user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT id FROM validation_requests vr2
+        WHERE vr2.lead_id = pl.lead_id AND vr2.status = 'pending'
+        LIMIT 1
+      ) vr ON true
       WHERE pl.tenant_id = $1
     `;
 
     const params = [tenantId];
     let paramIndex = 2;
+
+    // Filtre par campagne si spécifié
+    if (campaignFilter) {
+      query += ` AND pl.campaign_id = $${paramIndex}`;
+      params.push(campaignFilter);
+      paramIndex++;
+    }
+
+    // Filtre par stage si spécifié
+    if (stageFilter) {
+      query += ` AND pl.stage = $${paramIndex}`;
+      params.push(stageFilter);
+      paramIndex++;
+    }
 
     // Admin ou super admin : voir tous les leads
     if (isSuperAdmin || userRole === 'admin') {
@@ -84,14 +107,54 @@ router.get('/', authenticateToken, async (req, res) => {
       paramIndex++;
     }
 
-    query += ` ORDER BY pl.updated_at DESC LIMIT $${paramIndex}`;
-    params.push(limit);
+    query += ` ORDER BY pl.updated_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
 
     const { rows } = await q(query, params);
 
-    log(`Pipeline leads: ${rows.length} (limit: ${limit})`);
+    // Compter le total pour la pagination (requête simplifiée)
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM pipeline_leads pl
+      JOIN leads l ON l.id = pl.lead_id
+      WHERE pl.tenant_id = $1
+    `;
+    const countParams = [tenantId];
+    let countParamIndex = 2;
 
-    return res.json({ success: true, leads: rows });
+    if (campaignFilter) {
+      countQuery += ` AND pl.campaign_id = $${countParamIndex}`;
+      countParams.push(campaignFilter);
+      countParamIndex++;
+    }
+
+    if (stageFilter) {
+      countQuery += ` AND pl.stage = $${countParamIndex}`;
+      countParams.push(stageFilter);
+      countParamIndex++;
+    }
+
+    if (!isSuperAdmin && userRole !== 'admin') {
+      countQuery += ` AND (pl.assigned_user_id = $${countParamIndex} OR l.assigned_to = $${countParamIndex})`;
+      countParams.push(userId);
+    }
+
+    const { rows: countRows } = await q(countQuery, countParams);
+    const total = parseInt(countRows[0]?.total || 0);
+
+    log(`Pipeline leads: ${rows.length}/${total} (page ${page}, limit ${limit})`);
+
+    return res.json({
+      success: true,
+      leads: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: offset + rows.length < total
+      }
+    });
 
   } catch (err) {
     error('❌ Erreur GET pipeline-leads:', err);
@@ -182,8 +245,8 @@ router.post('/:id/action', authenticateToken, async (req, res) => {
       message: 'Action enregistrée avec succès'
     });
 
-  } catch (error) {
-    error('❌ Erreur enregistrement action:', error);
+  } catch (err) {
+    error('❌ Erreur enregistrement action:', err);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'enregistrement de l\'action'
@@ -417,9 +480,9 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
       message: `${deployed} nouveaux leads ajoutés`
     };
 
-  } catch (error) {
-    error('❌ [SMART-REFILL] Erreur:', error);
-    return { success: false, error: error.message };
+  } catch (err) {
+    error('❌ [SMART-REFILL] Erreur:', err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -852,9 +915,9 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       refill: refillResult
     });
 
-  } catch (error) {
-    error('❌ Erreur qualification:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur qualification:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -941,9 +1004,9 @@ router.post('/', authenticateToken, async (req, res) => {
       pipelineLead: pipelineRows[0]
     });
 
-  } catch (error) {
-    error('❌ Erreur POST /pipeline-leads:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur POST /pipeline-leads:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1156,9 +1219,9 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       refill: refillResult
     });
 
-  } catch (error) {
-    error('❌ Erreur PATCH pipeline-lead:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur PATCH pipeline-lead:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1197,9 +1260,9 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
 
     return res.json({ success: true, history: rows });
 
-  } catch (error) {
-    error('❌ Erreur GET history:', error);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    error('❌ Erreur GET history:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
