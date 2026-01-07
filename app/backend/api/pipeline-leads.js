@@ -776,10 +776,11 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
     }
 
     if (notes && notes.trim()) {
+      // 1. Sauvegarder dans l'historique des appels
       await q(
-        `INSERT INTO lead_call_history 
-         (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type, 
-          stage_before, stage_after, qualification, notes, call_duration, 
+        `INSERT INTO lead_call_history
+         (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type,
+          stage_before, stage_after, qualification, notes, call_duration,
           next_action, scheduled_date, deal_value, created_by)
          VALUES ($1, $2, $3, $4, 'qualification', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
@@ -798,6 +799,25 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
           userId
         ]
       );
+
+      // 2. Mettre à jour aussi leads.notes pour affichage dans la fiche
+      const noteDate = new Date().toLocaleDateString('fr-FR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      const formattedNote = `[${noteDate}] ${notes.trim()}`;
+
+      await q(
+        `UPDATE leads SET
+          notes = CASE
+            WHEN notes IS NULL OR notes = '' THEN $1
+            ELSE notes || E'\n---\n' || $1
+          END,
+          updated_at = NOW()
+         WHERE id = $2 AND tenant_id = $3`,
+        [formattedNote, pipelineLead.lead_id, tenantId]
+      );
+      log(`📝 Notes mises à jour pour lead ${pipelineLead.lead_id}`);
     }
 
     if (scheduled_date || follow_up_date) {
