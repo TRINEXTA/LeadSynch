@@ -41,10 +41,10 @@ router.get('/', authenticateToken, async (req, res) => {
         pl.contract_sent_date,
         pl.won_date,
         pl.notes,
-        -- Vérifier si demande en cours
+        -- Vérifier si demande en cours (cast UUID pour compatibilité)
         EXISTS(
           SELECT 1 FROM validation_requests vr
-          WHERE vr.lead_id = pl.lead_id AND vr.status = 'pending'
+          WHERE vr.lead_id::uuid = pl.lead_id AND vr.status = 'pending'
         ) as has_pending_request,
         -- Infos du lead
         l.company_name,
