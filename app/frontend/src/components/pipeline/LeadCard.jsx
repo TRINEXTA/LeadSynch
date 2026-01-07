@@ -1,6 +1,6 @@
 import { log, error, warn } from "../../lib/logger.js";
 import React, { useState } from 'react';
-import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, CheckCircle, HelpCircle, UserCog, AlertCircle } from 'lucide-react';
+import { Mail, Phone, FileText, FileCheck, FileSignature, DollarSign, Calendar, User, MoreVertical, Eye, Clock, Edit, History, CheckCircle, HelpCircle, UserCog, AlertCircle, Bell, BellRing } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const STAGE_CONFIG = {
@@ -37,6 +37,36 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
   const proposalStatus = PROPOSAL_STATUS[lead.proposal_status] || PROPOSAL_STATUS.not_sent;
   const contractStatus = CONTRACT_STATUS[lead.contract_status] || CONTRACT_STATUS.not_sent;
   const stageConfig = STAGE_CONFIG[lead.stage] || STAGE_CONFIG.cold_call;
+
+  // Info rappel programmé
+  const followupInfo = lead.followup_info || {};
+  const hasFollowup = followupInfo.has_followup;
+  const isFollowupOverdue = followupInfo.is_overdue;
+  const nextFollowup = followupInfo.next_followup;
+
+  const formatFollowupDate = (dateStr) => {
+    if (!dateStr) return '';
+    // Fuseau horaire Paris
+    const timeZone = 'Europe/Paris';
+    const date = new Date(dateStr);
+    const now = new Date();
+
+    // Comparer en timezone Paris
+    const dateInParis = new Date(date.toLocaleString('en-US', { timeZone }));
+    const todayInParis = new Date(now.toLocaleString('en-US', { timeZone }));
+    const tomorrowInParis = new Date(todayInParis);
+    tomorrowInParis.setDate(tomorrowInParis.getDate() + 1);
+
+    const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone });
+
+    if (dateInParis.toDateString() === todayInParis.toDateString()) {
+      return `Aujourd'hui ${timeStr}`;
+    } else if (dateInParis.toDateString() === tomorrowInParis.toDateString()) {
+      return `Demain ${timeStr}`;
+    } else {
+      return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone });
+    }
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -75,6 +105,24 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
           </div>
           
           <div className="flex items-center gap-1 ml-2">
+            {/* Indicateur rappel programmé */}
+            {hasFollowup && (
+              <div
+                className={`p-1.5 rounded-lg ${
+                  isFollowupOverdue
+                    ? 'bg-red-100 animate-pulse'
+                    : 'bg-orange-100'
+                }`}
+                title={`Rappel: ${formatFollowupDate(nextFollowup)}`}
+              >
+                {isFollowupOverdue ? (
+                  <BellRing className="w-4 h-4 text-red-600" />
+                ) : (
+                  <Bell className="w-4 h-4 text-orange-600" />
+                )}
+              </div>
+            )}
+
             <button
               onClick={() => setExpanded(!expanded)}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
@@ -279,6 +327,27 @@ export default function LeadCard({ lead, onEmailClick, onCallClick, onProposalCl
                 <div>
                   <p className="text-sm font-bold text-orange-900">⚠️ Demande en cours</p>
                   <p className="text-xs text-orange-700">Une demande de validation/aide est en attente pour ce lead</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Indicateur rappel programmé */}
+          {hasFollowup && (
+            <div className={`mb-3 p-3 ${isFollowupOverdue ? 'bg-red-50 border-2 border-red-300' : 'bg-amber-50 border-2 border-amber-300'} rounded-lg ${isFollowupOverdue ? 'animate-pulse' : ''}`}>
+              <div className="flex items-center gap-2">
+                {isFollowupOverdue ? (
+                  <BellRing className="w-5 h-5 text-red-600" />
+                ) : (
+                  <Bell className="w-5 h-5 text-amber-600" />
+                )}
+                <div>
+                  <p className={`text-sm font-bold ${isFollowupOverdue ? 'text-red-900' : 'text-amber-900'}`}>
+                    {isFollowupOverdue ? '🔔 Rappel en retard !' : '🔔 Rappel programmé'}
+                  </p>
+                  <p className={`text-xs ${isFollowupOverdue ? 'text-red-700' : 'text-amber-700'}`}>
+                    {formatFollowupDate(nextFollowup)}
+                  </p>
                 </div>
               </div>
             </div>

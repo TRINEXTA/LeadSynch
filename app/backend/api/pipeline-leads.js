@@ -70,6 +70,17 @@ router.get('/', authenticateToken, async (req, res) => {
           SELECT 1 FROM validation_requests vr
           WHERE vr.lead_id::uuid = pl.lead_id AND vr.status = 'pending'
         ) as has_pending_request,
+        -- Vérifier si rappel programmé (non complété)
+        (
+          SELECT json_build_object(
+            'has_followup', COUNT(*) > 0,
+            'next_followup', MIN(f.scheduled_date),
+            'is_overdue', MIN(f.scheduled_date) < NOW()
+          )
+          FROM follow_ups f
+          WHERE f.lead_id = pl.lead_id
+          AND (f.completed = FALSE OR f.completed IS NULL)
+        ) as followup_info,
         -- Infos du lead
         l.company_name,
         l.contact_name,
