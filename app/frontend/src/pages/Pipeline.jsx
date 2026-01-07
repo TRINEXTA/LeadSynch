@@ -31,8 +31,6 @@ export default function Pipeline() {
   const [selectedCampaign, setSelectedCampaign] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [pagination, setPagination] = useState({ hasMore: false, page: 1, total: 0 });
 
   // UI State - récupérer depuis localStorage
   const [showStats, setShowStats] = useState(() => {
@@ -66,43 +64,27 @@ export default function Pipeline() {
     loadData();
   }, []);
 
-  const loadData = useCallback(async (page = 1, append = false) => {
+  const loadData = useCallback(async () => {
     try {
-      if (page === 1) setLoading(true);
-      else setLoadingMore(true);
-
       const [leadsResponse, campaignsResponse] = await Promise.all([
-        api.get(`/pipeline-leads?page=${page}&limit=100`),
-        page === 1 ? api.get('/campaigns/my-campaigns') : Promise.resolve({ data: { campaigns: campaigns } })
+        api.get('/pipeline-leads'),
+        api.get('/campaigns/my-campaigns')
       ]);
 
       const leadsData = leadsResponse.data.leads || [];
-      const paginationData = leadsResponse.data.pagination || { hasMore: false, page: 1, total: 0 };
-      const campaignsData = campaignsResponse.data.campaigns || campaigns;
+      const campaignsData = campaignsResponse.data.campaigns || [];
 
-      log(`✅ Leads chargés: ${leadsData.length}/${paginationData.total} (page ${page})`);
-      if (page === 1) log('✅ Campagnes chargées:', campaignsData.length);
+      log('✅ Leads chargés:', leadsData.length);
+      log('✅ Campagnes chargées:', campaignsData.length);
 
-      if (append) {
-        setLeads(prev => [...prev, ...leadsData]);
-      } else {
-        setLeads(leadsData);
-      }
+      setLeads(leadsData);
       setCampaigns(campaignsData);
-      setPagination(paginationData);
+      setLoading(false);
     } catch (err) {
       error('❌ Erreur chargement données:', err);
-    } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
-  }, [campaigns]);
-
-  const loadMore = useCallback(() => {
-    if (pagination.hasMore && !loadingMore) {
-      loadData(pagination.page + 1, true);
-    }
-  }, [pagination, loadingMore, loadData]);
+  }, []);
 
   // Filtrage optimisé avec useMemo
   const filteredLeads = useMemo(() => {
@@ -341,31 +323,13 @@ export default function Pipeline() {
               onChange={(e) => setSelectedCampaign(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-purple-500 max-w-[200px]"
             >
-              <option value="all">Toutes ({leads.length}{pagination.total > leads.length ? `/${pagination.total}` : ''})</option>
+              <option value="all">Toutes ({leads.length})</option>
               {campaigns.map(campaign => (
                 <option key={campaign.id} value={campaign.id}>
                   {campaign.name}
                 </option>
               ))}
             </select>
-
-            {/* Bouton charger plus si nécessaire */}
-            {pagination.hasMore && (
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                {loadingMore ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    Chargement...
-                  </>
-                ) : (
-                  <>+ Charger plus ({pagination.total - leads.length} restants)</>
-                )}
-              </button>
-            )}
 
             {/* Mode Prospection */}
             <button
