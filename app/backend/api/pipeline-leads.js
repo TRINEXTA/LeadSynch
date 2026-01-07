@@ -67,40 +67,11 @@ router.get('/', authenticateToken, async (req, res) => {
     const params = [tenantId];
     let paramIndex = 2;
 
-    // Admin ou super admin : voir tous les leads
-    if (isSuperAdmin || userRole === 'admin') {
-      // Pas de filtre supplémentaire
-      log(`✅ Admin/SuperAdmin - accès à tous les leads du pipeline`);
-    }
-    // Manager : voir ses leads + équipes + campagnes assignées + subordonnés
-    else if (userRole === 'manager') {
-      query += ` AND (
-        -- Ses propres leads directs
-        pl.assigned_user_id = $${paramIndex}
-        OR l.assigned_to = $${paramIndex}
-        -- Leads de ses subordonnés directs (users.manager_id)
-        OR pl.assigned_user_id IN (SELECT id FROM users WHERE manager_id = $${paramIndex} AND tenant_id = $1)
-        OR l.assigned_to IN (SELECT id FROM users WHERE manager_id = $${paramIndex} AND tenant_id = $1)
-        -- Leads des équipes où il est manager
-        OR pl.assigned_user_id IN (
-          SELECT tm.user_id FROM team_members tm
-          JOIN teams t ON tm.team_id = t.id
-          WHERE t.manager_id = $${paramIndex} AND t.tenant_id = $1
-        )
-        -- Campagnes où il est dans campaign_assignments
-        OR pl.campaign_id IN (
-          SELECT ca.campaign_id FROM campaign_assignments ca
-          WHERE ca.user_id = $${paramIndex}
-        )
-        -- Campagnes où il est dans assigned_users (JSON)
-        OR pl.campaign_id IN (
-          SELECT c2.id FROM campaigns c2
-          WHERE c2.tenant_id = $1 AND c2.assigned_users::jsonb ? $${paramIndex}::text
-        )
-      )`;
-      params.push(userId);
-      paramIndex++;
-      log(`✅ Manager ${userId} - accès complet (leads + équipe + campagnes)`);
+    // Admin, super admin ou manager : voir tous les leads du tenant
+    // Les managers supervisent leur équipe donc ils ont besoin de tout voir
+    if (isSuperAdmin || userRole === 'admin' || userRole === 'manager') {
+      // Pas de filtre supplémentaire - accès complet au tenant
+      log(`✅ ${userRole} (${userId}) - accès à tous les leads du pipeline`);
     }
     // Commercial/User : uniquement ses propres leads
     else {
