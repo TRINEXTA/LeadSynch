@@ -74,6 +74,9 @@ router.get('/', authenticateToken, async (req, res) => {
     }
     // Manager : voir ses leads + leads des campagnes où il est affecté
     else if (userRole === 'manager') {
+      // Pattern pour recherche LIKE dans le JSON
+      const userIdPattern = `%${userId}%`;
+
       query += ` AND (
         -- Ses propres leads directs
         pl.assigned_user_id = $${paramIndex}
@@ -86,11 +89,12 @@ router.get('/', authenticateToken, async (req, res) => {
         OR pl.campaign_id IN (
           SELECT c2.id FROM campaigns c2
           WHERE c2.tenant_id = $1
-          AND c2.assigned_users::text LIKE '%' || $${paramIndex}::text || '%'
+          AND c2.assigned_users::text LIKE $${paramIndex + 1}
         )
       )`;
       params.push(userId);
-      paramIndex++;
+      params.push(userIdPattern);
+      paramIndex += 2;
       log(`✅ Manager ${userId} - accès à ses leads + campagnes affectées`);
     }
     // Commercial/User : uniquement ses propres leads
