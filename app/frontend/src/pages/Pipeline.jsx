@@ -66,10 +66,8 @@ export default function Pipeline() {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
-
       const [leadsResponse, campaignsResponse] = await Promise.all([
-        api.get('/pipeline-leads?limit=2000'),
+        api.get('/pipeline-leads'),
         api.get('/campaigns/my-campaigns')
       ]);
 
@@ -81,9 +79,9 @@ export default function Pipeline() {
 
       setLeads(leadsData);
       setCampaigns(campaignsData);
+      setLoading(false);
     } catch (err) {
       error('❌ Erreur chargement données:', err);
-    } finally {
       setLoading(false);
     }
   }, []);
