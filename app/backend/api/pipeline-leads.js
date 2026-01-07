@@ -8,6 +8,30 @@ const router = express.Router();
 const q = (text, params=[]) => db.query(text, params);
 
 // =============================
+// HELPER: Batch insert pour éviter les N+1 queries
+// Insère plusieurs leads en une seule requête SQL
+// =============================
+async function batchInsertPipelineLeads(tenantId, campaignId, candidates, userId) {
+  if (!candidates || !candidates.length) return 0;
+
+  const leadIds = candidates.map(row => row.lead_id);
+
+  try {
+    const { rowCount } = await q(
+      `INSERT INTO pipeline_leads
+       (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+       SELECT gen_random_uuid(), $1, unnest($2::uuid[]), $3, 'cold_call', $4, NOW(), NOW()
+       ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+      [tenantId, leadIds, campaignId, userId]
+    );
+    return rowCount || leadIds.length;
+  } catch (err) {
+    error('Erreur batch insert pipeline:', err);
+    return 0;
+  }
+}
+
+// =============================
 // GET /pipeline-leads
 // Récupère les leads du pipeline pour l'utilisateur connecté
 // OPTIMISÉ: Sans subqueries, avec LIMIT
@@ -403,22 +427,8 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
       return { success: true, message: 'Plus de leads disponibles', deployed: 0 };
     }
 
-    // 7. Insérer dans le pipeline
-    let deployed = 0;
-    for (const row of candidates) {
-      try {
-        await q(
-          `INSERT INTO pipeline_leads 
-           (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-           ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-          [tenant_id, row.lead_id, campaign_id, user_id]
-        );
-        deployed++;
-      } catch (err) {
-        error('Erreur insertion lead:', err);
-      }
-    }
+    // 7. Insérer dans le pipeline (BATCH - optimisé)
+    const deployed = await batchInsertPipelineLeads(tenant_id, campaign_id, candidates, user_id);
 
     // 8. Reset le compteur
     await q(
@@ -522,21 +532,8 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
           [tenantId, campaign.database_id, userId, campaign_id, needed]
         );
 
-        let deployed = 0;
-        for (const row of candidates) {
-          try {
-            await q(
-              `INSERT INTO pipeline_leads 
-               (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-               VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-              [tenantId, row.lead_id, campaign_id, userId]
-            );
-            deployed++;
-          } catch (err) {
-            error('Erreur insertion lead:', err);
-          }
-        }
+        // BATCH insert optimisé (évite N+1 queries)
+        const deployed = await batchInsertPipelineLeads(tenantId, campaign_id, candidates, userId);
 
         refillResults[userId] = {
           before: activeCount,
@@ -638,31 +635,20 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
         [tenantId, campaign.database_id, userId, campaign_id, SIZE]
       );
 
-      let deployed = 0;
-      for (const row of candidates) {
-        try {
-          await q(
-            `INSERT INTO pipeline_leads 
-             (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-             ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-            [tenantId, row.lead_id, campaign_id, userId]
-          );
-          deployed++;
-        } catch (err) {
-          error('Erreur insertion lead:', err);
-        }
-      }
+      // BATCH insert optimisé (évite N+1 queries)
+      const deployed = await batchInsertPipelineLeads(tenantId, campaign_id, candidates, userId);
 
       perUser[userId] = deployed;
       totalDeployed += deployed;
 
-      await q(
-        `UPDATE campaign_assignments 
-         SET leads_assigned = leads_assigned + $1
-         WHERE campaign_id = $2 AND user_id = $3`,
-        [deployed, campaign_id, userId]
-      );
+      if (deployed > 0) {
+        await q(
+          `UPDATE campaign_assignments
+           SET leads_assigned = leads_assigned + $1
+           WHERE campaign_id = $2 AND user_id = $3`,
+          [deployed, campaign_id, userId]
+        );
+      }
     }
 
     log(`🧩 Déploiement campagne ${campaign_id}: ${totalDeployed} leads injectés (cold_call)`);
@@ -1124,25 +1110,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
             [tenantId, databaseId, assignedUserId, campaignId, needed]
           );
 
-          let deployed = 0;
-          for (const row of candidates) {
-            try {
-              await q(
-                `INSERT INTO pipeline_leads 
-                 (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-                 VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-                 ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-                [tenantId, row.lead_id, campaignId, assignedUserId]
-              );
-              deployed++;
-            } catch (err) {
-              error('Erreur insertion lead:', err);
-            }
-          }
+          // BATCH insert optimisé (évite N+1 queries)
+          const deployed = await batchInsertPipelineLeads(tenantId, campaignId, candidates, assignedUserId);
 
           if (deployed > 0) {
             await q(
-              `UPDATE campaign_assignments 
+              `UPDATE campaign_assignments
                SET leads_assigned = leads_assigned + $1
                WHERE campaign_id = $2 AND user_id = $3`,
               [deployed, campaignId, assignedUserId]
