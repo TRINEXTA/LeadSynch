@@ -67,11 +67,31 @@ router.get('/', authenticateToken, async (req, res) => {
     const params = [tenantId];
     let paramIndex = 2;
 
-    // Admin, super admin ou manager : voir tous les leads du tenant
-    // Les managers supervisent leur équipe donc ils ont besoin de tout voir
-    if (isSuperAdmin || userRole === 'admin' || userRole === 'manager') {
+    // Admin ou super admin : voir tous les leads du tenant
+    if (isSuperAdmin || userRole === 'admin') {
       // Pas de filtre supplémentaire - accès complet au tenant
       log(`✅ ${userRole} (${userId}) - accès à tous les leads du pipeline`);
+    }
+    // Manager : voir ses leads + leads des campagnes où il est affecté
+    else if (userRole === 'manager') {
+      query += ` AND (
+        -- Ses propres leads directs
+        pl.assigned_user_id = $${paramIndex}
+        OR l.assigned_to = $${paramIndex}
+        -- Leads des campagnes où il est dans campaign_assignments
+        OR pl.campaign_id IN (
+          SELECT ca.campaign_id FROM campaign_assignments ca WHERE ca.user_id = $${paramIndex}
+        )
+        -- Leads des campagnes où son UUID apparaît dans assigned_users (JSON)
+        OR pl.campaign_id IN (
+          SELECT c2.id FROM campaigns c2
+          WHERE c2.tenant_id = $1
+          AND c2.assigned_users::text LIKE '%' || $${paramIndex}::text || '%'
+        )
+      )`;
+      params.push(userId);
+      paramIndex++;
+      log(`✅ Manager ${userId} - accès à ses leads + campagnes affectées`);
     }
     // Commercial/User : uniquement ses propres leads
     else {
