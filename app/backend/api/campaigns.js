@@ -122,6 +122,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // ==================== GET MY CAMPAIGNS ====================
+// OPTIMISÉ: Suppression des COUNT lourds, utilise des subqueries plus légères
 router.get('/my-campaigns', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
@@ -131,7 +132,7 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
     const userPermissions = req.user?.permissions || {};
     const canViewAllCampaigns = userPermissions.view_all_campaigns === true;
 
-    log(`📋 Chargement campagnes pour user ${userId} (${userRole}), permissions: ${JSON.stringify(userPermissions)}`);
+    log(`📋 Chargement campagnes pour user ${userId} (${userRole})`);
 
     let campaigns;
 
@@ -141,50 +142,62 @@ router.get('/my-campaigns', authenticateToken, async (req, res) => {
         `SELECT c.*,
                 ld.name as database_name,
                 et.name as template_name,
-                COUNT(DISTINCT pl.id) as my_leads_count,
-                COUNT(DISTINCT CASE WHEN eq.status = 'sent' THEN eq.id END) as emails_sent
+                (SELECT COUNT(*) FROM pipeline_leads pl WHERE pl.campaign_id = c.id) as my_leads_count,
+                (SELECT COUNT(*) FROM email_queue eq WHERE eq.campaign_id = c.id AND eq.status = 'sent') as emails_sent
          FROM campaigns c
          LEFT JOIN lead_databases ld ON c.database_id = ld.id
          LEFT JOIN email_templates et ON c.template_id = et.id
-         LEFT JOIN pipeline_leads pl ON c.id = pl.campaign_id
-         LEFT JOIN email_queue eq ON c.id = eq.campaign_id
          WHERE c.tenant_id = $1
-         GROUP BY c.id, ld.name, et.name
          ORDER BY c.created_at DESC`,
         [tenantId]
       );
       log(`✅ Admin - toutes les campagnes: ${campaigns.length}`);
     }
-    // Manager ou commercial : uniquement leurs campagnes assignées
-    else {
+    // Manager : voir ses campagnes + celles où il est affecté
+    else if (userRole === 'manager') {
+      const userIdPattern = `%${userId}%`;
       campaigns = await queryAll(
-        `SELECT DISTINCT c.*,
+        `SELECT c.*,
                 ld.name as database_name,
                 et.name as template_name,
-                COUNT(DISTINCT pl.id) as my_leads_count,
-                COUNT(DISTINCT CASE WHEN eq.status = 'sent' THEN eq.id END) as emails_sent
+                (SELECT COUNT(*) FROM pipeline_leads pl WHERE pl.campaign_id = c.id) as my_leads_count,
+                (SELECT COUNT(*) FROM email_queue eq WHERE eq.campaign_id = c.id AND eq.status = 'sent') as emails_sent
          FROM campaigns c
          LEFT JOIN lead_databases ld ON c.database_id = ld.id
          LEFT JOIN email_templates et ON c.template_id = et.id
-         LEFT JOIN pipeline_leads pl ON c.id = pl.campaign_id AND pl.assigned_user_id = $2
-         LEFT JOIN email_queue eq ON c.id = eq.campaign_id
          WHERE c.tenant_id = $1
            AND (
-             c.assigned_users::jsonb ? $2::text
-             OR c.created_by = $2
-             OR c.supervisor_id = $2::uuid
-             OR EXISTS (
-               SELECT 1 FROM pipeline_leads pl2
-               WHERE pl2.campaign_id = c.id AND pl2.assigned_user_id = $2
-             )
-             OR EXISTS (
-               SELECT 1 FROM campaign_assignments ca
-               WHERE ca.campaign_id = c.id AND ca.user_id = $2
-             )
+             c.assigned_users::text LIKE $2
+             OR c.created_by = $3
+             OR c.supervisor_id = $3::uuid
+             OR EXISTS (SELECT 1 FROM campaign_assignments ca WHERE ca.campaign_id = c.id AND ca.user_id = $3)
            )
-         GROUP BY c.id, ld.name, et.name
          ORDER BY c.created_at DESC`,
-        [tenantId, userId]
+        [tenantId, userIdPattern, userId]
+      );
+      log(`✅ Manager ${req.user?.email} - mes campagnes: ${campaigns.length}`);
+    }
+    // Commercial : uniquement ses campagnes assignées
+    else {
+      const userIdPattern = `%${userId}%`;
+      campaigns = await queryAll(
+        `SELECT c.*,
+                ld.name as database_name,
+                et.name as template_name,
+                (SELECT COUNT(*) FROM pipeline_leads pl WHERE pl.campaign_id = c.id AND pl.assigned_user_id = $3) as my_leads_count,
+                (SELECT COUNT(*) FROM email_queue eq WHERE eq.campaign_id = c.id AND eq.status = 'sent') as emails_sent
+         FROM campaigns c
+         LEFT JOIN lead_databases ld ON c.database_id = ld.id
+         LEFT JOIN email_templates et ON c.template_id = et.id
+         WHERE c.tenant_id = $1
+           AND (
+             c.assigned_users::text LIKE $2
+             OR c.created_by = $3
+             OR EXISTS (SELECT 1 FROM campaign_assignments ca WHERE ca.campaign_id = c.id AND ca.user_id = $3)
+             OR EXISTS (SELECT 1 FROM pipeline_leads pl WHERE pl.campaign_id = c.id AND pl.assigned_user_id = $3)
+           )
+         ORDER BY c.created_at DESC`,
+        [tenantId, userIdPattern, userId]
       );
       log(`✅ ${userRole} ${req.user?.email} - mes campagnes: ${campaigns.length}`);
     }
