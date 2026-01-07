@@ -143,25 +143,35 @@ export default function FollowUps() {
   };
 
   const calculateStats = () => {
+    // Utiliser le fuseau horaire Paris
+    const timeZone = 'Europe/Paris';
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const upcoming = followups.filter(f =>
-      !f.completed && new Date(f.scheduled_date) >= today
-    ).length;
+    // Obtenir la date "aujourd'hui" en timezone Paris (minuit)
+    const todayInParis = new Date(now.toLocaleString('en-US', { timeZone }));
+    todayInParis.setHours(0, 0, 0, 0);
 
-    const overdue = followups.filter(f =>
-      !f.completed && new Date(f.scheduled_date) < today
-    ).length;
+    const upcoming = followups.filter(f => {
+      if (f.completed) return false;
+      const followupDate = new Date(f.scheduled_date);
+      const followupInParis = new Date(followupDate.toLocaleString('en-US', { timeZone }));
+      followupInParis.setHours(0, 0, 0, 0);
+      return followupInParis >= todayInParis;
+    }).length;
+
+    const overdue = followups.filter(f => {
+      if (f.completed) return false;
+      const followupDate = new Date(f.scheduled_date);
+      return followupDate < now;
+    }).length;
 
     const completed = followups.filter(f => f.completed).length;
 
     const todayCount = followups.filter(f => {
+      if (f.completed) return false;
       const followupDate = new Date(f.scheduled_date);
-      return !f.completed &&
-        followupDate.getDate() === today.getDate() &&
-        followupDate.getMonth() === today.getMonth() &&
-        followupDate.getFullYear() === today.getFullYear();
+      const followupInParis = new Date(followupDate.toLocaleString('en-US', { timeZone }));
+      return followupInParis.toDateString() === todayInParis.toDateString();
     }).length;
 
     setStats({
@@ -266,17 +276,22 @@ export default function FollowUps() {
   };
 
   const getFilteredFollowups = () => {
+    // Fuseau horaire Paris
+    const timeZone = 'Europe/Paris';
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayInParis = new Date(now.toLocaleString('en-US', { timeZone }));
+    todayInParis.setHours(0, 0, 0, 0);
 
     return followups.filter(followup => {
       const followupDate = new Date(followup.scheduled_date);
+      const followupInParis = new Date(followupDate.toLocaleString('en-US', { timeZone }));
+      followupInParis.setHours(0, 0, 0, 0);
       let matchStatus = true;
 
       if (filterStatus === 'upcoming') {
-        matchStatus = !followup.completed && followupDate >= today;
+        matchStatus = !followup.completed && followupInParis >= todayInParis;
       } else if (filterStatus === 'overdue') {
-        matchStatus = !followup.completed && followupDate < today;
+        matchStatus = !followup.completed && followupDate < now;
       } else if (filterStatus === 'completed') {
         matchStatus = followup.completed;
       }
@@ -297,26 +312,42 @@ export default function FollowUps() {
 
   const isOverdue = (date, completed) => {
     if (completed) return false;
-    return new Date(date) < new Date();
+    // Comparer en timezone Paris
+    const timeZone = 'Europe/Paris';
+    const followupDate = new Date(date);
+    const now = new Date();
+    // Comparer les timestamps directement (UTC)
+    return followupDate < now;
   };
 
   const formatDate = (dateString) => {
+    // Fuseau horaire Paris
+    const timeZone = 'Europe/Paris';
     const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
 
-    if (date.toDateString() === today.toDateString()) {
-      return `Aujourd'hui à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return `Demain à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    // Comparer les dates en timezone Paris
+    const dateInParis = new Date(date.toLocaleString('en-US', { timeZone }));
+    const todayInParis = new Date(now.toLocaleString('en-US', { timeZone }));
+    const tomorrowInParis = new Date(todayInParis);
+    tomorrowInParis.setDate(tomorrowInParis.getDate() + 1);
+
+    // Formater l'heure en Paris timezone
+    const timeFormat = { hour: '2-digit', minute: '2-digit', timeZone };
+    const timeStr = date.toLocaleTimeString('fr-FR', timeFormat);
+
+    if (dateInParis.toDateString() === todayInParis.toDateString()) {
+      return `Aujourd'hui à ${timeStr}`;
+    } else if (dateInParis.toDateString() === tomorrowInParis.toDateString()) {
+      return `Demain à ${timeStr}`;
     } else {
       return date.toLocaleDateString('fr-FR', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone
       });
     }
   };
@@ -484,7 +515,6 @@ export default function FollowUps() {
           </div>
         ) : (
           filteredFollowups.map(followup => {
-            const lead = getLeadInfo(followup.lead_id);
             const typeInfo = getTypeInfo(followup.type);
             const priorityStyle = PRIORITY_COLORS[followup.priority] || PRIORITY_COLORS.medium;
             const overdue = isOverdue(followup.scheduled_date, followup.completed);
@@ -534,23 +564,23 @@ export default function FollowUps() {
                       </div>
                     </div>
 
-                    {/* Lead Info */}
+                    {/* Lead Info - Utilise les données directement du followup (JOIN API) */}
                     <div className="bg-gray-50 rounded-lg p-4 mb-4">
                       <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-blue-600" />
-                          <span className="font-semibold text-gray-900">{lead.company_name || 'Lead inconnu'}</span>
+                          <span className="font-semibold text-gray-900">{followup.company_name || 'Lead inconnu'}</span>
                         </div>
-                        {lead.email && (
+                        {followup.lead_email && (
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <Mail className="w-4 h-4" />
-                            {lead.email}
+                            {followup.lead_email}
                           </div>
                         )}
-                        {lead.phone && (
+                        {followup.lead_phone && (
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <Phone className="w-4 h-4" />
-                            {lead.phone}
+                            {followup.lead_phone}
                           </div>
                         )}
                       </div>

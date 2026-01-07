@@ -8,6 +8,30 @@ const router = express.Router();
 const q = (text, params=[]) => db.query(text, params);
 
 // =============================
+// HELPER: Batch insert pour éviter les N+1 queries
+// Insère plusieurs leads en une seule requête SQL
+// =============================
+async function batchInsertPipelineLeads(tenantId, campaignId, candidates, userId) {
+  if (!candidates || !candidates.length) return 0;
+
+  const leadIds = candidates.map(row => row.lead_id);
+
+  try {
+    const { rowCount } = await q(
+      `INSERT INTO pipeline_leads
+       (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
+       SELECT gen_random_uuid(), $1, unnest($2::uuid[]), $3, 'cold_call', $4, NOW(), NOW()
+       ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
+      [tenantId, leadIds, campaignId, userId]
+    );
+    return rowCount || leadIds.length;
+  } catch (err) {
+    error('Erreur batch insert pipeline:', err);
+    return 0;
+  }
+}
+
+// =============================
 // GET /pipeline-leads
 // Récupère les leads du pipeline pour l'utilisateur connecté
 // OPTIMISÉ: Sans subqueries, avec LIMIT
@@ -46,6 +70,17 @@ router.get('/', authenticateToken, async (req, res) => {
           SELECT 1 FROM validation_requests vr
           WHERE vr.lead_id::uuid = pl.lead_id AND vr.status = 'pending'
         ) as has_pending_request,
+        -- Vérifier si rappel programmé (non complété)
+        (
+          SELECT json_build_object(
+            'has_followup', COUNT(*) > 0,
+            'next_followup', MIN(f.scheduled_date),
+            'is_overdue', MIN(f.scheduled_date) < NOW()
+          )
+          FROM follow_ups f
+          WHERE f.lead_id = pl.lead_id
+          AND (f.completed = FALSE OR f.completed IS NULL)
+        ) as followup_info,
         -- Infos du lead
         l.company_name,
         l.contact_name,
@@ -403,22 +438,8 @@ async function smartRefill(campaign_id, user_id, tenant_id) {
       return { success: true, message: 'Plus de leads disponibles', deployed: 0 };
     }
 
-    // 7. Insérer dans le pipeline
-    let deployed = 0;
-    for (const row of candidates) {
-      try {
-        await q(
-          `INSERT INTO pipeline_leads 
-           (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-           ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-          [tenant_id, row.lead_id, campaign_id, user_id]
-        );
-        deployed++;
-      } catch (err) {
-        error('Erreur insertion lead:', err);
-      }
-    }
+    // 7. Insérer dans le pipeline (BATCH - optimisé)
+    const deployed = await batchInsertPipelineLeads(tenant_id, campaign_id, candidates, user_id);
 
     // 8. Reset le compteur
     await q(
@@ -522,21 +543,8 @@ router.post('/auto-refill', authenticateToken, async (req, res) => {
           [tenantId, campaign.database_id, userId, campaign_id, needed]
         );
 
-        let deployed = 0;
-        for (const row of candidates) {
-          try {
-            await q(
-              `INSERT INTO pipeline_leads 
-               (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-               VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-               ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-              [tenantId, row.lead_id, campaign_id, userId]
-            );
-            deployed++;
-          } catch (err) {
-            error('Erreur insertion lead:', err);
-          }
-        }
+        // BATCH insert optimisé (évite N+1 queries)
+        const deployed = await batchInsertPipelineLeads(tenantId, campaign_id, candidates, userId);
 
         refillResults[userId] = {
           before: activeCount,
@@ -638,31 +646,20 @@ router.post('/deploy-batch', authenticateToken, async (req, res) => {
         [tenantId, campaign.database_id, userId, campaign_id, SIZE]
       );
 
-      let deployed = 0;
-      for (const row of candidates) {
-        try {
-          await q(
-            `INSERT INTO pipeline_leads 
-             (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-             ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-            [tenantId, row.lead_id, campaign_id, userId]
-          );
-          deployed++;
-        } catch (err) {
-          error('Erreur insertion lead:', err);
-        }
-      }
+      // BATCH insert optimisé (évite N+1 queries)
+      const deployed = await batchInsertPipelineLeads(tenantId, campaign_id, candidates, userId);
 
       perUser[userId] = deployed;
       totalDeployed += deployed;
 
-      await q(
-        `UPDATE campaign_assignments 
-         SET leads_assigned = leads_assigned + $1
-         WHERE campaign_id = $2 AND user_id = $3`,
-        [deployed, campaign_id, userId]
-      );
+      if (deployed > 0) {
+        await q(
+          `UPDATE campaign_assignments
+           SET leads_assigned = leads_assigned + $1
+           WHERE campaign_id = $2 AND user_id = $3`,
+          [deployed, campaign_id, userId]
+        );
+      }
     }
 
     log(`🧩 Déploiement campagne ${campaign_id}: ${totalDeployed} leads injectés (cold_call)`);
@@ -790,10 +787,11 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
     }
 
     if (notes && notes.trim()) {
+      // 1. Sauvegarder dans l'historique des appels
       await q(
-        `INSERT INTO lead_call_history 
-         (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type, 
-          stage_before, stage_after, qualification, notes, call_duration, 
+        `INSERT INTO lead_call_history
+         (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type,
+          stage_before, stage_after, qualification, notes, call_duration,
           next_action, scheduled_date, deal_value, created_by)
          VALUES ($1, $2, $3, $4, 'qualification', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
@@ -812,6 +810,25 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
           userId
         ]
       );
+
+      // 2. Mettre à jour aussi leads.notes pour affichage dans la fiche
+      const noteDate = new Date().toLocaleDateString('fr-FR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      const formattedNote = `[${noteDate}] ${notes.trim()}`;
+
+      await q(
+        `UPDATE leads SET
+          notes = CASE
+            WHEN notes IS NULL OR notes = '' THEN $1
+            ELSE notes || E'\n---\n' || $1
+          END,
+          updated_at = NOW()
+         WHERE id = $2 AND tenant_id = $3`,
+        [formattedNote, pipelineLead.lead_id, tenantId]
+      );
+      log(`📝 Notes mises à jour pour lead ${pipelineLead.lead_id}`);
     }
 
     if (scheduled_date || follow_up_date) {
@@ -1124,25 +1141,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
             [tenantId, databaseId, assignedUserId, campaignId, needed]
           );
 
-          let deployed = 0;
-          for (const row of candidates) {
-            try {
-              await q(
-                `INSERT INTO pipeline_leads 
-                 (id, tenant_id, lead_id, campaign_id, stage, assigned_user_id, created_at, updated_at)
-                 VALUES (gen_random_uuid(), $1, $2, $3, 'cold_call', $4, NOW(), NOW())
-                 ON CONFLICT (lead_id, campaign_id) DO NOTHING`,
-                [tenantId, row.lead_id, campaignId, assignedUserId]
-              );
-              deployed++;
-            } catch (err) {
-              error('Erreur insertion lead:', err);
-            }
-          }
+          // BATCH insert optimisé (évite N+1 queries)
+          const deployed = await batchInsertPipelineLeads(tenantId, campaignId, candidates, assignedUserId);
 
           if (deployed > 0) {
             await q(
-              `UPDATE campaign_assignments 
+              `UPDATE campaign_assignments
                SET leads_assigned = leads_assigned + $1
                WHERE campaign_id = $2 AND user_id = $3`,
               [deployed, campaignId, assignedUserId]
