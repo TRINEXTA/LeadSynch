@@ -41,10 +41,10 @@ router.get('/', authenticateToken, async (req, res) => {
         pl.contract_sent_date,
         pl.won_date,
         pl.notes,
-        -- Vérifier si demande en cours
+        -- Vérifier si demande en cours (cast UUID pour compatibilité)
         EXISTS(
           SELECT 1 FROM validation_requests vr
-          WHERE vr.lead_id = pl.lead_id AND vr.status = 'pending'
+          WHERE vr.lead_id::uuid = pl.lead_id AND vr.status = 'pending'
         ) as has_pending_request,
         -- Infos du lead
         l.company_name,
@@ -67,20 +67,35 @@ router.get('/', authenticateToken, async (req, res) => {
     const params = [tenantId];
     let paramIndex = 2;
 
-    // Admin ou super admin : voir tous les leads
+    // Admin ou super admin : voir tous les leads du tenant
     if (isSuperAdmin || userRole === 'admin') {
-      // Pas de filtre supplémentaire
+      // Pas de filtre supplémentaire - accès complet au tenant
+      log(`✅ ${userRole} (${userId}) - accès à tous les leads du pipeline`);
     }
-    // Manager : voir ses leads + ceux de ses subordonnés (commerciaux sous sa supervision)
+    // Manager : voir ses leads + leads des campagnes où il est affecté
     else if (userRole === 'manager') {
+      // Pattern pour recherche LIKE dans le JSON
+      const userIdPattern = `%${userId}%`;
+
       query += ` AND (
+        -- Ses propres leads directs
         pl.assigned_user_id = $${paramIndex}
         OR l.assigned_to = $${paramIndex}
-        OR pl.assigned_user_id IN (SELECT id FROM users WHERE manager_id = $${paramIndex})
-        OR l.assigned_to IN (SELECT id FROM users WHERE manager_id = $${paramIndex})
+        -- Leads des campagnes où il est dans campaign_assignments
+        OR pl.campaign_id IN (
+          SELECT ca.campaign_id FROM campaign_assignments ca WHERE ca.user_id = $${paramIndex}
+        )
+        -- Leads des campagnes où son UUID apparaît dans assigned_users (JSON)
+        OR pl.campaign_id IN (
+          SELECT c2.id FROM campaigns c2
+          WHERE c2.tenant_id = $1
+          AND c2.assigned_users::text LIKE $${paramIndex + 1}
+        )
       )`;
       params.push(userId);
-      paramIndex++;
+      params.push(userIdPattern);
+      paramIndex += 2;
+      log(`✅ Manager ${userId} - accès à ses leads + campagnes affectées`);
     }
     // Commercial/User : uniquement ses propres leads
     else {
