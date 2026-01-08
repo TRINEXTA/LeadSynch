@@ -57,6 +57,19 @@ router.get('/summary', authenticateToken, async (req, res) => {
     const { startDate, endDate } = getDateRange(period);
     log(`[UserReports] Generating summary for period: ${period} (${startDate.toISOString()} - ${endDate.toISOString()})`);
 
+    // Check which tables exist
+    const tableChecks = await q(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('call_sessions', 'user_sessions', 'activity_logs', 'email_queue', 'pipeline_leads')
+    `);
+    const existingTables = tableChecks.rows.map(r => r.table_name);
+    const hasCallSessions = existingTables.includes('call_sessions');
+    const hasUserSessions = existingTables.includes('user_sessions');
+    const hasActivityLogs = existingTables.includes('activity_logs');
+    const hasEmailQueue = existingTables.includes('email_queue');
+    const hasPipelineLeads = existingTables.includes('pipeline_leads');
+
     const { rows: users } = await q(`
       SELECT
         u.id,
@@ -143,50 +156,13 @@ router.get('/summary', authenticateToken, async (req, res) => {
          AND f.completed_at IS NOT NULL
          AND f.created_at >= $2 AND f.created_at <= $3) as avg_response_hours,
 
-        -- Emails sent (from email_queue)
-        (SELECT COUNT(*) FROM email_queue eq
-         WHERE eq.tenant_id = $1
-         AND eq.status = 'sent'
-         AND eq.sent_at >= $2 AND eq.sent_at <= $3
-         AND EXISTS (SELECT 1 FROM campaigns c WHERE c.id = eq.campaign_id AND c.created_by = u.id)) as emails_sent,
-
-        -- Pipeline leads (in active pipeline)
+        -- Pipeline leads (only if table exists)
+        ${hasPipelineLeads ? `
         (SELECT COUNT(*) FROM pipeline_leads pl
          WHERE pl.assigned_user_id = u.id
          AND pl.tenant_id = $1
-         AND pl.created_at >= $2 AND pl.created_at <= $3) as pipeline_leads,
-
-        -- Call sessions count
-        (SELECT COUNT(*) FROM call_sessions cs
-         WHERE cs.user_id = u.id
-         AND cs.tenant_id = $1
-         AND cs.started_at >= $2 AND cs.started_at <= $3) as call_sessions,
-
-        -- Total call duration (seconds)
-        (SELECT COALESCE(SUM(cs.total_duration_seconds), 0)
-         FROM call_sessions cs
-         WHERE cs.user_id = u.id
-         AND cs.tenant_id = $1
-         AND cs.started_at >= $2 AND cs.started_at <= $3) as total_call_seconds,
-
-        -- Connection time from user_sessions (if table exists)
-        COALESCE((
-          SELECT SUM(
-            CASE
-              WHEN us.logout_at IS NOT NULL THEN EXTRACT(EPOCH FROM (us.logout_at - us.login_at))
-              ELSE EXTRACT(EPOCH FROM (NOW() - us.login_at))
-            END
-          )::INTEGER
-          FROM user_sessions us
-          WHERE us.user_id = u.id
-          AND us.login_at >= $2 AND us.login_at <= $3
-        ), 0) as total_connection_seconds,
-
-        -- Activity count
-        (SELECT COUNT(*) FROM activity_logs al
-         WHERE al.user_id = u.id
-         AND al.tenant_id = $1
-         AND al.created_at >= $2 AND al.created_at <= $3) as total_activities
+         AND pl.created_at >= $2 AND pl.created_at <= $3) as pipeline_leads
+        ` : '0 as pipeline_leads'}
 
       FROM users u
       WHERE u.tenant_id = $1
@@ -194,8 +170,87 @@ router.get('/summary', authenticateToken, async (req, res) => {
       ORDER BY u.first_name, u.last_name
     `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
 
+    // Get additional stats from optional tables
+    let emailsPerUser = {};
+    let callsPerUser = {};
+    let connectionPerUser = {};
+    let activityPerUser = {};
+
+    if (hasEmailQueue) {
+      try {
+        const { rows: emailStats } = await q(`
+          SELECT c.created_by as user_id, COUNT(eq.id) as emails_sent
+          FROM email_queue eq
+          JOIN campaigns c ON c.id = eq.campaign_id
+          WHERE eq.tenant_id = $1
+          AND eq.status = 'sent'
+          AND eq.sent_at >= $2 AND eq.sent_at <= $3
+          GROUP BY c.created_by
+        `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+        emailStats.forEach(e => { emailsPerUser[e.user_id] = parseInt(e.emails_sent || 0); });
+      } catch (e) { warn('[UserReports] email_queue query failed:', e.message); }
+    }
+
+    if (hasCallSessions) {
+      try {
+        const { rows: callStats } = await q(`
+          SELECT user_id, COUNT(*) as call_sessions, COALESCE(SUM(total_duration_seconds), 0) as total_call_seconds
+          FROM call_sessions
+          WHERE tenant_id = $1
+          AND started_at >= $2 AND started_at <= $3
+          GROUP BY user_id
+        `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+        callStats.forEach(c => {
+          callsPerUser[c.user_id] = {
+            sessions: parseInt(c.call_sessions || 0),
+            seconds: parseInt(c.total_call_seconds || 0)
+          };
+        });
+      } catch (e) { warn('[UserReports] call_sessions query failed:', e.message); }
+    }
+
+    if (hasUserSessions) {
+      try {
+        const { rows: connectionStats } = await q(`
+          SELECT user_id, SUM(
+            CASE
+              WHEN logout_at IS NOT NULL THEN EXTRACT(EPOCH FROM (logout_at - login_at))
+              ELSE EXTRACT(EPOCH FROM (NOW() - login_at))
+            END
+          )::INTEGER as total_connection_seconds
+          FROM user_sessions
+          WHERE login_at >= $1 AND login_at <= $2
+          GROUP BY user_id
+        `, [startDate.toISOString(), endDate.toISOString()]);
+        connectionStats.forEach(c => { connectionPerUser[c.user_id] = parseInt(c.total_connection_seconds || 0); });
+      } catch (e) { warn('[UserReports] user_sessions query failed:', e.message); }
+    }
+
+    if (hasActivityLogs) {
+      try {
+        const { rows: activityStats } = await q(`
+          SELECT user_id, COUNT(*) as total_activities
+          FROM activity_logs
+          WHERE tenant_id = $1
+          AND created_at >= $2 AND created_at <= $3
+          GROUP BY user_id
+        `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+        activityStats.forEach(a => { activityPerUser[a.user_id] = parseInt(a.total_activities || 0); });
+      } catch (e) { warn('[UserReports] activity_logs query failed:', e.message); }
+    }
+
+    // Merge additional stats into users
+    const enrichedUsers = users.map(user => ({
+      ...user,
+      emails_sent: emailsPerUser[user.id] || 0,
+      call_sessions: callsPerUser[user.id]?.sessions || 0,
+      total_call_seconds: callsPerUser[user.id]?.seconds || 0,
+      total_connection_seconds: connectionPerUser[user.id] || 0,
+      total_activities: activityPerUser[user.id] || 0
+    }));
+
     // Calculate totals
-    const totals = users.reduce((acc, user) => ({
+    const totals = enrichedUsers.reduce((acc, user) => ({
       leads_assigned: acc.leads_assigned + parseInt(user.leads_assigned || 0),
       leads_contacted: acc.leads_contacted + parseInt(user.leads_contacted || 0),
       leads_qualified: acc.leads_qualified + parseInt(user.leads_qualified || 0),
@@ -234,7 +289,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
         start: startDate.toISOString(),
         end: endDate.toISOString()
       },
-      users: users.map(u => ({
+      users: enrichedUsers.map(u => ({
         ...u,
         conversion_rate: parseInt(u.leads_contacted || 0) > 0
           ? ((parseInt(u.deals_won || 0) / parseInt(u.leads_contacted || 0)) * 100).toFixed(1)
@@ -529,6 +584,16 @@ router.get('/evolution', authenticateToken, async (req, res) => {
 
     const { startDate, endDate } = getDateRange(period);
 
+    // Check which tables exist
+    const tableChecks = await q(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('activity_logs', 'pipeline_leads')
+    `);
+    const existingTables = tableChecks.rows.map(r => r.table_name);
+    const hasActivityLogs = existingTables.includes('activity_logs');
+    const hasPipelineLeads = existingTables.includes('pipeline_leads');
+
     // Determine grouping interval based on period
     let interval = 'day';
     let dateFormat = 'YYYY-MM-DD';
@@ -576,34 +641,46 @@ router.get('/evolution', authenticateToken, async (req, res) => {
       ORDER BY DATE_TRUNC('${interval}', created_at)
     `, params);
 
-    // Get activity evolution
-    const { rows: activityEvolution } = await q(`
-      SELECT
-        TO_CHAR(DATE_TRUNC('${interval}', created_at), '${dateFormat}') as period,
-        COUNT(*) as total_actions,
-        COUNT(*) FILTER (WHERE action LIKE '%call%' OR action LIKE '%appel%') as call_actions,
-        COUNT(*) FILTER (WHERE action LIKE '%email%' OR action LIKE '%mail%') as email_actions
-      FROM activity_logs
-      WHERE tenant_id = $1
-      AND created_at >= $2 AND created_at <= $3
-      ${user_id ? 'AND user_id = $4' : ''}
-      GROUP BY DATE_TRUNC('${interval}', created_at)
-      ORDER BY DATE_TRUNC('${interval}', created_at)
-    `, params);
+    // Get activity evolution (only if table exists)
+    let activityEvolution = [];
+    if (hasActivityLogs) {
+      try {
+        const { rows } = await q(`
+          SELECT
+            TO_CHAR(DATE_TRUNC('${interval}', created_at), '${dateFormat}') as period,
+            COUNT(*) as total_actions,
+            COUNT(*) FILTER (WHERE action LIKE '%call%' OR action LIKE '%appel%') as call_actions,
+            COUNT(*) FILTER (WHERE action LIKE '%email%' OR action LIKE '%mail%') as email_actions
+          FROM activity_logs
+          WHERE tenant_id = $1
+          AND created_at >= $2 AND created_at <= $3
+          ${user_id ? 'AND user_id = $4' : ''}
+          GROUP BY DATE_TRUNC('${interval}', created_at)
+          ORDER BY DATE_TRUNC('${interval}', created_at)
+        `, params);
+        activityEvolution = rows;
+      } catch (e) { warn('[UserReports] activity_logs query failed:', e.message); }
+    }
 
-    // Get pipeline stage evolution (current snapshot per period)
-    const { rows: pipelineEvolution } = await q(`
-      SELECT
-        TO_CHAR(DATE_TRUNC('${interval}', pl.created_at), '${dateFormat}') as period,
-        pl.stage,
-        COUNT(*) as count
-      FROM pipeline_leads pl
-      WHERE pl.tenant_id = $1
-      AND pl.created_at >= $2 AND pl.created_at <= $3
-      ${user_id ? 'AND pl.assigned_user_id = $4' : ''}
-      GROUP BY DATE_TRUNC('${interval}', pl.created_at), pl.stage
-      ORDER BY DATE_TRUNC('${interval}', pl.created_at)
-    `, params);
+    // Get pipeline stage evolution (only if table exists)
+    let pipelineEvolution = [];
+    if (hasPipelineLeads) {
+      try {
+        const { rows } = await q(`
+          SELECT
+            TO_CHAR(DATE_TRUNC('${interval}', pl.created_at), '${dateFormat}') as period,
+            pl.stage,
+            COUNT(*) as count
+          FROM pipeline_leads pl
+          WHERE pl.tenant_id = $1
+          AND pl.created_at >= $2 AND pl.created_at <= $3
+          ${user_id ? 'AND pl.assigned_user_id = $4' : ''}
+          GROUP BY DATE_TRUNC('${interval}', pl.created_at), pl.stage
+          ORDER BY DATE_TRUNC('${interval}', pl.created_at)
+        `, params);
+        pipelineEvolution = rows;
+      } catch (e) { warn('[UserReports] pipeline_leads query failed:', e.message); }
+    }
 
     res.json({
       success: true,
@@ -772,6 +849,16 @@ router.get('/performance-score', authenticateToken, async (req, res) => {
 
     const { startDate, endDate } = getDateRange(period);
 
+    // Check which tables exist
+    const tableChecks = await q(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('activity_logs', 'pipeline_leads')
+    `);
+    const existingTables = tableChecks.rows.map(r => r.table_name);
+    const hasActivityLogs = existingTables.includes('activity_logs');
+    const hasPipelineLeads = existingTables.includes('pipeline_leads');
+
     // Calculate performance scores
     const { rows: scores } = await q(`
       WITH user_metrics AS (
@@ -798,14 +885,18 @@ router.get('/performance-score', authenticateToken, async (req, res) => {
           (SELECT COUNT(*) FROM follow_ups f WHERE f.user_id = u.id AND f.tenant_id = $1
            AND (f.completed = false OR f.completed IS NULL) AND f.scheduled_date < NOW()) as rappels_overdue,
 
-          -- Activity
+          -- Activity (0 if table doesn't exist)
+          ${hasActivityLogs ? `
           (SELECT COUNT(*) FROM activity_logs al WHERE al.user_id = u.id AND al.tenant_id = $1
-           AND al.created_at >= $2 AND al.created_at <= $3) as activity_count,
+           AND al.created_at >= $2 AND al.created_at <= $3)
+          ` : '0'} as activity_count,
 
-          -- Pipeline
+          -- Pipeline (0 if table doesn't exist)
+          ${hasPipelineLeads ? `
           (SELECT COUNT(*) FROM pipeline_leads pl WHERE pl.assigned_user_id = u.id AND pl.tenant_id = $1
            AND pl.stage IN ('gagne', 'won')
-           AND pl.updated_at >= $2 AND pl.updated_at <= $3) as pipeline_won
+           AND pl.updated_at >= $2 AND pl.updated_at <= $3)
+          ` : '0'} as pipeline_won
 
         FROM users u
         WHERE u.tenant_id = $1
