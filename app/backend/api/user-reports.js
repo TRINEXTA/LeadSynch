@@ -241,10 +241,10 @@ router.get('/report', authenticateToken, async (req, res) => {
             cl.user_id,
             COUNT(*) as total_calls,
             COALESCE(SUM(cl.duration), 0) as total_duration,
-            COUNT(*) FILTER (WHERE cl.outcome = 'qualified') as calls_qualified,
-            COUNT(*) FILTER (WHERE cl.outcome = 'rdv') as calls_rdv,
-            COUNT(*) FILTER (WHERE cl.outcome = 'nrp') as calls_nrp,
-            COUNT(*) FILTER (WHERE cl.outcome = 'rejected') as calls_rejected
+            COUNT(*) FILTER (WHERE cl.qualification IN ('qualifie', 'tres_qualifie')) as calls_qualified,
+            COUNT(*) FILTER (WHERE cl.qualification = 'tres_qualifie' OR cl.rdv_scheduled_at IS NOT NULL) as calls_rdv,
+            COUNT(*) FILTER (WHERE cl.qualification = 'nrp' OR cl.outcome = 'nrp') as calls_nrp,
+            COUNT(*) FILTER (WHERE cl.qualification IN ('pas_interesse', 'hors_cible', 'rejected') OR cl.outcome = 'rejected') as calls_rejected
           FROM call_logs cl
           WHERE cl.tenant_id = $1
           AND cl.started_at >= $2 AND cl.started_at <= $3
