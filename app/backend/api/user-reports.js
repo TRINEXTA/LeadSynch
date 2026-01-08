@@ -108,6 +108,7 @@ router.get('/report', authenticateToken, async (req, res) => {
     const hasEmailQueue = await tableExists('email_queue');
     const hasEmailTracking = await tableExists('email_tracking');
     const hasPipelineLeads = await tableExists('pipeline_leads');
+    const hasProspectionSessions = await tableExists('prospection_sessions');
 
     // Build user filter
     const userFilter = user_id ? 'AND u.id = $4' : '';
@@ -169,11 +170,24 @@ router.get('/report', authenticateToken, async (req, res) => {
          WHERE c.created_by = u.id AND c.tenant_id = $1
          AND c.created_at >= $2 AND c.created_at <= $3) as campaigns_created,
 
-        -- Campagnes où l'user est assigné
+        -- Campagnes où l'user est assigné (JSON array check)
         (SELECT COUNT(DISTINCT c.id) FROM campaigns c
          WHERE c.tenant_id = $1
-         AND (c.assigned_users::text LIKE '%' || u.id::text || '%'
-              OR c.supervisor_id = u.id)) as campaigns_assigned
+         AND (
+           c.assigned_users::jsonb @> to_jsonb(u.id::text)
+           OR c.assigned_users::jsonb @> to_jsonb(ARRAY[u.id::text])
+           OR c.supervisor_id = u.id
+           OR c.created_by = u.id
+         )) as campaigns_assigned,
+
+        -- Total leads dans les campagnes assignées
+        (SELECT COALESCE(SUM(c.total_leads), 0) FROM campaigns c
+         WHERE c.tenant_id = $1
+         AND (
+           c.assigned_users::jsonb @> to_jsonb(u.id::text)
+           OR c.assigned_users::jsonb @> to_jsonb(ARRAY[u.id::text])
+           OR c.supervisor_id = u.id
+         )) as campaigns_total_leads
 
       FROM users u
       WHERE u.tenant_id = $1
@@ -249,6 +263,66 @@ router.get('/report', authenticateToken, async (req, res) => {
         });
       } catch (e) {
         warn('[UserReports] call_logs query failed:', e.message);
+      }
+    }
+
+    // Prospection sessions (alternative call tracking)
+    if (hasProspectionSessions) {
+      try {
+        const { rows: prospection } = await q(`
+          SELECT
+            ps.user_id,
+            COUNT(ps.id) as sessions_count,
+            COALESCE(SUM(ps.total_duration), 0) as total_duration,
+            COALESCE(SUM(ps.calls_made), 0) as calls_made,
+            COALESCE(SUM(ps.meetings_obtained), 0) as meetings_obtained,
+            COALESCE(SUM(ps.docs_sent), 0) as docs_sent,
+            COALESCE(SUM(ps.follow_ups_created), 0) as follow_ups_created,
+            COALESCE(SUM(ps.disqualified), 0) as disqualified,
+            COALESCE(SUM(ps.nrp), 0) as nrp
+          FROM prospection_sessions ps
+          WHERE ps.tenant_id = $1
+          AND ps.start_time >= $2 AND ps.start_time <= $3
+          ${user_id ? 'AND ps.user_id = $4' : ''}
+          GROUP BY ps.user_id
+        `, params);
+
+        prospection.forEach(p => {
+          if (!callStats[p.user_id]) callStats[p.user_id] = {};
+          // Add prospection data to callStats (merge with call_sessions if both exist)
+          callStats[p.user_id].prospection_sessions = parseInt(p.sessions_count || 0);
+          callStats[p.user_id].prospection_duration = parseInt(p.total_duration || 0);
+          callStats[p.user_id].prospection_calls = parseInt(p.calls_made || 0);
+          callStats[p.user_id].meetings_obtained = parseInt(p.meetings_obtained || 0);
+          callStats[p.user_id].docs_sent = parseInt(p.docs_sent || 0);
+          callStats[p.user_id].prospection_followups = parseInt(p.follow_ups_created || 0);
+          callStats[p.user_id].disqualified = parseInt(p.disqualified || 0);
+          callStats[p.user_id].prospection_nrp = parseInt(p.nrp || 0);
+
+          // Merge totals if not already set
+          if (!callStats[p.user_id].sessions) {
+            callStats[p.user_id].sessions = parseInt(p.sessions_count || 0);
+          } else {
+            callStats[p.user_id].sessions += parseInt(p.sessions_count || 0);
+          }
+          if (!callStats[p.user_id].duration_seconds) {
+            callStats[p.user_id].duration_seconds = parseInt(p.total_duration || 0);
+          } else {
+            callStats[p.user_id].duration_seconds += parseInt(p.total_duration || 0);
+          }
+          if (!callStats[p.user_id].calls_made) {
+            callStats[p.user_id].calls_made = parseInt(p.calls_made || 0);
+          } else {
+            callStats[p.user_id].calls_made += parseInt(p.calls_made || 0);
+          }
+          if (!callStats[p.user_id].rdv_pris) {
+            callStats[p.user_id].rdv_pris = parseInt(p.meetings_obtained || 0);
+          } else {
+            callStats[p.user_id].rdv_pris += parseInt(p.meetings_obtained || 0);
+          }
+        });
+      } catch (e) {
+        warn('[UserReports] prospection_sessions query failed:', e.message);
       }
     }
 
@@ -378,19 +452,22 @@ router.get('/report', authenticateToken, async (req, res) => {
         // Campagnes
         campaigns: {
           created: parseInt(user.campaigns_created || 0),
-          assigned: parseInt(user.campaigns_assigned || 0)
+          assigned: parseInt(user.campaigns_assigned || 0),
+          total_leads: parseInt(user.campaigns_total_leads || 0)
         },
 
-        // Appels
+        // Appels (merge call_sessions + prospection_sessions)
         calls: {
           sessions: calls.sessions || 0,
           duration_minutes: Math.round((calls.duration_seconds || calls.duration_from_logs || 0) / 60),
           calls_made: calls.calls_made || calls.calls_logged || 0,
           leads_processed: calls.leads_processed || 0,
           qualified: calls.leads_qualified || calls.calls_qualified || 0,
-          rdv_pris: calls.rdv_pris || calls.calls_rdv || 0,
-          nrp: calls.calls_nrp || 0,
-          rejected: calls.calls_rejected || 0
+          rdv_pris: calls.rdv_pris || calls.calls_rdv || calls.meetings_obtained || 0,
+          nrp: calls.calls_nrp || calls.prospection_nrp || 0,
+          rejected: calls.calls_rejected || 0,
+          docs_sent: calls.docs_sent || 0,
+          disqualified: calls.disqualified || 0
         },
 
         // Emails
@@ -412,6 +489,7 @@ router.get('/report', authenticateToken, async (req, res) => {
     // Calculate totals
     const totals = enrichedUsers.reduce((acc, u) => ({
       leads_assigned: acc.leads_assigned + u.leads.assigned_period,
+      leads_total: acc.leads_total + u.leads.total_assigned,
       leads_qualified: acc.leads_qualified + u.leads.qualified,
       leads_won: acc.leads_won + u.leads.won,
       leads_lost: acc.leads_lost + u.leads.lost,
@@ -419,17 +497,22 @@ router.get('/report', authenticateToken, async (req, res) => {
       rappels_completed: acc.rappels_completed + u.rappels.completed,
       rappels_overdue: acc.rappels_overdue + u.rappels.overdue,
       campaigns_created: acc.campaigns_created + u.campaigns.created,
+      campaigns_assigned: acc.campaigns_assigned + u.campaigns.assigned,
+      campaigns_total_leads: acc.campaigns_total_leads + u.campaigns.total_leads,
+      calls_sessions: acc.calls_sessions + u.calls.sessions,
       calls_made: acc.calls_made + u.calls.calls_made,
       calls_duration_minutes: acc.calls_duration_minutes + u.calls.duration_minutes,
       calls_rdv: acc.calls_rdv + u.calls.rdv_pris,
+      calls_nrp: acc.calls_nrp + u.calls.nrp,
+      calls_leads_processed: acc.calls_leads_processed + u.calls.leads_processed,
       emails_sent: acc.emails_sent + u.emails.sent,
       emails_opens: acc.emails_opens + u.emails.opens,
       emails_clicks: acc.emails_clicks + u.emails.clicks
     }), {
-      leads_assigned: 0, leads_qualified: 0, leads_won: 0, leads_lost: 0,
+      leads_assigned: 0, leads_total: 0, leads_qualified: 0, leads_won: 0, leads_lost: 0,
       rappels_total: 0, rappels_completed: 0, rappels_overdue: 0,
-      campaigns_created: 0,
-      calls_made: 0, calls_duration_minutes: 0, calls_rdv: 0,
+      campaigns_created: 0, campaigns_assigned: 0, campaigns_total_leads: 0,
+      calls_sessions: 0, calls_made: 0, calls_duration_minutes: 0, calls_rdv: 0, calls_nrp: 0, calls_leads_processed: 0,
       emails_sent: 0, emails_opens: 0, emails_clicks: 0
     });
 
