@@ -417,6 +417,8 @@ router.get('/report', authenticateToken, async (req, res) => {
     // 4. PIPELINE STATS (if table exists)
     // =============================
     let pipelineStats = {};
+    let pipelineCallStats = {}; // Stats d'appels calculées depuis le pipeline
+
     if (hasPipelineLeads) {
       try {
         const { rows: pipeline } = await q(`
@@ -435,6 +437,28 @@ router.get('/report', authenticateToken, async (req, res) => {
           if (!pipelineStats[p.user_id]) pipelineStats[p.user_id] = {};
           pipelineStats[p.user_id][p.stage] = parseInt(p.count || 0);
         });
+
+        // Calculer les stats d'appels depuis le pipeline
+        // Les stages qui indiquent qu'un appel a été fait (tout sauf cold_call et leads_click)
+        const callStages = ['nrp', 'qualifie', 'tres_qualifie', 'relancer', 'hors_scope', 'proposition', 'gagne'];
+
+        Object.entries(pipelineStats).forEach(([visitorId, stages]) => {
+          const totalCalls = callStages.reduce((sum, stage) => sum + (stages[stage] || 0), 0);
+          const qualified = (stages['qualifie'] || 0) + (stages['tres_qualifie'] || 0);
+          const rdv = stages['tres_qualifie'] || 0;
+          const nrp = stages['nrp'] || 0;
+
+          pipelineCallStats[visitorId] = {
+            calls_from_pipeline: totalCalls,
+            qualified_from_pipeline: qualified,
+            rdv_from_pipeline: rdv,
+            nrp_from_pipeline: nrp,
+            relancer: stages['relancer'] || 0,
+            hors_scope: stages['hors_scope'] || 0
+          };
+        });
+
+        log('[UserReports] Pipeline call stats:', JSON.stringify(pipelineCallStats));
       } catch (e) {
         warn('[UserReports] pipeline_leads query failed:', e.message);
       }
@@ -450,7 +474,17 @@ router.get('/report', authenticateToken, async (req, res) => {
       const calls = callStats[user.id] || {};
       const emails = emailStats[user.id] || {};
       const pipeline = pipelineStats[user.id] || {};
-      log(`[UserReports] User ${user.first_name} (${user.id}): calls=`, JSON.stringify(calls));
+      const pipelineCalls = pipelineCallStats[user.id] || {};
+
+      // Les appels sont calculés depuis le pipeline (source principale)
+      // car chaque changement de stage = un appel traité
+      const callsFromPipeline = pipelineCalls.calls_from_pipeline || 0;
+      const callsFromSessions = calls.calls_made || calls.calls_logged || 0;
+
+      // Utiliser le max entre pipeline et sessions (éviter les doublons)
+      const totalCalls = Math.max(callsFromPipeline, callsFromSessions);
+
+      log(`[UserReports] User ${user.first_name} (${user.id}): pipeline_calls=${callsFromPipeline}, session_calls=${callsFromSessions}`);
 
       return {
         id: user.id,
@@ -484,18 +518,18 @@ router.get('/report', authenticateToken, async (req, res) => {
           total_leads: parseInt(user.campaigns_total_leads || 0)
         },
 
-        // Appels (merge call_sessions + prospection_sessions)
+        // Appels (priorité: pipeline > call_sessions > call_logs)
         calls: {
           sessions: calls.sessions || 0,
           duration_minutes: Math.round((calls.duration_seconds || calls.duration_from_logs || 0) / 60),
-          calls_made: calls.calls_made || calls.calls_logged || 0,
-          leads_processed: calls.leads_processed || 0,
-          qualified: calls.leads_qualified || calls.calls_qualified || 0,
-          rdv_pris: calls.rdv_pris || calls.calls_rdv || calls.meetings_obtained || 0,
-          nrp: calls.calls_nrp || calls.prospection_nrp || 0,
-          rejected: calls.calls_rejected || 0,
-          docs_sent: calls.docs_sent || 0,
-          disqualified: calls.disqualified || 0
+          calls_made: totalCalls,
+          leads_processed: totalCalls, // Chaque appel = 1 lead traité
+          qualified: pipelineCalls.qualified_from_pipeline || calls.leads_qualified || calls.calls_qualified || 0,
+          rdv_pris: pipelineCalls.rdv_from_pipeline || calls.rdv_pris || calls.calls_rdv || 0,
+          nrp: pipelineCalls.nrp_from_pipeline || calls.calls_nrp || 0,
+          relancer: pipelineCalls.relancer || 0,
+          hors_scope: pipelineCalls.hors_scope || 0,
+          rejected: calls.calls_rejected || 0
         },
 
         // Emails
