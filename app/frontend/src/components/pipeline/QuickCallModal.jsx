@@ -53,6 +53,22 @@ export default function QuickCallModal({ lead, onClose, onSuccess }) {
         notes: `📞 Appel téléphonique (${formatDuration(callDuration)})\n\nQualification: ${qualificationData.qualification}\n\n${notes || 'Aucune note'}`
       });
 
+      // 3. Enregistrer l'appel dans call_logs pour les statistiques
+      try {
+        await api.post('/call-sessions', {
+          action: 'log-call-direct',
+          lead_id: lead.lead_id || lead.id,
+          pipeline_lead_id: lead.id,
+          duration: callDuration,
+          qualification: qualificationData.qualification,
+          notes: notes || '',
+          outcome: qualificationData.qualification
+        });
+      } catch (e) {
+        // Ne pas bloquer si l'enregistrement stats échoue
+        warn('Erreur enregistrement stats appel:', e);
+      }
+
       toast.success('Appel enregistré !');
       if (onSuccess) onSuccess();
       onClose();
