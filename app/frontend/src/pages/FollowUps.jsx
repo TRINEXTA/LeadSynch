@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Clock, Plus, Check, X, AlertCircle,
   User, Phone, Mail, Building2, ChevronDown, Filter,
-  CheckCircle, XCircle, Clock3, TrendingUp, Users, Shield
+  CheckCircle, XCircle, Clock3, TrendingUp, Users, Shield,
+  PhoneCall, Send, ExternalLink, MessageSquare, Target, Eye
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+
+// Options de qualification (synchronisées avec le pipeline)
+const QUALIFICATION_OPTIONS = [
+  { value: 'qualifie', label: 'Qualifié', icon: '✅', color: 'bg-blue-100 text-blue-700', stage: 'qualifie' },
+  { value: 'tres_qualifie', label: 'Très Qualifié / RDV', icon: '🎯', color: 'bg-green-100 text-green-700', stage: 'tres_qualifie' },
+  { value: 'a_relancer', label: 'À Relancer', icon: '🔄', color: 'bg-yellow-100 text-yellow-700', stage: 'relancer' },
+  { value: 'proposition', label: 'Proposition envoyée', icon: '📄', color: 'bg-purple-100 text-purple-700', stage: 'proposition' },
+  { value: 'nrp', label: 'NRP / Pas de réponse', icon: '📵', color: 'bg-gray-100 text-gray-700', stage: 'nrp' },
+  { value: 'pas_interesse', label: 'Pas intéressé', icon: '❌', color: 'bg-red-100 text-red-700', stage: 'hors_scope' },
+];
 
 const PRIORITY_COLORS = {
   high: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', badge: 'bg-red-100' },
@@ -33,6 +45,7 @@ const ROLE_LABELS = {
 
 export default function FollowUps() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Permissions basées sur le rôle
   const isAdmin = user?.role === 'admin';
@@ -54,6 +67,16 @@ export default function FollowUps() {
   const [rescheduleModalId, setRescheduleModalId] = useState(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
+
+  // État pour le modal de qualification (action sur rappel)
+  const [qualifyModal, setQualifyModal] = useState(null); // followup object
+  const [qualifyData, setQualifyData] = useState({
+    qualification: '',
+    notes: '',
+    nextFollowupDate: '',
+    nextFollowupTime: '',
+    dealValue: ''
+  });
 
   const [stats, setStats] = useState({
     total: 0,
@@ -273,6 +296,102 @@ export default function FollowUps() {
       success: 'Rappel reprogrammé',
       error: (err) => err.response?.data?.error || 'Erreur lors de la reprogrammation',
     });
+  };
+
+  // =============================
+  // ACTIONS SUR RAPPELS
+  // =============================
+
+  // Ouvre le modal de qualification après un appel
+  const handleCallAction = (followup) => {
+    setQualifyModal(followup);
+    setQualifyData({
+      qualification: '',
+      notes: '',
+      nextFollowupDate: '',
+      nextFollowupTime: '',
+      dealValue: ''
+    });
+  };
+
+  // Ouvre le client email
+  const handleEmailAction = (followup) => {
+    const email = followup.lead_email;
+    const companyName = followup.company_name || 'Lead';
+
+    if (!email) {
+      toast.error('Pas d\'email disponible pour ce lead');
+      return;
+    }
+
+    const subject = encodeURIComponent(`Suivi - ${companyName}`);
+    const body = encodeURIComponent(`Bonjour,\n\nSuite à notre conversation...\n\nCordialement`);
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+
+    toast.success('Client email ouvert');
+  };
+
+  // Qualifier le lead depuis le rappel (synchronise avec le pipeline)
+  const handleQualifyFromRappel = async () => {
+    if (!qualifyData.qualification) {
+      toast.error('Veuillez sélectionner une qualification');
+      return;
+    }
+
+    const followup = qualifyModal;
+    const selectedOption = QUALIFICATION_OPTIONS.find(o => o.value === qualifyData.qualification);
+
+    try {
+      // 1. Trouver le pipeline_lead associé à ce lead
+      const pipelineResponse = await api.get('/pipeline-leads');
+      const pipelineLeads = pipelineResponse.data?.leads || [];
+      const pipelineLead = pipelineLeads.find(pl => pl.lead_id === followup.lead_id);
+
+      if (pipelineLead) {
+        // 2. Mettre à jour le pipeline avec la qualification
+        const qualifyPayload = {
+          qualification: qualifyData.qualification,
+          stage: selectedOption?.stage || qualifyData.qualification,
+          notes: qualifyData.notes,
+          deal_value: qualifyData.dealValue ? parseFloat(qualifyData.dealValue) : undefined
+        };
+
+        // Ajouter la date de suivi si spécifiée
+        if (qualifyData.nextFollowupDate) {
+          qualifyPayload.scheduled_date = `${qualifyData.nextFollowupDate}T${qualifyData.nextFollowupTime || '09:00'}:00`;
+        }
+
+        await api.post(`/pipeline-leads/${pipelineLead.id}/qualify`, qualifyPayload);
+        toast.success(`Lead qualifié: ${selectedOption?.label || qualifyData.qualification}`);
+      } else {
+        // Pas dans le pipeline, juste mettre à jour le lead
+        await api.patch(`/leads/${followup.lead_id}`, {
+          pipeline_stage: qualifyData.qualification,
+          notes: qualifyData.notes
+        });
+        toast.success('Lead mis à jour');
+      }
+
+      // 3. Marquer le rappel comme terminé
+      await api.put(`/follow-ups/${followup.id}/complete`, {
+        completed_notes: qualifyData.notes
+      });
+
+      // 4. Fermer le modal et rafraîchir
+      setQualifyModal(null);
+      setQualifyData({
+        qualification: '',
+        notes: '',
+        nextFollowupDate: '',
+        nextFollowupTime: '',
+        dealValue: ''
+      });
+      fetchFollowups();
+
+    } catch (error) {
+      console.error('Erreur qualification:', error);
+      toast.error(error.response?.data?.error || 'Erreur lors de la qualification');
+    }
   };
 
   const getFilteredFollowups = () => {
@@ -565,24 +684,40 @@ export default function FollowUps() {
                     </div>
 
                     {/* Lead Info - Utilise les données directement du followup (JOIN API) */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-blue-600" />
-                          <span className="font-semibold text-gray-900">{followup.company_name || 'Lead inconnu'}</span>
+                    <div
+                      className="bg-gray-50 rounded-lg p-4 mb-4 cursor-pointer hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all group"
+                      onClick={() => followup.lead_id && navigate(`/LeadDetails?id=${followup.lead_id}`)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-wrap flex-1">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-blue-600" />
+                            <span className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                              {followup.company_name || 'Lead inconnu'}
+                            </span>
+                          </div>
+                          {followup.lead_email && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Mail className="w-4 h-4" />
+                              {followup.lead_email}
+                            </div>
+                          )}
+                          {followup.lead_phone && (
+                            <a
+                              href={`tel:${followup.lead_phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600"
+                            >
+                              <Phone className="w-4 h-4" />
+                              {followup.lead_phone}
+                            </a>
+                          )}
                         </div>
-                        {followup.lead_email && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Mail className="w-4 h-4" />
-                            {followup.lead_email}
-                          </div>
-                        )}
-                        {followup.lead_phone && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Phone className="w-4 h-4" />
-                            {followup.lead_phone}
-                          </div>
-                        )}
+                        {/* Bouton voir le lead */}
+                        <div className="flex items-center gap-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-sm font-medium">Voir le lead</span>
+                          <Eye className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
 
@@ -616,6 +751,32 @@ export default function FollowUps() {
                   <div className="flex flex-col gap-2 ml-4">
                     {!followup.completed ? (
                       <>
+                        {/* Boutons d'action principaux */}
+                        <button
+                          onClick={() => handleCallAction(followup)}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all shadow-md"
+                        >
+                          <PhoneCall className="w-4 h-4" />
+                          Appeler
+                        </button>
+                        <button
+                          onClick={() => handleEmailAction(followup)}
+                          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-all shadow-md"
+                        >
+                          <Send className="w-4 h-4" />
+                          Email
+                        </button>
+                        <button
+                          onClick={() => followup.lead_id && navigate(`/LeadDetails?id=${followup.lead_id}`)}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-all shadow-md"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Voir le lead
+                        </button>
+
+                        {/* Séparateur */}
+                        <div className="border-t border-gray-200 my-1"></div>
+
                         <button
                           onClick={() => handleComplete(followup.id)}
                           className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all"
@@ -873,6 +1034,163 @@ export default function FollowUps() {
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg font-semibold hover:shadow-lg"
               >
                 Reprogrammer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Qualification (après appel) */}
+      {qualifyModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header avec infos lead */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Target className="w-6 h-6" />
+                  Qualifier le lead
+                </h3>
+                <button
+                  onClick={() => setQualifyModal(null)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Infos du lead */}
+              <div className="bg-white/10 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Building2 className="w-5 h-5" />
+                  <span className="font-bold text-lg">{qualifyModal.company_name || 'Lead'}</span>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {qualifyModal.lead_email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      {qualifyModal.lead_email}
+                    </div>
+                  )}
+                  {qualifyModal.lead_phone && (
+                    <a
+                      href={`tel:${qualifyModal.lead_phone}`}
+                      className="flex items-center gap-2 hover:underline"
+                    >
+                      <Phone className="w-4 h-4" />
+                      {qualifyModal.lead_phone}
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Contenu du modal */}
+            <div className="p-6 space-y-6">
+              {/* Sélection de qualification */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-3">
+                  Résultat de l'appel *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {QUALIFICATION_OPTIONS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setQualifyData({...qualifyData, qualification: option.value})}
+                      className={`p-4 rounded-xl border-2 transition-all text-left ${
+                        qualifyData.qualification === option.value
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{option.icon}</span>
+                        <span className="font-semibold text-gray-900">{option.label}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Notes de l'appel
+                </label>
+                <textarea
+                  rows="3"
+                  placeholder="Résumé de la conversation, points importants..."
+                  value={qualifyData.notes}
+                  onChange={(e) => setQualifyData({...qualifyData, notes: e.target.value})}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                />
+              </div>
+
+              {/* Prochain suivi (optionnel) */}
+              {(qualifyData.qualification === 'a_relancer' || qualifyData.qualification === 'qualifie') && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                  <label className="block text-sm font-bold text-yellow-800 mb-3">
+                    Programmer un nouveau rappel
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Date</label>
+                      <input
+                        type="date"
+                        value={qualifyData.nextFollowupDate}
+                        onChange={(e) => setQualifyData({...qualifyData, nextFollowupDate: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Heure</label>
+                      <input
+                        type="time"
+                        value={qualifyData.nextFollowupTime}
+                        onChange={(e) => setQualifyData({...qualifyData, nextFollowupTime: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Valeur du deal (optionnel) */}
+              {(qualifyData.qualification === 'tres_qualifie' || qualifyData.qualification === 'proposition') && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                  <label className="block text-sm font-bold text-green-800 mb-2">
+                    Valeur estimée du deal (€)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="Ex: 5000"
+                    value={qualifyData.dealValue}
+                    onChange={(e) => setQualifyData({...qualifyData, dealValue: e.target.value})}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:border-green-500 outline-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 bg-gray-50 border-t flex gap-3 rounded-b-2xl">
+              <button
+                onClick={() => setQualifyModal(null)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleQualifyFromRappel}
+                disabled={!qualifyData.qualification}
+                className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                  qualifyData.qualification
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Valider & Mettre à jour le pipeline
               </button>
             </div>
           </div>

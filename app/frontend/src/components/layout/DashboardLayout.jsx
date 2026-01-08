@@ -2,6 +2,7 @@ import { log, error, warn } from "../../lib/logger.js";
 ﻿import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import RappelNotification from '../notifications/RappelNotification'
 
 export default function DashboardLayout() {
   return (
@@ -13,6 +14,8 @@ export default function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+      {/* Notification flottante des rappels */}
+      <RappelNotification />
     </div>
   )
 }
