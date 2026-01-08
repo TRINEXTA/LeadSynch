@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Clock, Plus, Check, X, AlertCircle,
   User, Phone, Mail, Building2, ChevronDown, Filter,
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Shield,
-  PhoneCall, Send, ExternalLink, MessageSquare, Target
+  PhoneCall, Send, ExternalLink, MessageSquare, Target, Eye
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -44,6 +45,7 @@ const ROLE_LABELS = {
 
 export default function FollowUps() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Permissions basées sur le rôle
   const isAdmin = user?.role === 'admin';
@@ -682,24 +684,40 @@ export default function FollowUps() {
                     </div>
 
                     {/* Lead Info - Utilise les données directement du followup (JOIN API) */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-blue-600" />
-                          <span className="font-semibold text-gray-900">{followup.company_name || 'Lead inconnu'}</span>
+                    <div
+                      className="bg-gray-50 rounded-lg p-4 mb-4 cursor-pointer hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all group"
+                      onClick={() => followup.lead_id && navigate(`/LeadDetails?id=${followup.lead_id}`)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-wrap flex-1">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-blue-600" />
+                            <span className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                              {followup.company_name || 'Lead inconnu'}
+                            </span>
+                          </div>
+                          {followup.lead_email && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Mail className="w-4 h-4" />
+                              {followup.lead_email}
+                            </div>
+                          )}
+                          {followup.lead_phone && (
+                            <a
+                              href={`tel:${followup.lead_phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600"
+                            >
+                              <Phone className="w-4 h-4" />
+                              {followup.lead_phone}
+                            </a>
+                          )}
                         </div>
-                        {followup.lead_email && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Mail className="w-4 h-4" />
-                            {followup.lead_email}
-                          </div>
-                        )}
-                        {followup.lead_phone && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Phone className="w-4 h-4" />
-                            {followup.lead_phone}
-                          </div>
-                        )}
+                        {/* Bouton voir le lead */}
+                        <div className="flex items-center gap-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-sm font-medium">Voir le lead</span>
+                          <Eye className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
 
@@ -747,6 +765,13 @@ export default function FollowUps() {
                         >
                           <Send className="w-4 h-4" />
                           Email
+                        </button>
+                        <button
+                          onClick={() => followup.lead_id && navigate(`/LeadDetails?id=${followup.lead_id}`)}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-all shadow-md"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Voir le lead
                         </button>
 
                         {/* Séparateur */}
