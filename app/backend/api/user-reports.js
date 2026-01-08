@@ -202,6 +202,16 @@ router.get('/report', authenticateToken, async (req, res) => {
     let callStats = {};
     if (hasCallSessions) {
       try {
+        // D'abord vérifier s'il y a des données SANS filtre de date
+        const { rows: allSessions } = await q(`
+          SELECT user_id, COUNT(*) as total,
+                 SUM(COALESCE(calls_made, 0)) as calls,
+                 SUM(COALESCE(leads_processed, 0)) as processed
+          FROM call_sessions WHERE tenant_id = $1
+          GROUP BY user_id
+        `, [tenantId]);
+        log('[UserReports] ALL call_sessions (no date filter):', JSON.stringify(allSessions));
+
         const { rows: calls } = await q(`
           SELECT
             cs.user_id,
@@ -217,6 +227,9 @@ router.get('/report', authenticateToken, async (req, res) => {
           ${user_id ? 'AND cs.user_id = $4' : ''}
           GROUP BY cs.user_id
         `, params);
+
+        log('[UserReports] call_sessions with date filter:', JSON.stringify(calls));
+        log('[UserReports] Date range:', startDate.toISOString(), 'to', endDate.toISOString());
 
         calls.forEach(c => {
           callStats[c.user_id] = {
@@ -236,6 +249,15 @@ router.get('/report', authenticateToken, async (req, res) => {
     // Call logs for more detailed stats
     if (hasCallLogs) {
       try {
+        // D'abord vérifier les call_logs SANS filtre de date
+        const { rows: allLogs } = await q(`
+          SELECT user_id, COUNT(*) as total,
+                 COUNT(*) FILTER (WHERE qualification IN ('qualifie', 'tres_qualifie')) as qualified
+          FROM call_logs WHERE tenant_id = $1
+          GROUP BY user_id
+        `, [tenantId]);
+        log('[UserReports] ALL call_logs (no date filter):', JSON.stringify(allLogs));
+
         const { rows: logs } = await q(`
           SELECT
             cl.user_id,
@@ -251,6 +273,8 @@ router.get('/report', authenticateToken, async (req, res) => {
           ${user_id ? 'AND cl.user_id = $4' : ''}
           GROUP BY cl.user_id
         `, params);
+
+        log('[UserReports] call_logs with date filter:', JSON.stringify(logs));
 
         logs.forEach(l => {
           if (!callStats[l.user_id]) callStats[l.user_id] = {};
@@ -419,10 +443,14 @@ router.get('/report', authenticateToken, async (req, res) => {
     // =============================
     // 5. BUILD FINAL RESPONSE
     // =============================
+    log('[UserReports] Final callStats:', JSON.stringify(callStats));
+    log('[UserReports] Users IDs:', users.map(u => u.id));
+
     const enrichedUsers = users.map(user => {
       const calls = callStats[user.id] || {};
       const emails = emailStats[user.id] || {};
       const pipeline = pipelineStats[user.id] || {};
+      log(`[UserReports] User ${user.first_name} (${user.id}): calls=`, JSON.stringify(calls));
 
       return {
         id: user.id,
