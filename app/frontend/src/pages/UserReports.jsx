@@ -322,12 +322,24 @@ export default function UserReports() {
         </div>
 
         {/* Deuxième ligne de métriques */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
           <MetricCard
             icon={Briefcase}
-            label="Campagnes Créées"
-            value={totals.campaigns_created || 0}
+            label="Campagnes Assignées"
+            value={totals.campaigns_assigned || 0}
             color="purple"
+          />
+          <MetricCard
+            icon={Target}
+            label="Leads Campagnes"
+            value={totals.campaigns_total_leads || 0}
+            color="purple"
+          />
+          <MetricCard
+            icon={Activity}
+            label="Prospects Traités"
+            value={totals.calls_leads_processed || 0}
+            color="green"
           />
           <MetricCard
             icon={Calendar}
@@ -343,8 +355,8 @@ export default function UserReports() {
           />
           <MetricCard
             icon={XCircle}
-            label="Leads Perdus"
-            value={totals.leads_lost || 0}
+            label="NRP (Sans Réponse)"
+            value={totals.calls_nrp || 0}
             color="gray"
           />
         </div>
@@ -366,15 +378,14 @@ export default function UserReports() {
               <thead>
                 <tr className="bg-slate-900/50">
                   <th className="text-left py-4 px-5 text-slate-400 font-semibold text-sm">Utilisateur</th>
-                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Leads Total</th>
-                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Qualifiés</th>
-                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Gagnés</th>
+                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Leads</th>
                   <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Campagnes</th>
+                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Prospects</th>
                   <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Appels</th>
+                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Durée</th>
                   <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">RDV</th>
-                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Temps Appel</th>
+                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">NRP</th>
                   <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Emails</th>
-                  <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Taux Ouv.</th>
                   <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Rappels</th>
                   <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Retard</th>
                 </tr>
@@ -382,6 +393,7 @@ export default function UserReports() {
               <tbody className="divide-y divide-slate-700/30">
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-700/30 transition-colors">
+                    {/* Utilisateur */}
                     <td className="py-4 px-5">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${
@@ -395,51 +407,56 @@ export default function UserReports() {
                         </div>
                       </div>
                     </td>
+                    {/* Leads */}
                     <td className="py-4 px-3 text-center">
-                      <span className="text-white font-semibold">{u.leads.total_assigned}</span>
-                      {u.leads.assigned_period > 0 && (
-                        <span className="text-slate-500 text-xs block">+{u.leads.assigned_period} période</span>
-                      )}
+                      <div className="flex flex-col">
+                        <span className="text-white font-semibold">{u.leads.total_assigned}</span>
+                        <span className="text-emerald-400 text-xs">{u.leads.qualified} qualifiés</span>
+                        <span className="text-green-400 text-xs">{u.leads.won} gagnés</span>
+                      </div>
                     </td>
-                    <td className="py-4 px-3 text-center">
-                      <span className="text-violet-400 font-semibold">{u.leads.qualified}</span>
-                    </td>
-                    <td className="py-4 px-3 text-center">
-                      <span className="text-emerald-400 font-bold">{u.leads.won}</span>
-                    </td>
+                    {/* Campagnes */}
                     <td className="py-4 px-3 text-center">
                       <div className="flex flex-col">
                         <span className="text-blue-400 font-semibold">{u.campaigns.assigned}</span>
-                        <span className="text-slate-500 text-xs">{u.campaigns.created} créées</span>
+                        <span className="text-slate-500 text-xs">{u.campaigns.total_leads} leads</span>
                       </div>
                     </td>
+                    {/* Prospects Traités */}
+                    <td className="py-4 px-3 text-center">
+                      <span className="text-violet-400 font-semibold">{u.calls.leads_processed || 0}</span>
+                    </td>
+                    {/* Appels */}
                     <td className="py-4 px-3 text-center">
                       <span className="text-cyan-400 font-semibold">{u.calls.calls_made}</span>
                     </td>
-                    <td className="py-4 px-3 text-center">
-                      <span className="text-green-400 font-bold">{u.calls.rdv_pris}</span>
-                    </td>
+                    {/* Durée */}
                     <td className="py-4 px-3 text-center">
                       <span className="text-slate-300">{formatDuration(u.calls.duration_minutes)}</span>
                     </td>
+                    {/* RDV */}
                     <td className="py-4 px-3 text-center">
-                      <span className="text-amber-400 font-semibold">{u.emails.sent}</span>
+                      <span className="text-green-400 font-bold">{u.calls.rdv_pris}</span>
                     </td>
+                    {/* NRP */}
                     <td className="py-4 px-3 text-center">
-                      <span className={`font-semibold ${
-                        parseFloat(u.emails.open_rate || 0) >= 20 ? 'text-emerald-400' :
-                        parseFloat(u.emails.open_rate || 0) >= 10 ? 'text-amber-400' :
-                        'text-red-400'
-                      }`}>
-                        {u.emails.open_rate}%
-                      </span>
+                      <span className="text-orange-400 font-semibold">{u.calls.nrp || 0}</span>
                     </td>
+                    {/* Emails */}
+                    <td className="py-4 px-3 text-center">
+                      <div className="flex flex-col">
+                        <span className="text-amber-400 font-semibold">{u.emails.sent}</span>
+                        <span className="text-slate-500 text-xs">{u.emails.open_rate}% ouvert</span>
+                      </div>
+                    </td>
+                    {/* Rappels */}
                     <td className="py-4 px-3 text-center">
                       <div className="flex flex-col">
                         <span className="text-white font-semibold">{u.rappels.total}</span>
                         <span className="text-emerald-400 text-xs">{u.rappels.completed} faits</span>
                       </div>
                     </td>
+                    {/* Retard */}
                     <td className="py-4 px-3 text-center">
                       <span className={`font-bold ${
                         parseInt(u.rappels.overdue || 0) > 0 ? 'text-red-400' : 'text-slate-400'
