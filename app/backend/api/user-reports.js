@@ -57,6 +57,19 @@ router.get('/summary', authenticateToken, async (req, res) => {
     const { startDate, endDate } = getDateRange(period);
     log(`[UserReports] Generating summary for period: ${period} (${startDate.toISOString()} - ${endDate.toISOString()})`);
 
+    // Check which tables exist
+    const tableChecks = await q(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('call_sessions', 'user_sessions', 'activity_logs', 'email_queue', 'pipeline_leads')
+    `);
+    const existingTables = tableChecks.rows.map(r => r.table_name);
+    const hasCallSessions = existingTables.includes('call_sessions');
+    const hasUserSessions = existingTables.includes('user_sessions');
+    const hasActivityLogs = existingTables.includes('activity_logs');
+    const hasEmailQueue = existingTables.includes('email_queue');
+    const hasPipelineLeads = existingTables.includes('pipeline_leads');
+
     const { rows: users } = await q(`
       SELECT
         u.id,
@@ -110,61 +123,46 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
         -- Tasks completed
         (SELECT COUNT(*) FROM follow_ups f
-         WHERE f.assigned_to = u.id
+         WHERE f.user_id = u.id
          AND f.tenant_id = $1
          AND f.completed = true
          AND f.updated_at >= $2 AND f.updated_at <= $3) as tasks_completed,
 
         -- Tasks pending
         (SELECT COUNT(*) FROM follow_ups f
-         WHERE f.assigned_to = u.id
+         WHERE f.user_id = u.id
          AND f.tenant_id = $1
-         AND f.completed = false) as tasks_pending,
+         AND (f.completed = false OR f.completed IS NULL)) as tasks_pending,
 
-        -- Emails sent (from email_queue)
-        (SELECT COUNT(*) FROM email_queue eq
-         WHERE eq.tenant_id = $1
-         AND eq.status = 'sent'
-         AND eq.sent_at >= $2 AND eq.sent_at <= $3
-         AND EXISTS (SELECT 1 FROM campaigns c WHERE c.id = eq.campaign_id AND c.created_by = u.id)) as emails_sent,
+        -- Tasks overdue (rappels en retard)
+        (SELECT COUNT(*) FROM follow_ups f
+         WHERE f.user_id = u.id
+         AND f.tenant_id = $1
+         AND (f.completed = false OR f.completed IS NULL)
+         AND f.scheduled_date < NOW()) as tasks_overdue,
 
-        -- Pipeline leads (in active pipeline)
+        -- Total rappels pour le calcul du taux
+        (SELECT COUNT(*) FROM follow_ups f
+         WHERE f.user_id = u.id
+         AND f.tenant_id = $1
+         AND f.created_at >= $2 AND f.created_at <= $3) as total_rappels,
+
+        -- Temps moyen de réponse aux rappels (en heures)
+        (SELECT AVG(EXTRACT(EPOCH FROM (f.completed_at - f.scheduled_date))/3600)
+         FROM follow_ups f
+         WHERE f.user_id = u.id
+         AND f.tenant_id = $1
+         AND f.completed = true
+         AND f.completed_at IS NOT NULL
+         AND f.created_at >= $2 AND f.created_at <= $3) as avg_response_hours,
+
+        -- Pipeline leads (only if table exists)
+        ${hasPipelineLeads ? `
         (SELECT COUNT(*) FROM pipeline_leads pl
          WHERE pl.assigned_user_id = u.id
          AND pl.tenant_id = $1
-         AND pl.created_at >= $2 AND pl.created_at <= $3) as pipeline_leads,
-
-        -- Call sessions count
-        (SELECT COUNT(*) FROM call_sessions cs
-         WHERE cs.user_id = u.id
-         AND cs.tenant_id = $1
-         AND cs.started_at >= $2 AND cs.started_at <= $3) as call_sessions,
-
-        -- Total call duration (seconds)
-        (SELECT COALESCE(SUM(cs.total_duration_seconds), 0)
-         FROM call_sessions cs
-         WHERE cs.user_id = u.id
-         AND cs.tenant_id = $1
-         AND cs.started_at >= $2 AND cs.started_at <= $3) as total_call_seconds,
-
-        -- Connection time from user_sessions (if table exists)
-        COALESCE((
-          SELECT SUM(
-            CASE
-              WHEN us.logout_at IS NOT NULL THEN EXTRACT(EPOCH FROM (us.logout_at - us.login_at))
-              ELSE EXTRACT(EPOCH FROM (NOW() - us.login_at))
-            END
-          )::INTEGER
-          FROM user_sessions us
-          WHERE us.user_id = u.id
-          AND us.login_at >= $2 AND us.login_at <= $3
-        ), 0) as total_connection_seconds,
-
-        -- Activity count
-        (SELECT COUNT(*) FROM activity_logs al
-         WHERE al.user_id = u.id
-         AND al.tenant_id = $1
-         AND al.created_at >= $2 AND al.created_at <= $3) as total_activities
+         AND pl.created_at >= $2 AND pl.created_at <= $3) as pipeline_leads
+        ` : '0 as pipeline_leads'}
 
       FROM users u
       WHERE u.tenant_id = $1
@@ -172,8 +170,87 @@ router.get('/summary', authenticateToken, async (req, res) => {
       ORDER BY u.first_name, u.last_name
     `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
 
+    // Get additional stats from optional tables
+    let emailsPerUser = {};
+    let callsPerUser = {};
+    let connectionPerUser = {};
+    let activityPerUser = {};
+
+    if (hasEmailQueue) {
+      try {
+        const { rows: emailStats } = await q(`
+          SELECT c.created_by as user_id, COUNT(eq.id) as emails_sent
+          FROM email_queue eq
+          JOIN campaigns c ON c.id = eq.campaign_id
+          WHERE eq.tenant_id = $1
+          AND eq.status = 'sent'
+          AND eq.sent_at >= $2 AND eq.sent_at <= $3
+          GROUP BY c.created_by
+        `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+        emailStats.forEach(e => { emailsPerUser[e.user_id] = parseInt(e.emails_sent || 0); });
+      } catch (e) { warn('[UserReports] email_queue query failed:', e.message); }
+    }
+
+    if (hasCallSessions) {
+      try {
+        const { rows: callStats } = await q(`
+          SELECT user_id, COUNT(*) as call_sessions, COALESCE(SUM(total_duration_seconds), 0) as total_call_seconds
+          FROM call_sessions
+          WHERE tenant_id = $1
+          AND started_at >= $2 AND started_at <= $3
+          GROUP BY user_id
+        `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+        callStats.forEach(c => {
+          callsPerUser[c.user_id] = {
+            sessions: parseInt(c.call_sessions || 0),
+            seconds: parseInt(c.total_call_seconds || 0)
+          };
+        });
+      } catch (e) { warn('[UserReports] call_sessions query failed:', e.message); }
+    }
+
+    if (hasUserSessions) {
+      try {
+        const { rows: connectionStats } = await q(`
+          SELECT user_id, SUM(
+            CASE
+              WHEN logout_at IS NOT NULL THEN EXTRACT(EPOCH FROM (logout_at - login_at))
+              ELSE EXTRACT(EPOCH FROM (NOW() - login_at))
+            END
+          )::INTEGER as total_connection_seconds
+          FROM user_sessions
+          WHERE login_at >= $1 AND login_at <= $2
+          GROUP BY user_id
+        `, [startDate.toISOString(), endDate.toISOString()]);
+        connectionStats.forEach(c => { connectionPerUser[c.user_id] = parseInt(c.total_connection_seconds || 0); });
+      } catch (e) { warn('[UserReports] user_sessions query failed:', e.message); }
+    }
+
+    if (hasActivityLogs) {
+      try {
+        const { rows: activityStats } = await q(`
+          SELECT user_id, COUNT(*) as total_activities
+          FROM activity_logs
+          WHERE tenant_id = $1
+          AND created_at >= $2 AND created_at <= $3
+          GROUP BY user_id
+        `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+        activityStats.forEach(a => { activityPerUser[a.user_id] = parseInt(a.total_activities || 0); });
+      } catch (e) { warn('[UserReports] activity_logs query failed:', e.message); }
+    }
+
+    // Merge additional stats into users
+    const enrichedUsers = users.map(user => ({
+      ...user,
+      emails_sent: emailsPerUser[user.id] || 0,
+      call_sessions: callsPerUser[user.id]?.sessions || 0,
+      total_call_seconds: callsPerUser[user.id]?.seconds || 0,
+      total_connection_seconds: connectionPerUser[user.id] || 0,
+      total_activities: activityPerUser[user.id] || 0
+    }));
+
     // Calculate totals
-    const totals = users.reduce((acc, user) => ({
+    const totals = enrichedUsers.reduce((acc, user) => ({
       leads_assigned: acc.leads_assigned + parseInt(user.leads_assigned || 0),
       leads_contacted: acc.leads_contacted + parseInt(user.leads_contacted || 0),
       leads_qualified: acc.leads_qualified + parseInt(user.leads_qualified || 0),
@@ -181,6 +258,9 @@ router.get('/summary', authenticateToken, async (req, res) => {
       deals_won: acc.deals_won + parseInt(user.deals_won || 0),
       deals_lost: acc.deals_lost + parseInt(user.deals_lost || 0),
       tasks_completed: acc.tasks_completed + parseInt(user.tasks_completed || 0),
+      tasks_pending: acc.tasks_pending + parseInt(user.tasks_pending || 0),
+      tasks_overdue: acc.tasks_overdue + parseInt(user.tasks_overdue || 0),
+      total_rappels: acc.total_rappels + parseInt(user.total_rappels || 0),
       emails_sent: acc.emails_sent + parseInt(user.emails_sent || 0),
       call_sessions: acc.call_sessions + parseInt(user.call_sessions || 0),
       total_call_seconds: acc.total_call_seconds + parseInt(user.total_call_seconds || 0),
@@ -193,6 +273,9 @@ router.get('/summary', authenticateToken, async (req, res) => {
       deals_won: 0,
       deals_lost: 0,
       tasks_completed: 0,
+      tasks_pending: 0,
+      tasks_overdue: 0,
+      total_rappels: 0,
       emails_sent: 0,
       call_sessions: 0,
       total_call_seconds: 0,
@@ -206,7 +289,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
         start: startDate.toISOString(),
         end: endDate.toISOString()
       },
-      users: users.map(u => ({
+      users: enrichedUsers.map(u => ({
         ...u,
         conversion_rate: parseInt(u.leads_contacted || 0) > 0
           ? ((parseInt(u.deals_won || 0) / parseInt(u.leads_contacted || 0)) * 100).toFixed(1)
@@ -480,6 +563,413 @@ router.get('/export', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     error('[UserReports] Export error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================
+// GET /user-reports/evolution
+// Get evolution data for charts
+// =============================
+router.get('/evolution', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const userRole = req.user.role;
+    const { period = '30days', user_id } = req.query;
+
+    // Only admin and manager can view reports
+    if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    const { startDate, endDate } = getDateRange(period);
+
+    // Check which tables exist
+    const tableChecks = await q(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('activity_logs', 'pipeline_leads')
+    `);
+    const existingTables = tableChecks.rows.map(r => r.table_name);
+    const hasActivityLogs = existingTables.includes('activity_logs');
+    const hasPipelineLeads = existingTables.includes('pipeline_leads');
+
+    // Determine grouping interval based on period
+    let interval = 'day';
+    let dateFormat = 'YYYY-MM-DD';
+    if (period === 'year') {
+      interval = 'month';
+      dateFormat = 'YYYY-MM';
+    } else if (period === 'semester' || period === 'quarter') {
+      interval = 'week';
+      dateFormat = 'IYYY-IW';
+    }
+
+    const userFilter = user_id ? 'AND l.assigned_to = $4' : '';
+    const userFilterFollowups = user_id ? 'AND f.user_id = $4' : '';
+    const params = user_id
+      ? [tenantId, startDate.toISOString(), endDate.toISOString(), user_id]
+      : [tenantId, startDate.toISOString(), endDate.toISOString()];
+
+    // Get leads evolution
+    const { rows: leadsEvolution } = await q(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('${interval}', created_at), '${dateFormat}') as period,
+        COUNT(*) as leads_created,
+        COUNT(*) FILTER (WHERE status IN ('qualifie', 'tres_qualifie', 'qualified', 'hot')) as leads_qualified,
+        COUNT(*) FILTER (WHERE status IN ('gagne', 'won', 'closed_won')) as deals_won
+      FROM leads l
+      WHERE l.tenant_id = $1
+      AND l.created_at >= $2 AND l.created_at <= $3
+      ${userFilter}
+      GROUP BY DATE_TRUNC('${interval}', created_at)
+      ORDER BY DATE_TRUNC('${interval}', created_at)
+    `, params);
+
+    // Get rappels evolution
+    const { rows: rappelsEvolution } = await q(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('${interval}', created_at), '${dateFormat}') as period,
+        COUNT(*) as rappels_created,
+        COUNT(*) FILTER (WHERE completed = true) as rappels_completed,
+        COUNT(*) FILTER (WHERE completed = false AND scheduled_date < NOW()) as rappels_overdue
+      FROM follow_ups f
+      WHERE f.tenant_id = $1
+      AND f.created_at >= $2 AND f.created_at <= $3
+      ${userFilterFollowups}
+      GROUP BY DATE_TRUNC('${interval}', created_at)
+      ORDER BY DATE_TRUNC('${interval}', created_at)
+    `, params);
+
+    // Get activity evolution (only if table exists)
+    let activityEvolution = [];
+    if (hasActivityLogs) {
+      try {
+        const { rows } = await q(`
+          SELECT
+            TO_CHAR(DATE_TRUNC('${interval}', created_at), '${dateFormat}') as period,
+            COUNT(*) as total_actions,
+            COUNT(*) FILTER (WHERE action LIKE '%call%' OR action LIKE '%appel%') as call_actions,
+            COUNT(*) FILTER (WHERE action LIKE '%email%' OR action LIKE '%mail%') as email_actions
+          FROM activity_logs
+          WHERE tenant_id = $1
+          AND created_at >= $2 AND created_at <= $3
+          ${user_id ? 'AND user_id = $4' : ''}
+          GROUP BY DATE_TRUNC('${interval}', created_at)
+          ORDER BY DATE_TRUNC('${interval}', created_at)
+        `, params);
+        activityEvolution = rows;
+      } catch (e) { warn('[UserReports] activity_logs query failed:', e.message); }
+    }
+
+    // Get pipeline stage evolution (only if table exists)
+    let pipelineEvolution = [];
+    if (hasPipelineLeads) {
+      try {
+        const { rows } = await q(`
+          SELECT
+            TO_CHAR(DATE_TRUNC('${interval}', pl.created_at), '${dateFormat}') as period,
+            pl.stage,
+            COUNT(*) as count
+          FROM pipeline_leads pl
+          WHERE pl.tenant_id = $1
+          AND pl.created_at >= $2 AND pl.created_at <= $3
+          ${user_id ? 'AND pl.assigned_user_id = $4' : ''}
+          GROUP BY DATE_TRUNC('${interval}', pl.created_at), pl.stage
+          ORDER BY DATE_TRUNC('${interval}', pl.created_at)
+        `, params);
+        pipelineEvolution = rows;
+      } catch (e) { warn('[UserReports] pipeline_leads query failed:', e.message); }
+    }
+
+    res.json({
+      success: true,
+      period,
+      interval,
+      date_range: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString()
+      },
+      evolution: {
+        leads: leadsEvolution,
+        rappels: rappelsEvolution,
+        activity: activityEvolution,
+        pipeline: pipelineEvolution
+      }
+    });
+  } catch (err) {
+    error('[UserReports] Evolution error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================
+// GET /user-reports/rappels-stats
+// Get detailed rappels statistics
+// =============================
+router.get('/rappels-stats', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const userRole = req.user.role;
+    const { period = '30days' } = req.query;
+
+    // Only admin and manager can view reports
+    if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    const { startDate, endDate } = getDateRange(period);
+
+    // Get rappels stats by user
+    const { rows: rappelsByUser } = await q(`
+      SELECT
+        u.id as user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        COUNT(f.id) as total_rappels,
+        COUNT(*) FILTER (WHERE f.completed = true) as completed_rappels,
+        COUNT(*) FILTER (WHERE f.completed = false OR f.completed IS NULL) as pending_rappels,
+        COUNT(*) FILTER (WHERE (f.completed = false OR f.completed IS NULL) AND f.scheduled_date < NOW()) as overdue_rappels,
+
+        -- Taux de complétion
+        CASE
+          WHEN COUNT(f.id) > 0
+          THEN ROUND((COUNT(*) FILTER (WHERE f.completed = true)::numeric / COUNT(f.id)::numeric) * 100, 1)
+          ELSE 0
+        END as completion_rate,
+
+        -- Taux de retard
+        CASE
+          WHEN COUNT(*) FILTER (WHERE f.completed = false OR f.completed IS NULL) > 0
+          THEN ROUND((COUNT(*) FILTER (WHERE (f.completed = false OR f.completed IS NULL) AND f.scheduled_date < NOW())::numeric /
+                      COUNT(*) FILTER (WHERE f.completed = false OR f.completed IS NULL)::numeric) * 100, 1)
+          ELSE 0
+        END as overdue_rate,
+
+        -- Temps moyen de réponse (heures)
+        ROUND(AVG(EXTRACT(EPOCH FROM (f.completed_at - f.scheduled_date))/3600) FILTER (WHERE f.completed = true AND f.completed_at IS NOT NULL), 1) as avg_response_hours,
+
+        -- Temps moyen de retard (heures) pour les rappels en retard
+        ROUND(AVG(EXTRACT(EPOCH FROM (NOW() - f.scheduled_date))/3600) FILTER (WHERE (f.completed = false OR f.completed IS NULL) AND f.scheduled_date < NOW()), 1) as avg_delay_hours
+
+      FROM users u
+      LEFT JOIN follow_ups f ON f.user_id = u.id
+        AND f.tenant_id = $1
+        AND f.created_at >= $2 AND f.created_at <= $3
+      WHERE u.tenant_id = $1
+      AND u.role NOT IN ('super_admin')
+      AND u.is_active = true
+      GROUP BY u.id, u.first_name, u.last_name, u.email
+      ORDER BY overdue_rappels DESC, total_rappels DESC
+    `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+
+    // Get rappels by type
+    const { rows: rappelsByType } = await q(`
+      SELECT
+        COALESCE(type, 'non_défini') as type,
+        COUNT(*) as count,
+        COUNT(*) FILTER (WHERE completed = true) as completed,
+        COUNT(*) FILTER (WHERE (completed = false OR completed IS NULL) AND scheduled_date < NOW()) as overdue
+      FROM follow_ups
+      WHERE tenant_id = $1
+      AND created_at >= $2 AND created_at <= $3
+      GROUP BY type
+      ORDER BY count DESC
+    `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+
+    // Get overdue rappels list (top 20)
+    const { rows: overdueRappels } = await q(`
+      SELECT
+        f.id,
+        f.title,
+        f.type,
+        f.scheduled_date,
+        f.notes,
+        ROUND(EXTRACT(EPOCH FROM (NOW() - f.scheduled_date))/3600, 1) as hours_overdue,
+        u.first_name || ' ' || u.last_name as user_name,
+        l.company_name as lead_name
+      FROM follow_ups f
+      JOIN users u ON f.user_id = u.id
+      LEFT JOIN leads l ON f.lead_id = l.id
+      WHERE f.tenant_id = $1
+      AND (f.completed = false OR f.completed IS NULL)
+      AND f.scheduled_date < NOW()
+      ORDER BY f.scheduled_date ASC
+      LIMIT 20
+    `, [tenantId]);
+
+    // Calculate global stats
+    const totals = rappelsByUser.reduce((acc, u) => ({
+      total_rappels: acc.total_rappels + parseInt(u.total_rappels || 0),
+      completed_rappels: acc.completed_rappels + parseInt(u.completed_rappels || 0),
+      pending_rappels: acc.pending_rappels + parseInt(u.pending_rappels || 0),
+      overdue_rappels: acc.overdue_rappels + parseInt(u.overdue_rappels || 0)
+    }), { total_rappels: 0, completed_rappels: 0, pending_rappels: 0, overdue_rappels: 0 });
+
+    totals.completion_rate = totals.total_rappels > 0
+      ? ((totals.completed_rappels / totals.total_rappels) * 100).toFixed(1)
+      : 0;
+    totals.overdue_rate = totals.pending_rappels > 0
+      ? ((totals.overdue_rappels / totals.pending_rappels) * 100).toFixed(1)
+      : 0;
+
+    res.json({
+      success: true,
+      period,
+      date_range: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString()
+      },
+      totals,
+      by_user: rappelsByUser,
+      by_type: rappelsByType,
+      overdue_list: overdueRappels
+    });
+  } catch (err) {
+    error('[UserReports] Rappels stats error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================
+// GET /user-reports/performance-score
+// Calculate performance score for users
+// =============================
+router.get('/performance-score', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const userRole = req.user.role;
+    const { period = '30days' } = req.query;
+
+    // Only admin and manager can view reports
+    if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    const { startDate, endDate } = getDateRange(period);
+
+    // Check which tables exist
+    const tableChecks = await q(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name IN ('activity_logs', 'pipeline_leads')
+    `);
+    const existingTables = tableChecks.rows.map(r => r.table_name);
+    const hasActivityLogs = existingTables.includes('activity_logs');
+    const hasPipelineLeads = existingTables.includes('pipeline_leads');
+
+    // Calculate performance scores
+    const { rows: scores } = await q(`
+      WITH user_metrics AS (
+        SELECT
+          u.id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.role,
+
+          -- Leads metrics
+          (SELECT COUNT(*) FROM leads l WHERE l.assigned_to = u.id AND l.tenant_id = $1
+           AND l.created_at >= $2 AND l.created_at <= $3) as leads_assigned,
+          (SELECT COUNT(*) FROM leads l WHERE l.assigned_to = u.id AND l.tenant_id = $1
+           AND l.status IN ('gagne', 'won', 'closed_won')
+           AND l.updated_at >= $2 AND l.updated_at <= $3) as deals_won,
+
+          -- Rappels metrics
+          (SELECT COUNT(*) FROM follow_ups f WHERE f.user_id = u.id AND f.tenant_id = $1
+           AND f.created_at >= $2 AND f.created_at <= $3) as total_rappels,
+          (SELECT COUNT(*) FROM follow_ups f WHERE f.user_id = u.id AND f.tenant_id = $1
+           AND f.completed = true
+           AND f.created_at >= $2 AND f.created_at <= $3) as rappels_completed,
+          (SELECT COUNT(*) FROM follow_ups f WHERE f.user_id = u.id AND f.tenant_id = $1
+           AND (f.completed = false OR f.completed IS NULL) AND f.scheduled_date < NOW()) as rappels_overdue,
+
+          -- Activity (0 if table doesn't exist)
+          ${hasActivityLogs ? `
+          (SELECT COUNT(*) FROM activity_logs al WHERE al.user_id = u.id AND al.tenant_id = $1
+           AND al.created_at >= $2 AND al.created_at <= $3)
+          ` : '0'} as activity_count,
+
+          -- Pipeline (0 if table doesn't exist)
+          ${hasPipelineLeads ? `
+          (SELECT COUNT(*) FROM pipeline_leads pl WHERE pl.assigned_user_id = u.id AND pl.tenant_id = $1
+           AND pl.stage IN ('gagne', 'won')
+           AND pl.updated_at >= $2 AND pl.updated_at <= $3)
+          ` : '0'} as pipeline_won
+
+        FROM users u
+        WHERE u.tenant_id = $1
+        AND u.role NOT IN ('super_admin')
+        AND u.is_active = true
+      )
+      SELECT
+        *,
+        -- Taux de conversion (20 pts max)
+        CASE
+          WHEN leads_assigned > 0 THEN LEAST((deals_won::float / leads_assigned::float) * 100, 20)
+          ELSE 0
+        END as conversion_score,
+
+        -- Taux de complétion rappels (25 pts max)
+        CASE
+          WHEN total_rappels > 0 THEN (rappels_completed::float / total_rappels::float) * 25
+          ELSE 0
+        END as rappels_score,
+
+        -- Pénalité retards (-15 pts max)
+        LEAST(rappels_overdue * 3, 15) as overdue_penalty,
+
+        -- Activité (15 pts max)
+        LEAST(activity_count::float / 10, 15) as activity_score,
+
+        -- Pipeline gagné (25 pts max)
+        LEAST(pipeline_won * 5, 25) as pipeline_score,
+
+        -- Score total
+        GREATEST(0,
+          CASE WHEN leads_assigned > 0 THEN LEAST((deals_won::float / leads_assigned::float) * 100, 20) ELSE 0 END +
+          CASE WHEN total_rappels > 0 THEN (rappels_completed::float / total_rappels::float) * 25 ELSE 0 END -
+          LEAST(rappels_overdue * 3, 15) +
+          LEAST(activity_count::float / 10, 15) +
+          LEAST(pipeline_won * 5, 25)
+        ) as total_score
+
+      FROM user_metrics
+      ORDER BY total_score DESC
+    `, [tenantId, startDate.toISOString(), endDate.toISOString()]);
+
+    // Calculate rankings and add medals
+    const scoredUsers = scores.map((user, index) => ({
+      ...user,
+      rank: index + 1,
+      medal: index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : null,
+      total_score: parseFloat(user.total_score || 0).toFixed(1),
+      conversion_score: parseFloat(user.conversion_score || 0).toFixed(1),
+      rappels_score: parseFloat(user.rappels_score || 0).toFixed(1),
+      activity_score: parseFloat(user.activity_score || 0).toFixed(1),
+      pipeline_score: parseFloat(user.pipeline_score || 0).toFixed(1)
+    }));
+
+    res.json({
+      success: true,
+      period,
+      date_range: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString()
+      },
+      score_breakdown: {
+        conversion: { max: 20, description: 'Taux de conversion leads → deals' },
+        rappels: { max: 25, description: 'Taux de complétion des rappels' },
+        overdue_penalty: { max: -15, description: 'Pénalité pour rappels en retard' },
+        activity: { max: 15, description: 'Volume d\'activité' },
+        pipeline: { max: 25, description: 'Deals gagnés dans le pipeline' }
+      },
+      users: scoredUsers,
+      top_performer: scoredUsers[0] || null
+    });
+  } catch (err) {
+    error('[UserReports] Performance score error:', err);
     res.status(500).json({ error: err.message });
   }
 });

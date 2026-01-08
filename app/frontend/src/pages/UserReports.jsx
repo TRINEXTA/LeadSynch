@@ -6,8 +6,14 @@ import {
   FileText, Download, Calendar, Users, Target, Phone,
   Mail, CheckCircle, XCircle, TrendingUp, Clock, Award,
   BarChart3, Eye, Filter, RefreshCw, FileSpreadsheet,
-  ChevronDown, User, Activity, Briefcase, ArrowUp, ArrowDown
+  ChevronDown, User, Activity, Briefcase, ArrowUp, ArrowDown,
+  Bell, AlertTriangle, Trophy, Medal, Zap, Timer, PieChart
 } from 'lucide-react';
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart as RechartsPie, Pie, Cell
+} from 'recharts';
 
 const PERIODS = [
   { value: 'today', label: "Aujourd'hui", icon: Calendar },
@@ -17,6 +23,17 @@ const PERIODS = [
   { value: 'semester', label: 'Semestre (180 jours)', icon: Calendar },
   { value: 'year', label: 'Année (365 jours)', icon: Calendar }
 ];
+
+// Tabs for the report page
+const REPORT_TABS = [
+  { id: 'overview', label: 'Vue d\'ensemble', icon: BarChart3 },
+  { id: 'rappels', label: 'Rappels & Suivi', icon: Bell },
+  { id: 'performance', label: 'Performance', icon: Trophy },
+  { id: 'evolution', label: 'Évolution', icon: TrendingUp }
+];
+
+// Colors for charts
+const CHART_COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
 
 export default function UserReports() {
   const { user } = useAuth();
@@ -28,8 +45,20 @@ export default function UserReports() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // New states for enhanced reports
+  const [activeTab, setActiveTab] = useState('overview');
+  const [rappelsStats, setRappelsStats] = useState(null);
+  const [performanceScores, setPerformanceScores] = useState(null);
+  const [evolutionData, setEvolutionData] = useState(null);
+  const [loadingRappels, setLoadingRappels] = useState(false);
+  const [loadingPerformance, setLoadingPerformance] = useState(false);
+  const [loadingEvolution, setLoadingEvolution] = useState(false);
+
   useEffect(() => {
     loadReportData();
+    loadRappelsStats();
+    loadPerformanceScores();
+    loadEvolutionData();
   }, [period]);
 
   const loadReportData = async () => {
@@ -42,6 +71,42 @@ export default function UserReports() {
       toast.error('Erreur lors du chargement du rapport');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRappelsStats = async () => {
+    try {
+      setLoadingRappels(true);
+      const response = await api.get(`/user-reports/rappels-stats?period=${period}`);
+      setRappelsStats(response.data);
+    } catch (err) {
+      console.error('Error loading rappels stats:', err);
+    } finally {
+      setLoadingRappels(false);
+    }
+  };
+
+  const loadPerformanceScores = async () => {
+    try {
+      setLoadingPerformance(true);
+      const response = await api.get(`/user-reports/performance-score?period=${period}`);
+      setPerformanceScores(response.data);
+    } catch (err) {
+      console.error('Error loading performance scores:', err);
+    } finally {
+      setLoadingPerformance(false);
+    }
+  };
+
+  const loadEvolutionData = async () => {
+    try {
+      setLoadingEvolution(true);
+      const response = await api.get(`/user-reports/evolution?period=${period}`);
+      setEvolutionData(response.data);
+    } catch (err) {
+      console.error('Error loading evolution data:', err);
+    } finally {
+      setLoadingEvolution(false);
     }
   };
 
@@ -206,7 +271,28 @@ export default function UserReports() {
           )}
         </div>
 
-        {/* Summary Cards */}
+        {/* Tabs Navigation */}
+        <div className="mb-6 flex flex-wrap gap-2 bg-slate-800/50 backdrop-blur-xl rounded-xl p-2 border border-slate-700/50">
+          {REPORT_TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              <tab.icon className="w-5 h-5" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Summary Cards */}
         {reportData?.totals && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
             <SummaryCard
@@ -336,6 +422,33 @@ export default function UserReports() {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Rappels Tab */}
+        {activeTab === 'rappels' && (
+          <RappelsTab
+            data={rappelsStats}
+            loading={loadingRappels}
+            formatDuration={formatDuration}
+          />
+        )}
+
+        {/* Performance Tab */}
+        {activeTab === 'performance' && (
+          <PerformanceTab
+            data={performanceScores}
+            loading={loadingPerformance}
+          />
+        )}
+
+        {/* Evolution Tab */}
+        {activeTab === 'evolution' && (
+          <EvolutionTab
+            data={evolutionData}
+            loading={loadingEvolution}
+          />
+        )}
 
         {/* User Detail Modal */}
         {selectedUser && (
@@ -505,6 +618,569 @@ function StatBox({ label, value, icon: Icon }) {
         <span className="text-slate-400 text-sm">{label}</span>
       </div>
       <p className="text-2xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+// ================================
+// RAPPELS TAB COMPONENT
+// ================================
+function RappelsTab({ data, loading, formatDuration }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const getOverdueColor = (rate) => {
+    if (rate <= 10) return 'text-emerald-400';
+    if (rate <= 30) return 'text-amber-400';
+    return 'text-red-400';
+  };
+
+  const getCompletionColor = (rate) => {
+    if (rate >= 80) return 'text-emerald-400';
+    if (rate >= 50) return 'text-amber-400';
+    return 'text-red-400';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Global Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-violet-500/20 to-purple-600/10 border border-violet-500/30 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <Bell className="w-5 h-5 text-violet-400" />
+            <span className="text-slate-400 text-sm">Total Rappels</span>
+          </div>
+          <p className="text-3xl font-bold text-white">{data.totals?.total_rappels || 0}</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-emerald-500/20 to-green-600/10 border border-emerald-500/30 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            <span className="text-slate-400 text-sm">Complétés</span>
+          </div>
+          <p className="text-3xl font-bold text-white">{data.totals?.completed_rappels || 0}</p>
+          <p className={`text-sm font-semibold ${getCompletionColor(data.totals?.completion_rate)}`}>
+            {data.totals?.completion_rate}% taux
+          </p>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/10 border border-amber-500/30 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <Clock className="w-5 h-5 text-amber-400" />
+            <span className="text-slate-400 text-sm">En attente</span>
+          </div>
+          <p className="text-3xl font-bold text-white">{data.totals?.pending_rappels || 0}</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-red-500/20 to-rose-600/10 border border-red-500/30 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+            <span className="text-slate-400 text-sm">En retard</span>
+          </div>
+          <p className="text-3xl font-bold text-white">{data.totals?.overdue_rappels || 0}</p>
+          <p className={`text-sm font-semibold ${getOverdueColor(100 - data.totals?.overdue_rate)}`}>
+            {data.totals?.overdue_rate}% du pending
+          </p>
+        </div>
+      </div>
+
+      {/* Rappels by User */}
+      <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
+        <div className="p-5 border-b border-slate-700/50">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Users className="w-6 h-6 text-violet-400" />
+            Performance Rappels par Utilisateur
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-900/50">
+                <th className="text-left py-4 px-5 text-slate-400 font-semibold text-sm">Utilisateur</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Total</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Complétés</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">En attente</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">En retard</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Taux Complétion</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Taux Retard</th>
+                <th className="text-center py-4 px-3 text-slate-400 font-semibold text-sm">Temps Réponse</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700/30">
+              {data.by_user?.map((user, idx) => (
+                <tr key={idx} className="hover:bg-slate-700/30 transition-colors">
+                  <td className="py-4 px-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center font-bold text-white">
+                        {user.first_name?.[0]}{user.last_name?.[0]}
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">{user.first_name} {user.last_name}</p>
+                        <p className="text-slate-500 text-xs">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className="text-white font-semibold">{user.total_rappels || 0}</span>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className="text-emerald-400 font-semibold">{user.completed_rappels || 0}</span>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className="text-amber-400 font-semibold">{user.pending_rappels || 0}</span>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className={`font-bold ${parseInt(user.overdue_rappels) > 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                      {user.overdue_rappels || 0}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className={`font-bold ${getCompletionColor(parseFloat(user.completion_rate || 0))}`}>
+                      {user.completion_rate || 0}%
+                    </span>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className={`font-bold ${getOverdueColor(100 - parseFloat(user.overdue_rate || 0))}`}>
+                      {user.overdue_rate || 0}%
+                    </span>
+                  </td>
+                  <td className="py-4 px-3 text-center">
+                    <span className="text-slate-300">
+                      {user.avg_response_hours ? `${user.avg_response_hours}h` : '-'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Overdue Rappels List */}
+      {data.overdue_list?.length > 0 && (
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-red-500/30 rounded-2xl overflow-hidden">
+          <div className="p-5 border-b border-slate-700/50 bg-red-500/10">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <AlertTriangle className="w-6 h-6 text-red-400" />
+              Rappels en Retard (Top 20)
+            </h3>
+          </div>
+          <div className="divide-y divide-slate-700/30 max-h-96 overflow-y-auto">
+            {data.overdue_list.map((rappel, idx) => (
+              <div key={idx} className="p-4 hover:bg-slate-700/30 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <span className="px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium">
+                        {rappel.hours_overdue}h en retard
+                      </span>
+                      <span className="text-white font-medium">{rappel.title || 'Rappel'}</span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
+                      <span>👤 {rappel.user_name}</span>
+                      <span>🏢 {rappel.lead_name || 'Lead inconnu'}</span>
+                      <span>📅 {new Date(rappel.scheduled_date).toLocaleString('fr-FR')}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rappels by Type */}
+      {data.by_type?.length > 0 && (
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <PieChart className="w-6 h-6 text-cyan-400" />
+            Répartition par Type
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {data.by_type.map((type, idx) => (
+              <div key={idx} className="bg-slate-700/50 rounded-xl p-4 border border-slate-600/50">
+                <p className="text-slate-400 text-sm capitalize">{type.type?.replace(/_/g, ' ')}</p>
+                <p className="text-2xl font-bold text-white">{type.count}</p>
+                <div className="flex gap-2 mt-2 text-xs">
+                  <span className="text-emerald-400">{type.completed} ✓</span>
+                  <span className="text-red-400">{type.overdue} ⏰</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ================================
+// PERFORMANCE TAB COMPONENT
+// ================================
+function PerformanceTab({ data, loading }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const getScoreColor = (score) => {
+    if (score >= 70) return 'text-emerald-400';
+    if (score >= 40) return 'text-amber-400';
+    return 'text-red-400';
+  };
+
+  const getScoreBg = (score) => {
+    if (score >= 70) return 'from-emerald-500/20 to-green-600/10 border-emerald-500/30';
+    if (score >= 40) return 'from-amber-500/20 to-orange-600/10 border-amber-500/30';
+    return 'from-red-500/20 to-rose-600/10 border-red-500/30';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Score Breakdown */}
+      {data.score_breakdown && (
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Award className="w-6 h-6 text-amber-400" />
+            Composition du Score de Performance
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {Object.entries(data.score_breakdown).map(([key, info], idx) => (
+              <div key={key} className="bg-slate-700/50 rounded-xl p-4 border border-slate-600/50">
+                <p className="text-slate-400 text-sm">{info.description}</p>
+                <p className={`text-lg font-bold mt-1 ${info.max < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {info.max > 0 ? `+${info.max}` : info.max} pts max
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top Performer */}
+      {data.top_performer && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-orange-500/20 border border-amber-500/50 rounded-2xl p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/30">
+              🏆
+            </div>
+            <div className="flex-1">
+              <p className="text-amber-300 text-sm font-medium">Meilleur Performeur</p>
+              <h3 className="text-2xl font-bold text-white">
+                {data.top_performer.first_name} {data.top_performer.last_name}
+              </h3>
+              <p className="text-slate-400">{data.top_performer.email}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-4xl font-bold text-amber-400">{data.top_performer.total_score}</p>
+              <p className="text-slate-400 text-sm">points</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard */}
+      <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
+        <div className="p-5 border-b border-slate-700/50">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Trophy className="w-6 h-6 text-amber-400" />
+            Classement des Performances
+          </h3>
+        </div>
+        <div className="divide-y divide-slate-700/30">
+          {data.users?.map((user, idx) => (
+            <div key={idx} className={`p-5 hover:bg-slate-700/30 transition-colors ${idx < 3 ? 'bg-slate-700/20' : ''}`}>
+              <div className="flex items-center gap-4">
+                {/* Rank */}
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl ${
+                  idx === 0 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' :
+                  idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-slate-800' :
+                  idx === 2 ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white' :
+                  'bg-slate-700 text-slate-400'
+                }`}>
+                  {user.medal || `#${user.rank}`}
+                </div>
+
+                {/* User Info */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-white font-semibold">{user.first_name} {user.last_name}</p>
+                    <span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs">{user.role}</span>
+                  </div>
+                  <p className="text-slate-500 text-sm">{user.email}</p>
+                </div>
+
+                {/* Score Breakdown */}
+                <div className="hidden md:flex items-center gap-4 text-sm">
+                  <div className="text-center">
+                    <p className="text-slate-400">Conversion</p>
+                    <p className="text-emerald-400 font-semibold">+{user.conversion_score}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-slate-400">Rappels</p>
+                    <p className="text-cyan-400 font-semibold">+{user.rappels_score}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-slate-400">Activité</p>
+                    <p className="text-violet-400 font-semibold">+{user.activity_score}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-slate-400">Pipeline</p>
+                    <p className="text-amber-400 font-semibold">+{user.pipeline_score}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-slate-400">Retards</p>
+                    <p className="text-red-400 font-semibold">-{user.overdue_penalty}</p>
+                  </div>
+                </div>
+
+                {/* Total Score */}
+                <div className={`px-4 py-2 rounded-xl bg-gradient-to-br ${getScoreBg(parseFloat(user.total_score))} border`}>
+                  <p className={`text-2xl font-bold ${getScoreColor(parseFloat(user.total_score))}`}>
+                    {user.total_score}
+                  </p>
+                  <p className="text-slate-400 text-xs text-center">pts</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================================
+// EVOLUTION TAB COMPONENT
+// ================================
+function EvolutionTab({ data, loading }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!data?.evolution) return null;
+
+  const formatPeriodLabel = (period) => {
+    if (period.includes('W')) {
+      // Week format: 2024-W01
+      return `S${period.split('-W')[1]}`;
+    }
+    if (period.length === 7) {
+      // Month format: 2024-01
+      const [year, month] = period.split('-');
+      const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+      return months[parseInt(month) - 1];
+    }
+    // Day format: 2024-01-15
+    const date = new Date(period);
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  };
+
+  // Prepare chart data
+  const leadsChartData = data.evolution.leads?.map(item => ({
+    period: formatPeriodLabel(item.period),
+    leads: parseInt(item.leads_created) || 0,
+    qualifies: parseInt(item.leads_qualified) || 0,
+    gagnes: parseInt(item.deals_won) || 0
+  })) || [];
+
+  const rappelsChartData = data.evolution.rappels?.map(item => ({
+    period: formatPeriodLabel(item.period),
+    crees: parseInt(item.rappels_created) || 0,
+    completes: parseInt(item.rappels_completed) || 0,
+    retard: parseInt(item.rappels_overdue) || 0
+  })) || [];
+
+  const activityChartData = data.evolution.activity?.map(item => ({
+    period: formatPeriodLabel(item.period),
+    actions: parseInt(item.total_actions) || 0,
+    appels: parseInt(item.call_actions) || 0,
+    emails: parseInt(item.email_actions) || 0
+  })) || [];
+
+  return (
+    <div className="space-y-6">
+      {/* Info Banner */}
+      <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 flex items-center gap-3">
+        <div className="p-2 bg-violet-500/20 rounded-lg">
+          <TrendingUp className="w-5 h-5 text-violet-400" />
+        </div>
+        <div>
+          <p className="text-white font-medium">Évolution sur la période</p>
+          <p className="text-slate-400 text-sm">
+            Intervalle: {data.interval === 'day' ? 'Quotidien' : data.interval === 'week' ? 'Hebdomadaire' : 'Mensuel'}
+          </p>
+        </div>
+      </div>
+
+      {/* Leads Evolution Chart */}
+      {leadsChartData.length > 0 && (
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Target className="w-6 h-6 text-violet-400" />
+            Évolution des Leads
+          </h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={leadsChartData}>
+                <defs>
+                  <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorQualifies" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#06B6D4" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorGagnes" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="period" stroke="#9CA3AF" fontSize={12} />
+                <YAxis stroke="#9CA3AF" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1E293B',
+                    border: '1px solid #475569',
+                    borderRadius: '12px',
+                    color: '#fff'
+                  }}
+                />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="leads"
+                  name="Leads créés"
+                  stroke="#8B5CF6"
+                  fillOpacity={1}
+                  fill="url(#colorLeads)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="qualifies"
+                  name="Qualifiés"
+                  stroke="#06B6D4"
+                  fillOpacity={1}
+                  fill="url(#colorQualifies)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="gagnes"
+                  name="Gagnés"
+                  stroke="#10B981"
+                  fillOpacity={1}
+                  fill="url(#colorGagnes)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Rappels Evolution Chart */}
+      {rappelsChartData.length > 0 && (
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Bell className="w-6 h-6 text-amber-400" />
+            Évolution des Rappels
+          </h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={rappelsChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="period" stroke="#9CA3AF" fontSize={12} />
+                <YAxis stroke="#9CA3AF" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1E293B',
+                    border: '1px solid #475569',
+                    borderRadius: '12px',
+                    color: '#fff'
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="crees" name="Créés" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completes" name="Complétés" fill="#10B981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="retard" name="En retard" fill="#EF4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Evolution Chart */}
+      {activityChartData.length > 0 && (
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Activity className="w-6 h-6 text-cyan-400" />
+            Évolution de l'Activité
+          </h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={activityChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="period" stroke="#9CA3AF" fontSize={12} />
+                <YAxis stroke="#9CA3AF" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1E293B',
+                    border: '1px solid #475569',
+                    borderRadius: '12px',
+                    color: '#fff'
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="actions"
+                  name="Total actions"
+                  stroke="#8B5CF6"
+                  strokeWidth={3}
+                  dot={{ fill: '#8B5CF6', strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="appels"
+                  name="Appels"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  dot={{ fill: '#10B981', strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="emails"
+                  name="Emails"
+                  stroke="#06B6D4"
+                  strokeWidth={2}
+                  dot={{ fill: '#06B6D4', strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
