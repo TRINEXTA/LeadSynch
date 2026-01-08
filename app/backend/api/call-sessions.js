@@ -213,10 +213,12 @@ export default async function handler(req, res) {
           });
         }
 
-        // Créer la nouvelle session
+        // Créer la nouvelle session avec valeurs numériques à 0
         const newSession = await queryOne(
-          `INSERT INTO call_sessions (tenant_id, user_id, campaign_id, filter_type, started_at, status)
-           VALUES ($1, $2, $3, $4, NOW(), 'active')
+          `INSERT INTO call_sessions (tenant_id, user_id, campaign_id, filter_type, started_at, status,
+                                      calls_made, leads_processed, leads_qualified, leads_rdv,
+                                      total_duration, pause_duration)
+           VALUES ($1, $2, $3, $4, NOW(), 'active', 0, 0, 0, 0, 0, 0)
            RETURNING *`,
           [tenantId, userId, campaign_id || null, filter_type || 'all']
         );
@@ -385,16 +387,16 @@ export default async function handler(req, res) {
           ]
         );
 
-        // Mettre à jour les stats de la session
+        // Mettre à jour les stats de la session (COALESCE pour gérer les NULL existants)
         const isQualified = ['qualifie', 'tres_qualifie'].includes(qualification);
         const isRDV = qualification === 'tres_qualifie' || rdv_scheduled_at;
 
         await execute(
           `UPDATE call_sessions
-           SET leads_processed = leads_processed + 1,
-               leads_qualified = leads_qualified + $2,
-               leads_rdv = leads_rdv + $3,
-               calls_made = calls_made + 1,
+           SET leads_processed = COALESCE(leads_processed, 0) + 1,
+               leads_qualified = COALESCE(leads_qualified, 0) + $2,
+               leads_rdv = COALESCE(leads_rdv, 0) + $3,
+               calls_made = COALESCE(calls_made, 0) + 1,
                updated_at = NOW()
            WHERE id = $1`,
           [session_id, isQualified ? 1 : 0, isRDV ? 1 : 0]
