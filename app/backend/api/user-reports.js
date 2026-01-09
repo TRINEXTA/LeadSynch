@@ -105,6 +105,7 @@ router.get('/report', authenticateToken, async (req, res) => {
     // Check which tables exist
     const hasCallSessions = await tableExists('call_sessions');
     const hasCallLogs = await tableExists('call_logs');
+    const hasCallDailyStats = await tableExists('call_daily_stats');
     const hasEmailQueue = await tableExists('email_queue');
     const hasEmailTracking = await tableExists('email_tracking');
     const hasPipelineLeads = await tableExists('pipeline_leads');
@@ -287,6 +288,40 @@ router.get('/report', authenticateToken, async (req, res) => {
         });
       } catch (e) {
         warn('[UserReports] call_logs query failed:', e.message);
+      }
+    }
+
+    // call_daily_stats - C'est la source principale utilisée par la modal Stats d'Appels
+    if (hasCallDailyStats) {
+      try {
+        const { rows: dailyStats } = await q(`
+          SELECT
+            cds.user_id,
+            SUM(cds.total_sessions) as sessions,
+            SUM(cds.effective_seconds) as duration_seconds,
+            SUM(cds.leads_processed) as leads_processed,
+            SUM(cds.leads_qualified) as leads_qualified,
+            SUM(cds.rdv_created) as rdv_created
+          FROM call_daily_stats cds
+          WHERE cds.tenant_id = $1
+          AND cds.call_date >= $2::date AND cds.call_date <= $3::date
+          ${user_id ? 'AND cds.user_id = $4' : ''}
+          GROUP BY cds.user_id
+        `, params);
+
+        log('[UserReports] call_daily_stats:', JSON.stringify(dailyStats));
+
+        dailyStats.forEach(ds => {
+          if (!callStats[ds.user_id]) callStats[ds.user_id] = {};
+          // Utiliser call_daily_stats comme source principale (c'est ce que la modal Users utilise)
+          callStats[ds.user_id].daily_stats_sessions = parseInt(ds.sessions || 0);
+          callStats[ds.user_id].daily_stats_duration = parseInt(ds.duration_seconds || 0);
+          callStats[ds.user_id].daily_stats_processed = parseInt(ds.leads_processed || 0);
+          callStats[ds.user_id].daily_stats_qualified = parseInt(ds.leads_qualified || 0);
+          callStats[ds.user_id].daily_stats_rdv = parseInt(ds.rdv_created || 0);
+        });
+      } catch (e) {
+        warn('[UserReports] call_daily_stats query failed:', e.message);
       }
     }
 
@@ -476,15 +511,21 @@ router.get('/report', authenticateToken, async (req, res) => {
       const pipeline = pipelineStats[user.id] || {};
       const pipelineCalls = pipelineCallStats[user.id] || {};
 
-      // Les appels sont calculés depuis le pipeline (source principale)
-      // car chaque changement de stage = un appel traité
+      // Sources de données pour les appels (par ordre de priorité):
+      // 1. call_daily_stats (utilisé par la modal Stats d'Appels - source principale)
+      // 2. pipeline stages (leads traités = changement de stage)
+      // 3. call_sessions / call_logs
+      const callsFromDailyStats = calls.daily_stats_processed || 0;
       const callsFromPipeline = pipelineCalls.calls_from_pipeline || 0;
       const callsFromSessions = calls.calls_made || calls.calls_logged || 0;
 
-      // Utiliser le max entre pipeline et sessions (éviter les doublons)
-      const totalCalls = Math.max(callsFromPipeline, callsFromSessions);
+      // Utiliser le max de toutes les sources
+      const totalCalls = Math.max(callsFromDailyStats, callsFromPipeline, callsFromSessions);
 
-      log(`[UserReports] User ${user.first_name} (${user.id}): pipeline_calls=${callsFromPipeline}, session_calls=${callsFromSessions}`);
+      // Durée depuis call_daily_stats (en priorité) ou autres sources
+      const durationSeconds = calls.daily_stats_duration || calls.duration_seconds || calls.duration_from_logs || 0;
+
+      log(`[UserReports] User ${user.first_name} (${user.id}): daily_stats=${callsFromDailyStats}, pipeline=${callsFromPipeline}, sessions=${callsFromSessions}`);
 
       return {
         id: user.id,
@@ -518,14 +559,14 @@ router.get('/report', authenticateToken, async (req, res) => {
           total_leads: parseInt(user.campaigns_total_leads || 0)
         },
 
-        // Appels (priorité: pipeline > call_sessions > call_logs)
+        // Appels (priorité: call_daily_stats > pipeline > call_sessions)
         calls: {
-          sessions: calls.sessions || 0,
-          duration_minutes: Math.round((calls.duration_seconds || calls.duration_from_logs || 0) / 60),
+          sessions: calls.daily_stats_sessions || calls.sessions || 0,
+          duration_minutes: Math.round(durationSeconds / 60),
           calls_made: totalCalls,
-          leads_processed: totalCalls, // Chaque appel = 1 lead traité
-          qualified: pipelineCalls.qualified_from_pipeline || calls.leads_qualified || calls.calls_qualified || 0,
-          rdv_pris: pipelineCalls.rdv_from_pipeline || calls.rdv_pris || calls.calls_rdv || 0,
+          leads_processed: totalCalls,
+          qualified: calls.daily_stats_qualified || pipelineCalls.qualified_from_pipeline || calls.leads_qualified || calls.calls_qualified || 0,
+          rdv_pris: calls.daily_stats_rdv || pipelineCalls.rdv_from_pipeline || calls.rdv_pris || calls.calls_rdv || 0,
           nrp: pipelineCalls.nrp_from_pipeline || calls.calls_nrp || 0,
           relancer: pipelineCalls.relancer || 0,
           hors_scope: pipelineCalls.hors_scope || 0,
