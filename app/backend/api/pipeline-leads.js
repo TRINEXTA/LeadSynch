@@ -108,53 +108,68 @@ router.get('/', authenticateToken, async (req, res) => {
       // Pas de filtre supplémentaire - accès complet au tenant
       log(`✅ ${userRole} (${userId}) - accès à tous les leads du pipeline`);
     }
-    // Manager ou Supervisor : accès complet aux leads de leur équipe
+    // Manager ou Supervisor : accès complet aux leads de leur équipe + leurs campagnes
     else if (userRole === 'manager' || userRole === 'supervisor') {
       // Pattern pour recherche LIKE dans le JSON
       const userIdPattern = `%${userId}%`;
 
-      query += ` AND (
-        -- Ses propres leads directs
-        pl.assigned_user_id = $${paramIndex}
-        OR l.assigned_to = $${paramIndex}
-        -- Leads des campagnes où il est dans campaign_assignments
-        OR pl.campaign_id IN (
-          SELECT ca.campaign_id FROM campaign_assignments ca WHERE ca.user_id = $${paramIndex}
-        )
-        -- Leads des campagnes où son UUID apparaît dans assigned_users (JSON)
-        OR pl.campaign_id IN (
-          SELECT c2.id FROM campaigns c2
-          WHERE c2.tenant_id = $1
-          AND c2.assigned_users::text LIKE $${paramIndex + 1}
-        )
-        -- 🆕 Leads assignés aux membres de ses équipes (via team_members)
-        OR pl.assigned_user_id IN (
-          SELECT tm.user_id FROM team_members tm
-          JOIN teams t ON tm.team_id = t.id
-          WHERE t.manager_id = $${paramIndex}
-        )
-        -- 🆕 Leads assignés aux utilisateurs qu'il manage directement (via users.manager_id)
-        OR pl.assigned_user_id IN (
-          SELECT u2.id FROM users u2
-          WHERE u2.manager_id = $${paramIndex}
-          AND u2.tenant_id = $1
-        )
-        -- 🆕 Leads de la table leads assignés aux membres de son équipe
-        OR l.assigned_to IN (
-          SELECT tm.user_id FROM team_members tm
-          JOIN teams t ON tm.team_id = t.id
-          WHERE t.manager_id = $${paramIndex}
-        )
-        OR l.assigned_to IN (
-          SELECT u2.id FROM users u2
-          WHERE u2.manager_id = $${paramIndex}
-          AND u2.tenant_id = $1
-        )
-      )`;
-      params.push(userId);
-      params.push(userIdPattern);
-      paramIndex += 2;
-      log(`✅ ${userRole} ${userId} - accès complet à ses leads + équipe + campagnes affectées`);
+      // D'abord récupérer les IDs des membres de l'équipe
+      let teamMemberIds = [];
+      try {
+        const { rows: teamRows } = await q(
+          `SELECT DISTINCT u.id FROM users u
+           LEFT JOIN team_members tm ON tm.user_id = u.id
+           LEFT JOIN teams t ON tm.team_id = t.id
+           WHERE u.tenant_id = $1
+           AND (u.manager_id = $2 OR t.manager_id = $2)`,
+          [tenantId, userId]
+        );
+        teamMemberIds = teamRows.map(r => r.id);
+        log(`👥 Membres équipe de ${userId}: ${teamMemberIds.length}`);
+      } catch (e) {
+        warn('⚠️ Erreur récupération membres équipe:', e.message);
+      }
+
+      if (teamMemberIds.length > 0) {
+        // Avec accès équipe
+        const teamPlaceholders = teamMemberIds.map((_, i) => `$${paramIndex + 2 + i}`).join(',');
+        query += ` AND (
+          pl.assigned_user_id = $${paramIndex}
+          OR l.assigned_to = $${paramIndex}
+          OR pl.campaign_id IN (
+            SELECT ca.campaign_id FROM campaign_assignments ca WHERE ca.user_id = $${paramIndex}
+          )
+          OR pl.campaign_id IN (
+            SELECT c2.id FROM campaigns c2
+            WHERE c2.tenant_id = $1
+            AND c2.assigned_users::text LIKE $${paramIndex + 1}
+          )
+          OR pl.assigned_user_id IN (${teamPlaceholders})
+          OR l.assigned_to IN (${teamPlaceholders})
+        )`;
+        params.push(userId);
+        params.push(userIdPattern);
+        params.push(...teamMemberIds);
+        paramIndex += 2 + teamMemberIds.length;
+      } else {
+        // Sans équipe - juste ses campagnes
+        query += ` AND (
+          pl.assigned_user_id = $${paramIndex}
+          OR l.assigned_to = $${paramIndex}
+          OR pl.campaign_id IN (
+            SELECT ca.campaign_id FROM campaign_assignments ca WHERE ca.user_id = $${paramIndex}
+          )
+          OR pl.campaign_id IN (
+            SELECT c2.id FROM campaigns c2
+            WHERE c2.tenant_id = $1
+            AND c2.assigned_users::text LIKE $${paramIndex + 1}
+          )
+        )`;
+        params.push(userId);
+        params.push(userIdPattern);
+        paramIndex += 2;
+      }
+      log(`✅ ${userRole} ${userId} - accès à ses leads + équipe (${teamMemberIds.length}) + campagnes`);
     }
     // Commercial/User : ses propres leads OU tous les leads de ses campagnes en mode prospection
     else {
