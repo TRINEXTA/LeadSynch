@@ -108,8 +108,8 @@ router.get('/', authenticateToken, async (req, res) => {
       // Pas de filtre supplémentaire - accès complet au tenant
       log(`✅ ${userRole} (${userId}) - accès à tous les leads du pipeline`);
     }
-    // Manager : voir ses leads + leads des campagnes où il est affecté
-    else if (userRole === 'manager') {
+    // Manager ou Supervisor : accès complet aux leads de leur équipe
+    else if (userRole === 'manager' || userRole === 'supervisor') {
       // Pattern pour recherche LIKE dans le JSON
       const userIdPattern = `%${userId}%`;
 
@@ -127,11 +127,34 @@ router.get('/', authenticateToken, async (req, res) => {
           WHERE c2.tenant_id = $1
           AND c2.assigned_users::text LIKE $${paramIndex + 1}
         )
+        -- 🆕 Leads assignés aux membres de ses équipes (via team_members)
+        OR pl.assigned_user_id IN (
+          SELECT tm.user_id FROM team_members tm
+          JOIN teams t ON tm.team_id = t.id
+          WHERE t.manager_id = $${paramIndex}
+        )
+        -- 🆕 Leads assignés aux utilisateurs qu'il manage directement (via users.manager_id)
+        OR pl.assigned_user_id IN (
+          SELECT u2.id FROM users u2
+          WHERE u2.manager_id = $${paramIndex}
+          AND u2.tenant_id = $1
+        )
+        -- 🆕 Leads de la table leads assignés aux membres de son équipe
+        OR l.assigned_to IN (
+          SELECT tm.user_id FROM team_members tm
+          JOIN teams t ON tm.team_id = t.id
+          WHERE t.manager_id = $${paramIndex}
+        )
+        OR l.assigned_to IN (
+          SELECT u2.id FROM users u2
+          WHERE u2.manager_id = $${paramIndex}
+          AND u2.tenant_id = $1
+        )
       )`;
       params.push(userId);
       params.push(userIdPattern);
       paramIndex += 2;
-      log(`✅ Manager ${userId} - accès à ses leads + campagnes affectées`);
+      log(`✅ ${userRole} ${userId} - accès complet à ses leads + équipe + campagnes affectées`);
     }
     // Commercial/User : ses propres leads OU tous les leads de ses campagnes en mode prospection
     else {

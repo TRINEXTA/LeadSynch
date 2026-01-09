@@ -302,8 +302,15 @@ export default function FollowUps() {
   // ACTIONS SUR RAPPELS
   // =============================
 
-  // Ouvre le modal de qualification après un appel
+  // Lance l'appel puis ouvre le modal de qualification
   const handleCallAction = (followup) => {
+    // 1. Lancer l'appel téléphonique
+    if (followup.lead_phone) {
+      const cleanPhone = followup.lead_phone.replace(/[\s\-\(\)]/g, '');
+      window.location.href = `tel:${cleanPhone}`;
+    }
+
+    // 2. Ouvrir le modal de qualification
     setQualifyModal(followup);
     setQualifyData({
       qualification: '',
@@ -703,14 +710,17 @@ export default function FollowUps() {
                             </div>
                           )}
                           {followup.lead_phone && (
-                            <a
-                              href={`tel:${followup.lead_phone}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600"
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const cleanPhone = followup.lead_phone.replace(/[\s\-\(\)]/g, '');
+                                window.location.href = `tel:${cleanPhone}`;
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium transition-all"
                             >
                               <Phone className="w-4 h-4" />
                               {followup.lead_phone}
-                            </a>
+                            </button>
                           )}
                         </div>
                         {/* Bouton voir le lead */}
