@@ -1,8 +1,9 @@
 import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { TrendingUp, Users, DollarSign, Clock, Filter, Search, Plus, Target, ChevronDown, ChevronUp, BarChart3, X } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Clock, Filter, Search, Plus, Target, ChevronDown, ChevronUp, BarChart3, X, User } from 'lucide-react';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 import ProspectingMode from './ProspectingMode';
 import LeadModal from '../components/LeadModal';
 import LeadCard from '../components/pipeline/LeadCard';
@@ -26,11 +27,17 @@ const STAGES = [
 ];
 
 export default function Pipeline() {
+  const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState('all');
+  const [selectedUser, setSelectedUser] = useState('all'); // 🆕 Filtre par utilisateur pour managers
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Vérifier si l'utilisateur est manager ou supervisor
+  const isManagerOrSupervisor = user?.role === 'manager' || user?.role === 'supervisor' || user?.role === 'admin';
 
   // UI State - récupérer depuis localStorage
   const [showStats, setShowStats] = useState(() => {
@@ -66,25 +73,52 @@ export default function Pipeline() {
 
   const loadData = useCallback(async () => {
     try {
-      const [leadsResponse, campaignsResponse] = await Promise.all([
+      const requests = [
         api.get('/pipeline-leads'),
         api.get('/campaigns/my-campaigns')
-      ]);
+      ];
 
-      const leadsData = leadsResponse.data.leads || [];
-      const campaignsData = campaignsResponse.data.campaigns || [];
+      // Charger les membres de l'équipe si manager/supervisor
+      if (isManagerOrSupervisor) {
+        requests.push(api.get('/users/team').catch(() => ({ data: { users: [] } })));
+      }
+
+      const responses = await Promise.all(requests);
+
+      const leadsData = responses[0].data.leads || [];
+      const campaignsData = responses[1].data.campaigns || [];
 
       log('✅ Leads chargés:', leadsData.length);
       log('✅ Campagnes chargées:', campaignsData.length);
 
       setLeads(leadsData);
       setCampaigns(campaignsData);
+
+      // Extraire les utilisateurs uniques des leads pour le filtre
+      if (isManagerOrSupervisor) {
+        const teamData = responses[2]?.data?.users || [];
+        // Créer une liste d'utilisateurs uniques à partir des leads + team
+        const usersFromLeads = leadsData
+          .filter(l => l.assigned_user_id && l.assigned_user_name)
+          .map(l => ({ id: l.assigned_user_id, name: l.assigned_user_name }));
+
+        const uniqueUsers = Array.from(
+          new Map([...usersFromLeads, ...teamData.map(u => ({
+            id: u.id,
+            name: `${u.first_name} ${u.last_name}`
+          }))].map(u => [u.id, u])).values()
+        );
+
+        setTeamMembers(uniqueUsers);
+        log('✅ Membres équipe:', uniqueUsers.length);
+      }
+
       setLoading(false);
     } catch (err) {
       error('❌ Erreur chargement données:', err);
       setLoading(false);
     }
-  }, []);
+  }, [isManagerOrSupervisor]);
 
   // Filtrage optimisé avec useMemo
   const filteredLeads = useMemo(() => {
@@ -92,6 +126,11 @@ export default function Pipeline() {
 
     if (selectedCampaign !== 'all') {
       filtered = filtered.filter(lead => lead.campaign_id === selectedCampaign);
+    }
+
+    // 🆕 Filtre par utilisateur (pour managers/supervisors)
+    if (selectedUser !== 'all') {
+      filtered = filtered.filter(lead => lead.assigned_user_id === selectedUser);
     }
 
     if (searchQuery) {
@@ -106,7 +145,7 @@ export default function Pipeline() {
     }
 
     return filtered;
-  }, [leads, selectedCampaign, searchQuery]);
+  }, [leads, selectedCampaign, selectedUser, searchQuery]);
 
   // Stats calculées avec useMemo
   const stats = useMemo(() => {
@@ -330,6 +369,22 @@ export default function Pipeline() {
                 </option>
               ))}
             </select>
+
+            {/* 🆕 Filtre par utilisateur pour managers/supervisors */}
+            {isManagerOrSupervisor && teamMembers.length > 0 && (
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-purple-500 max-w-[200px]"
+              >
+                <option value="all">👥 Toute l'équipe</option>
+                {teamMembers.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            )}
 
             {/* Mode Prospection */}
             <button
