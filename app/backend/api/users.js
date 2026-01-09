@@ -639,7 +639,7 @@ async function getTeamMembers(req, res) {
       // Manager/Supervisor voit les membres de ses équipes
       // D'abord récupérer l'équipe du manager/supervisor
       const managerTeam = await queryOne(
-        `SELECT t.id, t.name FROM teams t WHERE t.manager_id = $1 AND t.tenant_id = $2`,
+        `SELECT t.id, t.name FROM teams t WHERE t.manager_id = $1::uuid AND t.tenant_id = $2`,
         [userId, tenantId]
       );
 
@@ -657,9 +657,9 @@ async function getTeamMembers(req, res) {
            AND u.is_active = true
            AND (
              -- Utilisateurs avec ce manager_id
-             u.manager_id = $2
+             u.manager_id = $2::uuid
              -- OU membres d'une équipe gérée par ce manager
-             OR t.manager_id = $2
+             OR t.manager_id = $2::uuid
            )
          ORDER BY u.first_name, u.last_name`,
         [tenantId, userId]
