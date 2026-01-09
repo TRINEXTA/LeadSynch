@@ -121,7 +121,7 @@ router.get('/', authenticateToken, async (req, res) => {
            LEFT JOIN team_members tm ON tm.user_id = u.id
            LEFT JOIN teams t ON tm.team_id = t.id
            WHERE u.tenant_id = $1
-           AND (u.manager_id = $2 OR t.manager_id = $2)`,
+           AND (u.manager_id = $2::uuid OR t.manager_id = $2::uuid)`,
           [tenantId, userId]
         );
         teamMemberIds = teamRows.map(r => r.id);
