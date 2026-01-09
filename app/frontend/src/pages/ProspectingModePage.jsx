@@ -13,7 +13,8 @@ import {
   Users,
   Flame,
   ThumbsUp,
-  PhoneOff
+  PhoneOff,
+  Mail
 } from 'lucide-react';
 import api from '../api/axios';
 import ProspectionMode from './ProspectingMode';
@@ -23,6 +24,7 @@ import { toast } from '../lib/toast';
 const LEAD_FILTERS = [
   { id: 'all', label: 'Tous les leads', icon: Target, color: 'bg-purple-500' },
   { id: 'cold_call', label: 'Appels à froid', icon: Phone, color: 'bg-indigo-500' },
+  { id: 'leads_click', label: 'Leads Click', icon: Mail, color: 'bg-cyan-500' },
   { id: 'relancer', label: 'À relancer', icon: Clock, color: 'bg-yellow-500' },
   { id: 'nrp', label: 'NRP (Ne répond pas)', icon: PhoneOff, color: 'bg-gray-500' },
   { id: 'qualifie', label: 'Qualifiés', icon: ThumbsUp, color: 'bg-blue-500' },
@@ -48,7 +50,7 @@ export default function ProspectingModePage() {
     try {
       setLoading(true);
       const [leadsRes, campaignsRes] = await Promise.all([
-        api.get('/pipeline-leads'),
+        api.get('/pipeline-leads', { params: { mode: 'prospection' } }),
         api.get('/campaigns/my-campaigns')
       ]);
 

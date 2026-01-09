@@ -43,6 +43,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const userRole = req.user?.role;
     const isSuperAdmin = req.user?.is_super_admin === true;
     const limit = Math.min(parseInt(req.query.limit) || 500, 1000);
+    const mode = req.query.mode; // 'prospection' = voir tous les leads des campagnes assignées
 
     // Requête optimisée avec colonnes d'activité
     let query = `
@@ -132,11 +133,36 @@ router.get('/', authenticateToken, async (req, res) => {
       paramIndex += 2;
       log(`✅ Manager ${userId} - accès à ses leads + campagnes affectées`);
     }
-    // Commercial/User : uniquement ses propres leads
+    // Commercial/User : ses propres leads OU tous les leads de ses campagnes en mode prospection
     else {
-      query += ` AND (pl.assigned_user_id = $${paramIndex} OR l.assigned_to = $${paramIndex})`;
-      params.push(userId);
-      paramIndex++;
+      if (mode === 'prospection') {
+        // En mode prospection, voir tous les leads des campagnes où l'utilisateur est assigné
+        const userIdPattern = `%${userId}%`;
+        query += ` AND (
+          -- Ses propres leads directs
+          pl.assigned_user_id = $${paramIndex}
+          OR l.assigned_to = $${paramIndex}
+          -- Leads des campagnes où il est dans campaign_assignments
+          OR pl.campaign_id IN (
+            SELECT ca.campaign_id FROM campaign_assignments ca WHERE ca.user_id = $${paramIndex}
+          )
+          -- Leads des campagnes où son UUID apparaît dans assigned_users (JSON)
+          OR pl.campaign_id IN (
+            SELECT c2.id FROM campaigns c2
+            WHERE c2.tenant_id = $1
+            AND c2.assigned_users::text LIKE $${paramIndex + 1}
+          )
+        )`;
+        params.push(userId);
+        params.push(userIdPattern);
+        paramIndex += 2;
+        log(`✅ ${userRole} ${userId} - mode prospection - accès à tous les leads des campagnes affectées`);
+      } else {
+        // Mode normal : uniquement ses propres leads
+        query += ` AND (pl.assigned_user_id = $${paramIndex} OR l.assigned_to = $${paramIndex})`;
+        params.push(userId);
+        paramIndex++;
+      }
     }
 
     query += ` ORDER BY pl.updated_at DESC LIMIT $${paramIndex}`;
