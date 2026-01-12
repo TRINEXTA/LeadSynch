@@ -217,7 +217,11 @@ async function handler(req, res) {
 
     // ✅ PUT - Update user
     if (method === 'PUT') {
-      const userId = req.url.split('/').pop();
+      // req.url contient le chemin APRÈS /api/users, donc /{userId}
+      const urlParts = req.url.split('/').filter(p => p);
+      const userId = urlParts[0];
+
+      log(`✏️ PUT user: userId=${userId}`);
 
       if (!['admin', 'manager', 'supervisor'].includes(req.user.role)) {
         return res.status(403).json({
@@ -361,8 +365,12 @@ async function handler(req, res) {
 
     // PATCH - Bloquer/Débloquer ou Forcer changement de mot de passe
     if (method === 'PATCH') {
-      const userId = req.url.split('/')[3]; // /api/users/{userId}/action
-      const action = req.url.split('/')[4]; // block, unblock, force-password-change
+      // req.url contient le chemin APRÈS /api/users, donc /{userId}/{action}
+      const urlParts = req.url.split('/').filter(p => p);
+      const userId = urlParts[0]; // userId
+      const action = urlParts[1]; // block, unblock, force-password-change
+
+      log(`🔧 PATCH user action: userId=${userId}, action=${action}`);
 
       if (!['admin', 'manager', 'supervisor'].includes(req.user.role)) {
         return res.status(403).json({
@@ -470,8 +478,12 @@ async function handler(req, res) {
 
     // DELETE - Delete user (avec dispatch des leads)
     if (method === 'DELETE') {
-      const userId = req.url.split('/').pop();
+      // req.url contient le chemin APRÈS /api/users, donc /{userId}
+      const urlParts = req.url.split('/').filter(p => p);
+      const userId = urlParts[0];
       const { reassign_to } = req.body; // ID du commercial qui récupère les leads, ou null pour admin
+
+      log(`🗑️ DELETE user: userId=${userId}`);
 
       if (req.user.role !== 'admin') {
         return res.status(403).json({
