@@ -212,9 +212,9 @@ IMPORTANT: Réponds UNIQUEMENT avec le texte final amélioré, prêt à être en
 // POST /asefi/generate-quick-email - Génération rapide email pour prospection
 router.post('/generate-quick-email', authMiddleware, async (req, res) => {
   log(' Génération rapide email pour prospection');
-  
+
   try {
-    const { template_type, lead_info, tone, user_signature } = req.body;
+    const { template_type, lead_info, tone, user_signature, custom_instructions } = req.body;
 
     if (!template_type || !lead_info) {
       return res.status(400).json({ error: 'template_type et lead_info requis' });
@@ -239,6 +239,12 @@ ${lead_info.last_interaction ? `- Dernière interaction: ${lead_info.last_intera
 
 TON: ${tone || 'professionnel et amical'}
 ${user_signature ? `\nSIGNATURE:\n${user_signature.name}\n${user_signature.title}\n${user_signature.company}` : ''}
+${custom_instructions ? `
+⚠️ INSTRUCTIONS SPÉCIFIQUES DE L'UTILISATEUR (PRIORITÉ MAXIMALE):
+${custom_instructions}
+
+IMPORTANT: Ces instructions de l'utilisateur sont PRIORITAIRES sur tout le reste. Adapte le contenu, le ton et la structure de l'email pour respecter exactement ces demandes.
+` : ''}
 
 CONSIGNES:
 - Email personnalisé et adapté au secteur
@@ -246,6 +252,7 @@ CONSIGNES:
 - Message concis (200-300 mots)
 - Appel à l'action clair
 - Valeur ajoutée évidente
+${custom_instructions ? '- RESPECTE IMPÉRATIVEMENT les instructions spécifiques de l\'utilisateur ci-dessus' : ''}
 
 Réponds en JSON strict:
 {
@@ -337,12 +344,12 @@ Analyse et réponds en JSON:
 // POST /asefi/generate-email-from-notes - Génération email depuis notes d'appel
 router.post('/generate-email-from-notes', authMiddleware, async (req, res) => {
   log('📧 Génération email depuis notes d\'appel avec Asefi');
-  
-  try {
-    const { lead_info, call_notes, qualification, user_signature } = req.body;
 
-    if (!lead_info || !call_notes) {
-      return res.status(400).json({ error: 'lead_info et call_notes requis' });
+  try {
+    const { lead_info, call_notes, qualification, user_signature, custom_instructions } = req.body;
+
+    if (!lead_info) {
+      return res.status(400).json({ error: 'lead_info requis' });
     }
 
     // Définir le type d'email selon la qualification
@@ -360,6 +367,15 @@ router.post('/generate-email-from-notes', authMiddleware, async (req, res) => {
     const prompt = `Tu es Asefi, assistant IA expert en communication commerciale pour LeadSynch CRM.
 
 Je viens de terminer un appel téléphonique avec un prospect. Génère un email de suivi professionnel et personnalisé basé sur cet appel.
+${custom_instructions ? `
+⚠️ *** INSTRUCTIONS SPÉCIFIQUES DE L'UTILISATEUR (PRIORITÉ MAXIMALE) ***:
+${custom_instructions}
+
+🔴 IMPORTANT: Ces instructions de l'utilisateur sont ABSOLUMENT PRIORITAIRES sur tout le reste.
+Tu DOIS adapter le contenu, le ton, la structure et l'objectif de l'email pour respecter EXACTEMENT ces demandes.
+Si les instructions demandent quelque chose de simple (ex: "c'est un test"), génère un email SIMPLE qui correspond à cette demande.
+Ne génère PAS un email commercial classique si l'utilisateur demande autre chose.
+` : ''}
 
 📞 CONTEXTE DE L'APPEL:
 
@@ -373,10 +389,10 @@ ${lead_info.city ? `- Ville: ${lead_info.city}` : ''}
 
 QUALIFICATION: ${qualification}
 TYPE D'EMAIL À GÉNÉRER: ${emailType}
-
+${call_notes ? `
 📝 NOTES DE L'APPEL:
 ${call_notes}
-
+` : ''}
 ${user_signature ? `
 👤 MA SIGNATURE:
 ${user_signature.name}${user_signature.title ? '\n' + user_signature.title : ''}
@@ -385,10 +401,12 @@ ${user_signature.email}${user_signature.phone ? '\n' + user_signature.phone : ''
 ` : ''}
 
 🎯 CONSIGNES DE GÉNÉRATION:
-
+${custom_instructions ? `
+*** PRIORITÉ ABSOLUE: Respecte les instructions spécifiques de l'utilisateur ci-dessus ***
+` : ''}
 1. **Objet percutant**: Référence l'appel de manière naturelle et engageante
 2. **Introduction chaleureuse**: Remercie pour l'échange et rappelle le contexte
-3. **Corps personnalisé**: 
+3. **Corps personnalisé**:
    - Synthétise les points clés discutés
    - Reprends les besoins/problématiques évoqués
    - Propose une valeur ajoutée concrète
@@ -399,7 +417,7 @@ ${user_signature.email}${user_signature.phone ? '\n' + user_signature.phone : ''
 TON: Professionnel mais humain, personnalisé, orienté solution
 
 IMPORTANT:
-- Utilise des détails PRÉCIS des notes d'appel
+- ${custom_instructions ? 'RESPECTE IMPÉRATIVEMENT les instructions spécifiques de l\'utilisateur' : 'Utilise des détails PRÉCIS des notes d\'appel'}
 - Ne mentionne JAMAIS explicitement "suite à notre appel" si les notes sont vides
 - Adapte la longueur selon l'importance (200-400 mots)
 - Si RDV pris, propose une date/horaire
@@ -448,12 +466,12 @@ Réponds en JSON strict sans markdown:
 // POST /asefi/regenerate-email-with-tone - Régénérer email avec nouveau ton
 router.post('/regenerate-email-with-tone', authMiddleware, async (req, res) => {
   log('🎨 Régénération email avec nouveau ton');
-  
-  try {
-    const { lead_info, call_notes, qualification, tone, user_signature } = req.body;
 
-    if (!lead_info || !call_notes || !tone) {
-      return res.status(400).json({ error: 'lead_info, call_notes et tone requis' });
+  try {
+    const { lead_info, call_notes, qualification, tone, user_signature, custom_instructions } = req.body;
+
+    if (!lead_info || !tone) {
+      return res.status(400).json({ error: 'lead_info et tone requis' });
     }
 
     const toneDescriptions = {
@@ -479,6 +497,12 @@ router.post('/regenerate-email-with-tone', authMiddleware, async (req, res) => {
     const prompt = `Tu es Asefi, assistant IA expert en communication commerciale pour LeadSynch CRM.
 
 Je viens de terminer un appel téléphonique avec un prospect. Génère un email de suivi professionnel et personnalisé.
+${custom_instructions ? `
+⚠️ *** INSTRUCTIONS SPÉCIFIQUES DE L'UTILISATEUR (PRIORITÉ MAXIMALE) ***:
+${custom_instructions}
+
+🔴 IMPORTANT: Ces instructions sont PRIORITAIRES. Adapte le contenu pour respecter exactement ces demandes.
+` : ''}
 
 📞 CONTEXTE DE L'APPEL:
 
@@ -490,9 +514,10 @@ PROSPECT:
 
 QUALIFICATION: ${qualification}
 TYPE D'EMAIL: ${emailType}
-
+${call_notes ? `
 📝 NOTES DE L'APPEL:
 ${call_notes}
+` : ''}
 
 🎨 TON DEMANDÉ: ${toneDesc}
 
@@ -504,7 +529,9 @@ ${user_signature.email}${user_signature.phone ? '\n' + user_signature.phone : ''
 ` : ''}
 
 🎯 CONSIGNES CRITIQUES:
-
+${custom_instructions ? `
+*** PRIORITÉ ABSOLUE: Respecte les instructions spécifiques de l'utilisateur ci-dessus ***
+` : ''}
 1. **Ton ${tone}**: Adapte COMPLÈTEMENT le style et la tonalité selon: ${toneDesc}
 2. **Objet**: Change l'objet pour refléter le nouveau ton
 3. **Structure**: Adapte la structure selon le ton (formel = structure classique, direct = paragraphes courts, etc.)
@@ -516,6 +543,7 @@ IMPORTANT:
 - Reste professionnel même avec un ton amical ou enthousiaste
 - Garde les informations factuelles des notes
 - Adapte la longueur selon le ton (direct = court, formel = plus développé)
+${custom_instructions ? '- RESPECTE les instructions spécifiques de l\'utilisateur' : ''}
 
 Réponds en JSON strict sans markdown:
 {
