@@ -288,9 +288,16 @@ export default function Pipeline() {
   }, [loadData]);
 
   if (prospectionMode) {
+    // Trouver la campagne sélectionnée si elle existe
+    const selectedCampaignData = selectedCampaign !== 'all'
+      ? campaigns.find(c => c.id === selectedCampaign)
+      : null;
+
     return (
-      <ProspectingMode 
+      <ProspectingMode
         leads={filteredLeads}
+        campaign={selectedCampaignData}
+        filterType={selectedCampaign !== 'all' ? 'campaign' : 'all'}
         onExit={() => {
           setProspectionMode(false);
           loadData();

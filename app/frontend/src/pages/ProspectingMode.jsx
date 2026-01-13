@@ -65,14 +65,31 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
   // Charger la progression sauvegardée au montage
   const savedProgression = useRef(loadSavedProgression(campaign?.id, filterType));
+
+  // Utiliser un ref EN PLUS de state pour éviter les race conditions
+  // Le ref est mis à jour immédiatement, le state déclenche les re-renders
+  const processedLeadIdsRef = useRef(savedProgression.current?.processedLeadIds || []);
   const [processedLeadIds, setProcessedLeadIds] = useState(() => {
     return savedProgression.current?.processedLeadIds || [];
   });
 
+  // Fonction helper pour ajouter un lead traité - met à jour ref ET state de manière synchrone
+  const addProcessedLead = useCallback((leadId) => {
+    // Mettre à jour le ref immédiatement (synchrone)
+    if (!processedLeadIdsRef.current.includes(leadId)) {
+      processedLeadIdsRef.current = [...processedLeadIdsRef.current, leadId];
+    }
+    // Mettre à jour le state (async, déclenche re-render et sauvegarde)
+    setProcessedLeadIds(prev => {
+      if (prev.includes(leadId)) return prev;
+      return [...prev, leadId];
+    });
+  }, []);
+
   // Calculer l'index initial basé sur les leads non traités
   const getInitialIndex = useCallback(() => {
     if (!leads || leads.length === 0) return 0;
-    const savedIds = savedProgression.current?.processedLeadIds || [];
+    const savedIds = processedLeadIdsRef.current;
     // Trouver le premier lead qui n'a pas été traité
     const firstUnprocessedIndex = leads.findIndex(lead => !savedIds.includes(lead.id));
     return firstUnprocessedIndex >= 0 ? firstUnprocessedIndex : 0;
@@ -308,8 +325,8 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         onLeadUpdated();
       }
 
-      // Ajouter le lead aux leads traités pour la persistance
-      setProcessedLeadIds(prev => [...prev, currentLead.id]);
+      // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
+      addProcessedLead(currentLead.id);
 
       // Stats
       setProcessed(prev => prev + 1);
@@ -330,9 +347,12 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     setLeadStartTime(Date.now());
     setLeadDuration(0);
 
+    // IMPORTANT: Utiliser processedLeadIdsRef.current (synchrone) au lieu de processedLeadIds (state async)
+    const currentProcessedIds = processedLeadIdsRef.current;
+
     // Trouver le prochain lead non traité
     const nextIndex = leads.findIndex((lead, idx) =>
-      idx > currentIndex && !processedLeadIds.includes(lead.id)
+      idx > currentIndex && !currentProcessedIds.includes(lead.id)
     );
 
     if (nextIndex >= 0) {
@@ -340,13 +360,14 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     } else {
       // Vérifier s'il reste des leads non traités avant l'index actuel
       const remainingBefore = leads.findIndex(lead =>
-        !processedLeadIds.includes(lead.id) && lead.id !== currentLead?.id
+        !currentProcessedIds.includes(lead.id) && lead.id !== currentLead?.id
       );
 
       if (remainingBefore >= 0) {
         setCurrentIndex(remainingBefore);
       } else {
-        // Tous les leads sont traités - effacer la progression
+        // Tous les leads sont traités - effacer la progression et le ref
+        processedLeadIdsRef.current = [];
         clearProgression(campaign?.id, filterType);
         toast.success('Tous les leads traités ! Félicitations !');
         setTimeout(() => handleExit(), 1500);
@@ -367,8 +388,8 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         scheduled_date: rappelData?.date ? `${rappelData.date}T${rappelData.time || '10:00'}:00` : null
       });
 
-      // Ajouter le lead aux leads traités pour la persistance
-      setProcessedLeadIds(prev => [...prev, currentLead.id]);
+      // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
+      addProcessedLead(currentLead.id);
 
       // Logger l'appel dans la session
       if (sessionId) {
@@ -407,9 +428,9 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   };
 
   const handleRDVSuccess = async (rdvData) => {
-    // Ajouter le lead aux leads traités pour la persistance
+    // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
     if (currentLead) {
-      setProcessedLeadIds(prev => [...prev, currentLead.id]);
+      addProcessedLead(currentLead.id);
     }
 
     // Mettre à jour les stats
