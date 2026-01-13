@@ -182,7 +182,19 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const tenant_id = req.user.tenant_id;
     const user_role = req.user.role;
-    const { lead_id, user_id, type, priority, title, notes, scheduled_date } = req.body;
+    const {
+      lead_id,
+      user_id,
+      type,
+      priority,
+      title,
+      notes,
+      scheduled_date,
+      // Nouveaux champs pour informations de contact
+      contact_name,
+      contact_phone,
+      contact_method
+    } = req.body;
 
     // Déterminer l'utilisateur assigné
     let assigned_user_id = req.user.id; // Par défaut, auto-assignation
@@ -219,8 +231,9 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const { rows } = await q(
       `INSERT INTO follow_ups
-       (tenant_id, lead_id, user_id, type, priority, title, notes, scheduled_date, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+       (tenant_id, lead_id, user_id, type, priority, title, notes, scheduled_date, created_by,
+        contact_name, contact_phone, contact_method, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
        RETURNING *`,
       [
         tenant_id,
@@ -231,7 +244,10 @@ router.post('/', authenticateToken, async (req, res) => {
         title || null,
         notes || null,
         scheduled_date,
-        req.user.id // Qui a créé la tâche
+        req.user.id, // Qui a créé la tâche
+        contact_name || null,
+        contact_phone || null,
+        contact_method || 'phone'
       ]
     );
 

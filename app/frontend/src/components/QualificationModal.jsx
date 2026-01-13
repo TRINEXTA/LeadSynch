@@ -7,12 +7,13 @@ import toast from 'react-hot-toast';
 
 const QUALIFICATIONS = [
   { id: 'nrp', label: 'NRP - Ne répond pas', stage: 'nrp', color: 'gray' },
-  { id: 'mauvais_contact', label: 'Mauvais contact', stage: 'hors_scope', color: 'orange' },
   { id: 'qualifie', label: 'Qualifié - Intéressé', stage: 'qualifie', color: 'blue' },
   { id: 'a_relancer', label: 'À relancer plus tard', stage: 'relancer', color: 'yellow' },
   { id: 'tres_qualifie', label: 'Très qualifié / RDV pris', stage: 'tres_qualifie', color: 'green' },
   { id: 'proposition', label: 'En attente proposition', stage: 'proposition', color: 'purple' },
   { id: 'gagne', label: 'Client gagné !', stage: 'gagne', color: 'emerald' },
+  { id: 'pas_interesse', label: 'Pas intéressé', stage: 'perdu', color: 'red' },
+  { id: 'hors_scope', label: 'Hors Scope (pas dans la cible)', stage: 'hors_scope', color: 'orange' },
 ];
 
 export default function QualificationModal({ lead, callDuration, notes: initialNotes, onClose, onQualify }) {

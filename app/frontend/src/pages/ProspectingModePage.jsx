@@ -29,6 +29,7 @@ const LEAD_FILTERS = [
   { id: 'nrp', label: 'NRP (Ne répond pas)', icon: PhoneOff, color: 'bg-gray-500' },
   { id: 'qualifie', label: 'Qualifiés', icon: ThumbsUp, color: 'bg-blue-500' },
   { id: 'tres_qualifie', label: 'Très chauds / RDV', icon: Flame, color: 'bg-green-500' },
+  { id: 'hors_scope', label: 'Hors Scope', icon: AlertCircle, color: 'bg-orange-500' },
 ];
 
 export default function ProspectingModePage() {

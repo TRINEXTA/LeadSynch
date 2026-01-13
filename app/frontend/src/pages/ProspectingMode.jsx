@@ -5,23 +5,92 @@ import api from '../api/axios';
 import { toast } from '../lib/toast';
 import ValidationRequestModal from '../components/pipeline/ValidationRequestModal';
 import RDVSchedulerModal from '../components/pipeline/RDVSchedulerModal';
+import RappelModal from '../components/pipeline/RappelModal';
+import EmailGeneratorModal from '../components/pipeline/EmailGeneratorModal';
 
 const QUICK_QUALIFICATIONS = [
   { id: 'tres_qualifie', label: '🔥 Très Chaud / RDV', color: 'bg-green-500', stage: 'tres_qualifie', needsRDV: true },
   { id: 'qualifie', label: '👍 Qualifié', color: 'bg-blue-500', stage: 'qualifie' },
-  { id: 'a_relancer', label: '⏰ À Relancer', color: 'bg-yellow-500', stage: 'relancer' },
+  { id: 'a_relancer', label: '⏰ À Relancer', color: 'bg-yellow-500', stage: 'relancer', needsRappel: true },
   { id: 'nrp', label: '📵 NRP', color: 'bg-gray-500', stage: 'nrp' },
-  { id: 'pas_interesse', label: '👎 Pas Intéressé', color: 'bg-red-500', stage: 'hors_scope' },
+  { id: 'pas_interesse', label: '👎 Pas Intéressé', color: 'bg-red-500', stage: 'perdu' },
+  { id: 'hors_scope', label: '🚫 Hors Scope', color: 'bg-orange-500', stage: 'hors_scope' },
 ];
+
+// Clé unique pour la progression basée sur campaign et filter
+const getProgressionKey = (campaignId, filter) => {
+  return `prospection_progress_${campaignId || 'all'}_${filter || 'all'}`;
+};
+
+// Charger la progression sauvegardée
+const loadSavedProgression = (campaignId, filter) => {
+  try {
+    const key = getProgressionKey(campaignId, filter);
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Erreur chargement progression:', e);
+  }
+  return null;
+};
+
+// Sauvegarder la progression
+const saveProgression = (campaignId, filter, processedLeadIds, stats) => {
+  try {
+    const key = getProgressionKey(campaignId, filter);
+    localStorage.setItem(key, JSON.stringify({
+      processedLeadIds,
+      stats,
+      savedAt: Date.now()
+    }));
+  } catch (e) {
+    console.error('Erreur sauvegarde progression:', e);
+  }
+};
+
+// Effacer la progression
+const clearProgression = (campaignId, filter) => {
+  try {
+    const key = getProgressionKey(campaignId, filter);
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error('Erreur suppression progression:', e);
+  }
+};
 
 export default function ProspectionMode({ leads = [], campaign, filterType, onExit, onLeadUpdated }) {
   const navigate = useNavigate();
-  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Charger la progression sauvegardée au montage
+  const savedProgression = useRef(loadSavedProgression(campaign?.id, filterType));
+  const [processedLeadIds, setProcessedLeadIds] = useState(() => {
+    return savedProgression.current?.processedLeadIds || [];
+  });
+
+  // Calculer l'index initial basé sur les leads non traités
+  const getInitialIndex = useCallback(() => {
+    if (!leads || leads.length === 0) return 0;
+    const savedIds = savedProgression.current?.processedLeadIds || [];
+    // Trouver le premier lead qui n'a pas été traité
+    const firstUnprocessedIndex = leads.findIndex(lead => !savedIds.includes(lead.id));
+    return firstUnprocessedIndex >= 0 ? firstUnprocessedIndex : 0;
+  }, [leads]);
+
+  const [currentIndex, setCurrentIndex] = useState(getInitialIndex);
   const [notes, setNotes] = useState('');
-  const [processed, setProcessed] = useState(0);
-  const [qualified, setQualified] = useState(0);
-  const [rdvCount, setRdvCount] = useState(0);
-  const [generating, setGenerating] = useState(false);
+
+  // Stats - restaurer depuis la sauvegarde si disponible
+  const [processed, setProcessed] = useState(() => {
+    return savedProgression.current?.stats?.processed || 0;
+  });
+  const [qualified, setQualified] = useState(() => {
+    return savedProgression.current?.stats?.qualified || 0;
+  });
+  const [rdvCount, setRdvCount] = useState(() => {
+    return savedProgression.current?.stats?.rdvCount || 0;
+  });
 
   // Session state
   const [sessionId, setSessionId] = useState(null);
@@ -39,14 +108,36 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationRequestType, setValidationRequestType] = useState('validation');
   const [showRDVModal, setShowRDVModal] = useState(false);
+  const [showRappelModal, setShowRappelModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [pendingQualification, setPendingQualification] = useState(null);
 
   // Protection contre leads undefined ou vide
   const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
 
+  // Sauvegarder la progression à chaque changement
+  useEffect(() => {
+    if (processedLeadIds.length > 0) {
+      saveProgression(campaign?.id, filterType, processedLeadIds, {
+        processed,
+        qualified,
+        rdvCount
+      });
+    }
+  }, [processedLeadIds, processed, qualified, rdvCount, campaign?.id, filterType]);
+
   // Démarrer la session au montage
   useEffect(() => {
     startSession();
+
+    // Si une progression a été restaurée, afficher un message
+    if (savedProgression.current && savedProgression.current.processedLeadIds?.length > 0) {
+      const remaining = leads.length - savedProgression.current.processedLeadIds.length;
+      if (remaining > 0) {
+        toast.success(`Session reprise ! ${remaining} leads restants à traiter.`, { duration: 3000 });
+      }
+    }
+
     return () => {
       // Ne pas terminer automatiquement - l'utilisateur doit cliquer sur Quitter
     };
@@ -171,6 +262,13 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       return;
     }
 
+    // Si c'est "À Relancer", ouvrir le modal de rappel
+    if (qualification.needsRappel) {
+      setPendingQualification(qualification);
+      setShowRappelModal(true);
+      return;
+    }
+
     // Sinon, qualifier directement
     await qualifyLead(qualification);
   };
@@ -210,6 +308,9 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         onLeadUpdated();
       }
 
+      // Ajouter le lead aux leads traités pour la persistance
+      setProcessedLeadIds(prev => [...prev, currentLead.id]);
+
       // Stats
       setProcessed(prev => prev + 1);
       if (qualification.stage === 'qualifie' || qualification.stage === 'tres_qualifie') {
@@ -229,15 +330,88 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     setLeadStartTime(Date.now());
     setLeadDuration(0);
 
-    if (currentIndex < leads.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+    // Trouver le prochain lead non traité
+    const nextIndex = leads.findIndex((lead, idx) =>
+      idx > currentIndex && !processedLeadIds.includes(lead.id)
+    );
+
+    if (nextIndex >= 0) {
+      setCurrentIndex(nextIndex);
     } else {
-      toast.success('Tous les leads traités !');
-      setTimeout(() => handleExit(), 1500);
+      // Vérifier s'il reste des leads non traités avant l'index actuel
+      const remainingBefore = leads.findIndex(lead =>
+        !processedLeadIds.includes(lead.id) && lead.id !== currentLead?.id
+      );
+
+      if (remainingBefore >= 0) {
+        setCurrentIndex(remainingBefore);
+      } else {
+        // Tous les leads sont traités - effacer la progression
+        clearProgression(campaign?.id, filterType);
+        toast.success('Tous les leads traités ! Félicitations !');
+        setTimeout(() => handleExit(), 1500);
+      }
+    }
+  };
+
+  const handleRappelSuccess = async (rappelData) => {
+    // Qualifier le lead comme "À Relancer"
+    try {
+      if (!currentLead) return;
+
+      await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
+        qualification: 'a_relancer',
+        notes: notes.trim() || '',
+        call_duration: leadDuration,
+        next_action: 'Rappel planifié',
+        scheduled_date: rappelData?.date ? `${rappelData.date}T${rappelData.time || '10:00'}:00` : null
+      });
+
+      // Ajouter le lead aux leads traités pour la persistance
+      setProcessedLeadIds(prev => [...prev, currentLead.id]);
+
+      // Logger l'appel dans la session
+      if (sessionId) {
+        try {
+          await api.post('/call-sessions', {
+            action: 'log-call',
+            session_id: sessionId,
+            lead_id: currentLead.lead_id,
+            pipeline_lead_id: currentLead.id,
+            duration: leadDuration,
+            qualification: 'a_relancer',
+            notes: notes.trim() || '',
+            outcome: 'a_relancer'
+          });
+        } catch (e) {
+          console.error('Erreur log appel:', e);
+        }
+      }
+
+      // Notifier le parent
+      if (onLeadUpdated) {
+        onLeadUpdated();
+      }
+
+      // Mettre à jour les stats
+      setProcessed(prev => prev + 1);
+
+      // Fermer le modal et passer au suivant
+      setShowRappelModal(false);
+      setPendingQualification(null);
+      moveToNextLead();
+    } catch (err) {
+      console.error('Erreur qualification rappel:', err);
+      toast.error('Erreur lors de la qualification');
     }
   };
 
   const handleRDVSuccess = async (rdvData) => {
+    // Ajouter le lead aux leads traités pour la persistance
+    if (currentLead) {
+      setProcessedLeadIds(prev => [...prev, currentLead.id]);
+    }
+
     // Mettre à jour les stats
     setProcessed(prev => prev + 1);
     setQualified(prev => prev + 1);
@@ -286,45 +460,26 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     }
   };
 
-  const handleEmail = async () => {
+  const handleEmail = () => {
     if (!currentLead) return;
-
-    setGenerating(true);
-
-    try {
-      const response = await api.post('/asefi/generate-quick-email', {
-        template_type: 'first_contact',
-        lead_info: {
-          company_name: currentLead.company_name,
-          industry: currentLead.sector || 'B2B',
-          status: 'nouveau'
-        },
-        tone: 'friendly',
-        user_signature: {
-          name: 'Votre nom',
-          title: 'Votre titre',
-          company: 'Votre entreprise'
-        }
-      });
-
-      if (response.data.success) {
-        const email = response.data.email;
-        const subject = encodeURIComponent(email.subject);
-        const body = encodeURIComponent(`${email.body}\n\n${email.cta || ''}`);
-        const to = encodeURIComponent(currentLead.email);
-
-        window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
-      }
-    } catch (error) {
-      console.error('Erreur génération email:', error);
-      toast.error('Erreur lors de la génération de l\'email');
-    } finally {
-      setGenerating(false);
-    }
+    setShowEmailModal(true);
   };
 
   const skipLead = () => {
-    moveToNextLead();
+    // Ne pas marquer comme traité quand on skip - permet de revenir au lead plus tard
+    setNotes('');
+    setLeadStartTime(Date.now());
+    setLeadDuration(0);
+
+    // Trouver le prochain lead (traité ou non)
+    if (currentIndex < leads.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else if (currentIndex > 0) {
+      // Revenir au début si on est à la fin
+      setCurrentIndex(0);
+    } else {
+      toast.info('Un seul lead disponible');
+    }
   };
 
   const handleViewDetails = () => {
@@ -610,20 +765,11 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
                 <button
                   onClick={handleEmail}
-                  disabled={!currentLead.email || generating}
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={!currentLead.email}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {generating ? (
-                    <>
-                      <Sparkles className="w-6 h-6 animate-spin" />
-                      Génération...
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="w-6 h-6" />
-                      Email IA
-                    </>
-                  )}
+                  <Sparkles className="w-6 h-6" />
+                  Email Asefi
                 </button>
               </div>
 
@@ -672,7 +818,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
             {/* Qualification rapide */}
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-3">Qualification rapide :</p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {QUICK_QUALIFICATIONS.map((qual) => (
                   <button
                     key={qual.id}
@@ -718,6 +864,35 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
           lead={currentLead}
           onSuccess={handleRDVSuccess}
           qualification={pendingQualification?.id}
+        />
+      )}
+
+      {/* Rappel Modal */}
+      {showRappelModal && currentLead && (
+        <RappelModal
+          isOpen={showRappelModal}
+          onClose={() => {
+            setShowRappelModal(false);
+            setPendingQualification(null);
+          }}
+          lead={currentLead}
+          onSuccess={handleRappelSuccess}
+          initialNotes={notes}
+          qualification={pendingQualification?.id}
+        />
+      )}
+
+      {/* Email Generator Modal */}
+      {showEmailModal && currentLead && (
+        <EmailGeneratorModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          lead={currentLead}
+          callNotes={notes}
+          onSuccess={() => {
+            setShowEmailModal(false);
+            toast.success('Email préparé !');
+          }}
         />
       )}
     </div>

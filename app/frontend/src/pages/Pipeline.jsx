@@ -23,6 +23,7 @@ const STAGES = [
   { id: 'tres_qualifie', name: 'Très Qualifié/RDV', color: 'bg-green-500', textColor: 'text-green-700', bgLight: 'bg-green-50' },
   { id: 'proposition', name: 'Proposition', color: 'bg-purple-500', textColor: 'text-purple-700', bgLight: 'bg-purple-50' },
   { id: 'gagne', name: 'Gagné', color: 'bg-emerald-600', textColor: 'text-emerald-700', bgLight: 'bg-emerald-50' },
+  { id: 'perdu', name: 'Perdu', color: 'bg-red-500', textColor: 'text-red-700', bgLight: 'bg-red-50' },
   { id: 'hors_scope', name: 'Hors Scope', color: 'bg-orange-500', textColor: 'text-orange-700', bgLight: 'bg-orange-50' }
 ];
 

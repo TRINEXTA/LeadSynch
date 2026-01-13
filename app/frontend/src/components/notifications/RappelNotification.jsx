@@ -58,15 +58,26 @@ export default function RappelNotification() {
                       <p className="text-xs text-gray-500 mt-1">
                         {formatDateTime(rappel.scheduled_date)}
                       </p>
-                      <div className="mt-3 flex gap-2">
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        {rappel.lead_id && (
+                          <button
+                            onClick={() => {
+                              navigate(`/LeadDetails?id=${rappel.lead_id}`);
+                              toast.dismiss(t.id);
+                            }}
+                            className="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700"
+                          >
+                            Voir le lead
+                          </button>
+                        )}
                         <button
                           onClick={() => {
-                            navigate('/rappels');
+                            navigate('/FollowUps');
                             toast.dismiss(t.id);
                           }}
                           className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
                         >
-                          Voir les rappels
+                          Tous les rappels
                         </button>
                         <button
                           onClick={() => toast.dismiss(t.id)}
@@ -190,13 +201,9 @@ export default function RappelNotification() {
                 return (
                   <div
                     key={rappel.id}
-                    className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${
+                    className={`p-4 border-b hover:bg-gray-50 ${
                       isOverdue ? 'bg-red-50' : ''
                     }`}
-                    onClick={() => {
-                      navigate('/rappels');
-                      setShowPanel(false);
-                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -215,6 +222,31 @@ export default function RappelNotification() {
                           <Clock className="w-3 h-3" />
                           {formatDateTime(rappel.scheduled_date)}
                         </div>
+                        {/* Boutons d'action rapide */}
+                        <div className="flex gap-2 mt-3">
+                          {rappel.lead_id && (
+                            <button
+                              onClick={() => {
+                                navigate(`/LeadDetails?id=${rappel.lead_id}`);
+                                setShowPanel(false);
+                              }}
+                              className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded hover:bg-purple-200 flex items-center gap-1"
+                            >
+                              <User className="w-3 h-3" />
+                              Voir lead
+                            </button>
+                          )}
+                          {rappel.lead_phone && (
+                            <a
+                              href={`tel:${rappel.lead_phone.replace(/[\s\-\(\)]/g, '')}`}
+                              className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded hover:bg-green-200 flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Phone className="w-3 h-3" />
+                              Appeler
+                            </a>
+                          )}
+                        </div>
                       </div>
                       <ChevronRight className="w-5 h-5 text-gray-400" />
                     </div>
@@ -226,7 +258,7 @@ export default function RappelNotification() {
             <div className="p-3 bg-gray-50 border-t">
               <button
                 onClick={() => {
-                  navigate('/rappels');
+                  navigate('/FollowUps');
                   setShowPanel(false);
                 }}
                 className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"

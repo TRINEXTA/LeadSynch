@@ -17,7 +17,8 @@ const QUALIFICATION_OPTIONS = [
   { value: 'a_relancer', label: 'À Relancer', icon: '🔄', color: 'bg-yellow-100 text-yellow-700', stage: 'relancer' },
   { value: 'proposition', label: 'Proposition envoyée', icon: '📄', color: 'bg-purple-100 text-purple-700', stage: 'proposition' },
   { value: 'nrp', label: 'NRP / Pas de réponse', icon: '📵', color: 'bg-gray-100 text-gray-700', stage: 'nrp' },
-  { value: 'pas_interesse', label: 'Pas intéressé', icon: '❌', color: 'bg-red-100 text-red-700', stage: 'hors_scope' },
+  { value: 'pas_interesse', label: 'Pas intéressé', icon: '❌', color: 'bg-red-100 text-red-700', stage: 'perdu' },
+  { value: 'hors_scope', label: 'Hors Scope', icon: '🚫', color: 'bg-orange-100 text-orange-700', stage: 'hors_scope' },
 ];
 
 const PRIORITY_COLORS = {
