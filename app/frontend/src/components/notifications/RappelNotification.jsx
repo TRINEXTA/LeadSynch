@@ -3,6 +3,7 @@ import { Bell, BellRing, X, Phone, Mail, Clock, Building2, User, ChevronRight } 
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import RappelTreatmentModal from './RappelTreatmentModal';
 
 // Composant de notification pour les rappels imminents
 export default function RappelNotification() {
@@ -10,6 +11,8 @@ export default function RappelNotification() {
   const [upcomingRappels, setUpcomingRappels] = useState([]);
   const [showPanel, setShowPanel] = useState(false);
   const [notifiedIds, setNotifiedIds] = useState(new Set());
+  const [selectedRappel, setSelectedRappel] = useState(null);
+  const [showTreatmentModal, setShowTreatmentModal] = useState(false);
 
   // Vérifier les rappels toutes les 60 secondes
   const checkUpcomingRappels = useCallback(async () => {
@@ -59,6 +62,15 @@ export default function RappelNotification() {
                         {formatDateTime(rappel.scheduled_date)}
                       </p>
                       <div className="mt-3 flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => {
+                            handleTreatRappel(rappel);
+                            toast.dismiss(t.id);
+                          }}
+                          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700"
+                        >
+                          Traiter maintenant
+                        </button>
                         {rappel.lead_id && (
                           <button
                             onClick={() => {
@@ -70,15 +82,6 @@ export default function RappelNotification() {
                             Voir le lead
                           </button>
                         )}
-                        <button
-                          onClick={() => {
-                            navigate('/FollowUps');
-                            toast.dismiss(t.id);
-                          }}
-                          className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
-                        >
-                          Tous les rappels
-                        </button>
                         <button
                           onClick={() => toast.dismiss(t.id)}
                           className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-300"
@@ -140,10 +143,25 @@ export default function RappelNotification() {
     }
   };
 
+  // Ouvrir le modal de traitement pour un rappel
+  const handleTreatRappel = (rappel) => {
+    setSelectedRappel(rappel);
+    setShowTreatmentModal(true);
+    setShowPanel(false);
+  };
+
+  // Callback après traitement réussi
+  const handleTreatmentSuccess = () => {
+    setShowTreatmentModal(false);
+    setSelectedRappel(null);
+    // Rafraîchir les rappels
+    checkUpcomingRappels();
+  };
+
   const overdueCount = upcomingRappels.filter(r => new Date(r.scheduled_date) < new Date()).length;
   const imminentCount = upcomingRappels.length - overdueCount;
 
-  if (upcomingRappels.length === 0) return null;
+  if (upcomingRappels.length === 0 && !showTreatmentModal) return null;
 
   return (
     <>
@@ -223,7 +241,24 @@ export default function RappelNotification() {
                           {formatDateTime(rappel.scheduled_date)}
                         </div>
                         {/* Boutons d'action rapide */}
-                        <div className="flex gap-2 mt-3">
+                        <div className="flex gap-2 mt-3 flex-wrap">
+                          <button
+                            onClick={() => handleTreatRappel(rappel)}
+                            className="px-2 py-1 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 flex items-center gap-1"
+                          >
+                            <Clock className="w-3 h-3" />
+                            Traiter
+                          </button>
+                          {rappel.lead_phone && (
+                            <a
+                              href={`tel:${rappel.lead_phone.replace(/[\s\-\(\)]/g, '')}`}
+                              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded hover:bg-blue-200 flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Phone className="w-3 h-3" />
+                              Appeler
+                            </a>
+                          )}
                           {rappel.lead_id && (
                             <button
                               onClick={() => {
@@ -235,16 +270,6 @@ export default function RappelNotification() {
                               <User className="w-3 h-3" />
                               Voir lead
                             </button>
-                          )}
-                          {rappel.lead_phone && (
-                            <a
-                              href={`tel:${rappel.lead_phone.replace(/[\s\-\(\)]/g, '')}`}
-                              className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded hover:bg-green-200 flex items-center gap-1"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Phone className="w-3 h-3" />
-                              Appeler
-                            </a>
                           )}
                         </div>
                       </div>
@@ -268,6 +293,18 @@ export default function RappelNotification() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Modal de traitement du rappel */}
+      {showTreatmentModal && selectedRappel && (
+        <RappelTreatmentModal
+          rappel={selectedRappel}
+          onClose={() => {
+            setShowTreatmentModal(false);
+            setSelectedRappel(null);
+          }}
+          onSuccess={handleTreatmentSuccess}
+        />
       )}
     </>
   );

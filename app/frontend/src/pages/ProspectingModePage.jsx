@@ -37,11 +37,20 @@ export default function ProspectingModePage() {
   const [allLeads, setAllLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Récupérer la campagne depuis l'URL (peut venir du Pipeline ou d'un lien direct)
   const [selectedCampaign, setSelectedCampaign] = useState(searchParams.get('campaign') || 'all');
   const [selectedFilter, setSelectedFilter] = useState(searchParams.get('filter') || 'all');
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
   const navigate = useNavigate();
+
+  // Mettre à jour selectedCampaign si l'URL change
+  useEffect(() => {
+    const campaignFromUrl = searchParams.get('campaign');
+    if (campaignFromUrl && campaignFromUrl !== selectedCampaign) {
+      setSelectedCampaign(campaignFromUrl);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadData();

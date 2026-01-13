@@ -294,7 +294,10 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     try {
       if (!currentLead) return;
 
-      await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
+      // IMPORTANT: Sauvegarder l'ID du lead AVANT tout pour éviter les problèmes de timing
+      const leadIdToProcess = currentLead.id;
+
+      await api.post(`/pipeline-leads/${leadIdToProcess}/qualify`, {
         qualification: qualification.id,
         notes: notes.trim() || '',
         call_duration: leadDuration,
@@ -309,7 +312,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
             action: 'log-call',
             session_id: sessionId,
             lead_id: currentLead.lead_id,
-            pipeline_lead_id: currentLead.id,
+            pipeline_lead_id: leadIdToProcess,
             duration: leadDuration,
             qualification: qualification.id,
             notes: notes.trim() || '',
@@ -320,48 +323,59 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         }
       }
 
-      // Notifier le parent que le lead a été mis à jour
-      if (onLeadUpdated) {
-        onLeadUpdated();
-      }
+      // 1. D'ABORD ajouter le lead aux leads traités (ref + state)
+      addProcessedLead(leadIdToProcess);
 
-      // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
-      addProcessedLead(currentLead.id);
-
-      // Stats
+      // 2. Mettre à jour les stats
       setProcessed(prev => prev + 1);
       if (qualification.stage === 'qualifie' || qualification.stage === 'tres_qualifie') {
         setQualified(prev => prev + 1);
       }
 
+      // 3. Passer au lead suivant
+      moveToNextLead(leadIdToProcess);
+
+      // 4. APRÈS avoir avancé, notifier le parent (ne pas bloquer la progression)
       toast.success(`Lead qualifié : ${qualification.label}`);
-      moveToNextLead();
+      if (onLeadUpdated) {
+        // Différer la notification pour ne pas interférer avec les mises à jour locales
+        setTimeout(() => onLeadUpdated(), 100);
+      }
     } catch (err) {
       console.error('Erreur qualification:', err);
       toast.error('Erreur lors de la qualification');
     }
   };
 
-  const moveToNextLead = () => {
+  const moveToNextLead = (justProcessedId = null) => {
     setNotes('');
     setLeadStartTime(Date.now());
     setLeadDuration(0);
 
-    // IMPORTANT: Utiliser processedLeadIdsRef.current (synchrone) au lieu de processedLeadIds (state async)
-    const currentProcessedIds = processedLeadIdsRef.current;
+    // Utiliser le ref pour avoir la liste à jour + le lead qu'on vient de traiter
+    let currentProcessedIds = [...processedLeadIdsRef.current];
+    if (justProcessedId && !currentProcessedIds.includes(justProcessedId)) {
+      currentProcessedIds.push(justProcessedId);
+    }
 
-    // Trouver le prochain lead non traité
+    console.log('moveToNextLead - processedIds:', currentProcessedIds, 'currentIndex:', currentIndex, 'totalLeads:', leads.length);
+
+    // Trouver le prochain lead non traité (après l'index actuel)
     const nextIndex = leads.findIndex((lead, idx) =>
       idx > currentIndex && !currentProcessedIds.includes(lead.id)
     );
+
+    console.log('nextIndex trouvé:', nextIndex);
 
     if (nextIndex >= 0) {
       setCurrentIndex(nextIndex);
     } else {
       // Vérifier s'il reste des leads non traités avant l'index actuel
       const remainingBefore = leads.findIndex(lead =>
-        !currentProcessedIds.includes(lead.id) && lead.id !== currentLead?.id
+        !currentProcessedIds.includes(lead.id)
       );
+
+      console.log('remainingBefore:', remainingBefore);
 
       if (remainingBefore >= 0) {
         setCurrentIndex(remainingBefore);
@@ -380,7 +394,10 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     try {
       if (!currentLead) return;
 
-      await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
+      // IMPORTANT: Sauvegarder l'ID du lead AVANT tout
+      const leadIdToProcess = currentLead.id;
+
+      await api.post(`/pipeline-leads/${leadIdToProcess}/qualify`, {
         qualification: 'a_relancer',
         notes: notes.trim() || '',
         call_duration: leadDuration,
@@ -388,8 +405,8 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         scheduled_date: rappelData?.date ? `${rappelData.date}T${rappelData.time || '10:00'}:00` : null
       });
 
-      // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
-      addProcessedLead(currentLead.id);
+      // 1. D'ABORD ajouter le lead aux leads traités
+      addProcessedLead(leadIdToProcess);
 
       // Logger l'appel dans la session
       if (sessionId) {
@@ -398,7 +415,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
             action: 'log-call',
             session_id: sessionId,
             lead_id: currentLead.lead_id,
-            pipeline_lead_id: currentLead.id,
+            pipeline_lead_id: leadIdToProcess,
             duration: leadDuration,
             qualification: 'a_relancer',
             notes: notes.trim() || '',
@@ -409,18 +426,19 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         }
       }
 
-      // Notifier le parent
-      if (onLeadUpdated) {
-        onLeadUpdated();
-      }
-
-      // Mettre à jour les stats
+      // 2. Mettre à jour les stats
       setProcessed(prev => prev + 1);
 
-      // Fermer le modal et passer au suivant
+      // 3. Fermer le modal et passer au suivant
       setShowRappelModal(false);
       setPendingQualification(null);
-      moveToNextLead();
+      moveToNextLead(leadIdToProcess);
+
+      // 4. Notifier le parent APRÈS avoir avancé
+      toast.success('Rappel planifié !');
+      if (onLeadUpdated) {
+        setTimeout(() => onLeadUpdated(), 100);
+      }
     } catch (err) {
       console.error('Erreur qualification rappel:', err);
       toast.error('Erreur lors de la qualification');
@@ -428,12 +446,15 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   };
 
   const handleRDVSuccess = async (rdvData) => {
-    // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
-    if (currentLead) {
-      addProcessedLead(currentLead.id);
-    }
+    if (!currentLead) return;
 
-    // Mettre à jour les stats
+    // IMPORTANT: Sauvegarder l'ID du lead AVANT tout
+    const leadIdToProcess = currentLead.id;
+
+    // 1. D'ABORD ajouter le lead aux leads traités
+    addProcessedLead(leadIdToProcess);
+
+    // 2. Mettre à jour les stats
     setProcessed(prev => prev + 1);
     setQualified(prev => prev + 1);
     setRdvCount(prev => prev + 1);
@@ -444,8 +465,8 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         await api.post('/call-sessions', {
           action: 'log-call',
           session_id: sessionId,
-          lead_id: currentLead?.lead_id,
-          pipeline_lead_id: currentLead?.id,
+          lead_id: currentLead.lead_id,
+          pipeline_lead_id: leadIdToProcess,
           duration: leadDuration,
           qualification: 'tres_qualifie',
           notes: notes.trim() || '',
@@ -458,15 +479,16 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       }
     }
 
-    // Notifier le parent
-    if (onLeadUpdated) {
-      onLeadUpdated();
-    }
-
-    // Fermer le modal et passer au suivant
+    // 3. Fermer le modal et passer au suivant
     setShowRDVModal(false);
     setPendingQualification(null);
-    moveToNextLead();
+    moveToNextLead(leadIdToProcess);
+
+    // 4. Notifier le parent APRÈS avoir avancé
+    toast.success('RDV planifié !');
+    if (onLeadUpdated) {
+      setTimeout(() => onLeadUpdated(), 100);
+    }
   };
 
   const handleCall = () => {
