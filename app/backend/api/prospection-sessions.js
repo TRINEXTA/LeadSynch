@@ -174,27 +174,19 @@ async function handler(req, res) {
           JOIN leads l ON pl.lead_id = l.id
           WHERE pl.campaign_id = $1
           AND pl.tenant_id = $2
-          AND pl.assigned_user_id = $3
-          ${filter_stage && filter_stage !== 'all' ? 'AND pl.stage = $4' : ''}
+          ${filter_stage && filter_stage !== 'all' ? 'AND pl.stage = $3' : ''}
           AND l.id NOT IN (
             SELECT lead_id FROM call_history
-            WHERE user_id = $3
-            AND session_id = $5
+            WHERE user_id = $${filter_stage && filter_stage !== 'all' ? '4' : '3'}
+            AND session_id = $${filter_stage && filter_stage !== 'all' ? '5' : '4'}
             AND lead_id IS NOT NULL
           )
           AND pl.stage NOT IN ('gagne', 'perdu')
           ORDER BY pl.updated_at DESC
         `;
         params = filter_stage && filter_stage !== 'all'
-          ? [campaign_id, tenant_id, user_id, filter_stage, activeSession.id]
+          ? [campaign_id, tenant_id, filter_stage, user_id, activeSession.id]
           : [campaign_id, tenant_id, user_id, activeSession.id];
-
-        // Ajuster l'index du paramètre session_id
-        if (filter_stage && filter_stage !== 'all') {
-          query = query.replace('$5', '$5');
-        } else {
-          query = query.replace('$5', '$4');
-        }
       } else {
         // Pas de session active : retourner tous les leads du filtre
         query = `
@@ -203,14 +195,13 @@ async function handler(req, res) {
           JOIN leads l ON pl.lead_id = l.id
           WHERE pl.campaign_id = $1
           AND pl.tenant_id = $2
-          AND pl.assigned_user_id = $3
-          ${filter_stage && filter_stage !== 'all' ? 'AND pl.stage = $4' : ''}
+          ${filter_stage && filter_stage !== 'all' ? 'AND pl.stage = $3' : ''}
           AND pl.stage NOT IN ('gagne', 'perdu')
           ORDER BY pl.updated_at DESC
         `;
         params = filter_stage && filter_stage !== 'all'
-          ? [campaign_id, tenant_id, user_id, filter_stage]
-          : [campaign_id, tenant_id, user_id];
+          ? [campaign_id, tenant_id, filter_stage]
+          : [campaign_id, tenant_id];
       }
 
       const leads = await queryAll(query, params);
