@@ -15,6 +15,7 @@ import Login from './pages/Login';
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 
 // Pages principales
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -169,6 +170,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/activate" element={<ActivateAccount />} />
 
             {/* Routes protégées */}
             <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
