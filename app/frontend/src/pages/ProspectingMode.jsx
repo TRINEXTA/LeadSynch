@@ -380,9 +380,12 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     try {
       if (!currentLead) return;
 
+      // Utiliser les notes du modal si fournies, sinon celles du composant parent
+      const finalNotes = rappelData?.notes?.trim() || notes.trim() || '';
+
       await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
         qualification: 'a_relancer',
-        notes: notes.trim() || '',
+        notes: finalNotes,
         call_duration: leadDuration,
         next_action: 'Rappel planifié',
         scheduled_date: rappelData?.date ? `${rappelData.date}T${rappelData.time || '10:00'}:00` : null
@@ -401,7 +404,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
             pipeline_lead_id: currentLead.id,
             duration: leadDuration,
             qualification: 'a_relancer',
-            notes: notes.trim() || '',
+            notes: finalNotes,
             outcome: 'a_relancer'
           });
         } catch (e) {
@@ -627,16 +630,16 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold text-gray-700">
-            Progression : {currentIndex + 1} / {leads.length}
+            Leads traités : {processedLeadIds.length} / {leads.length}
           </span>
           <span className="text-sm text-gray-600">
-            {Math.round(((currentIndex + 1) / leads.length) * 100)}%
+            {Math.round((processedLeadIds.length / leads.length) * 100)}% • Lead actuel : {currentIndex + 1}
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3">
           <div
             className="bg-gradient-to-r from-purple-600 to-pink-600 h-3 rounded-full transition-all duration-500"
-            style={{ width: `${((currentIndex + 1) / leads.length) * 100}%` }}
+            style={{ width: `${(processedLeadIds.length / leads.length) * 100}%` }}
           ></div>
         </div>
       </div>
