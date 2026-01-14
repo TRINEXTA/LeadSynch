@@ -69,7 +69,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
   // Total de leads pour cette session (ne change pas pendant la session)
   // Utilise le total sauvegardé s'il existe, sinon le nombre de leads actuels
-  const [totalLeadsForSession] = useState(() => {
+  const [totalLeadsForSession, setTotalLeadsForSession] = useState(() => {
     const saved = savedProgression.current;
     // Si on a une progression sauvegardée avec un total, utiliser ce total
     if (saved?.totalLeads && saved.totalLeads > 0) {
@@ -78,6 +78,14 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     // Sinon, utiliser le nombre de leads actuels comme total initial
     return leads.length;
   });
+
+  // Mettre à jour le total si c'est une nouvelle session et que les leads viennent d'être chargés
+  useEffect(() => {
+    // Si on n'a pas encore de total (=0) et qu'on a des leads, initialiser le total
+    if (totalLeadsForSession === 0 && leads.length > 0 && processedLeadIds.length === 0) {
+      setTotalLeadsForSession(leads.length);
+    }
+  }, [leads.length, totalLeadsForSession, processedLeadIds.length]);
 
   // Utiliser un ref EN PLUS de state pour éviter les race conditions
   // Le ref est mis à jour immédiatement, le state déclenche les re-renders
