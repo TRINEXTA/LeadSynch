@@ -88,9 +88,13 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
   // Mettre à jour le total si c'est une nouvelle session et que les leads viennent d'être chargés
   useEffect(() => {
-    // Si on n'a pas encore de total (=0) et qu'on a des leads, initialiser le total
-    if (totalLeadsForSession === 0 && leads.length > 0 && processedLeadIds.length === 0) {
-      setTotalLeadsForSession(leads.length);
+    // Si on n'a pas encore de total valide (=0) et qu'on a des leads, initialiser le total
+    // Le total = leads actuels + leads déjà traités (qui ont peut-être changé de stage)
+    if (totalLeadsForSession === 0 && (leads.length > 0 || processedLeadIds.length > 0)) {
+      const calculatedTotal = leads.length + processedLeadIds.length;
+      if (calculatedTotal > 0) {
+        setTotalLeadsForSession(calculatedTotal);
+      }
     }
   }, [leads.length, totalLeadsForSession, processedLeadIds.length]);
 
