@@ -293,11 +293,16 @@ export default function Pipeline() {
       ? campaigns.find(c => c.id === selectedCampaign)
       : null;
 
+    // Filtrer les leads prospectables (exclure gagnés/perdus)
+    const prospectableLeads = filteredLeads.filter(lead =>
+      !['gagne', 'perdu'].includes(lead.stage)
+    );
+
     return (
       <ProspectingMode
-        leads={filteredLeads}
+        leads={prospectableLeads}
         campaign={selectedCampaignData}
-        filterType={selectedCampaign !== 'all' ? 'campaign' : 'all'}
+        filterType="all"
         onExit={() => {
           setProspectionMode(false);
           loadData();
