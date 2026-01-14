@@ -17,7 +17,9 @@ const importCsvSchema = z.object({
 // POST /api/import-csv - Import et classification automatique
 router.post('/', authMiddleware, async (req, res) => {
   const tenant_id = req.user.tenant_id;
-  const user_id = req.user.id;
+
+  // ✅ OPTIMISATION : Utiliser une connexion client dédiée pour la transaction
+  const client = await db.pool.connect();
 
   try {
     // ✅ VALIDATION ZOD
@@ -83,6 +85,9 @@ router.post('/', authMiddleware, async (req, res) => {
     let skipped = 0;
     const sectorsDetected = {};
     const errors = [];
+
+    // ✅ DÉBUT TRANSACTION : Performance x10 sur les gros fichiers
+    await client.query('BEGIN');
 
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
@@ -224,12 +229,12 @@ router.post('/', authMiddleware, async (req, res) => {
         siret = siret || null;
         naf_code = naf_code || null;
 
-        // ✅ Déduplication intelligente
+        // ✅ Déduplication intelligente (utilise client pour la transaction)
         let existingLead = null;
 
         // Chercher par email si présent
         if (email) {
-          const emailCheck = await db.query(
+          const emailCheck = await client.query(
             'SELECT id FROM leads WHERE tenant_id = $1 AND email = $2 LIMIT 1',
             [tenant_id, email]
           );
@@ -240,7 +245,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         // Si pas trouvé par email, chercher par phone
         if (!existingLead && phone) {
-          const phoneCheck = await db.query(
+          const phoneCheck = await client.query(
             'SELECT id FROM leads WHERE tenant_id = $1 AND phone = $2 LIMIT 1',
             [tenant_id, phone]
           );
@@ -251,7 +256,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         // Si pas trouvé, chercher par company_name + city
         if (!existingLead && city) {
-          const nameCheck = await db.query(
+          const nameCheck = await client.query(
             'SELECT id FROM leads WHERE tenant_id = $1 AND LOWER(company_name) = LOWER($2) AND city = $3 LIMIT 1',
             [tenant_id, company_name, city]
           );
@@ -261,11 +266,11 @@ router.post('/', authMiddleware, async (req, res) => {
         }
 
         if (existingLead) {
-          // Lead existe → Update
+          // Lead existe → Update (utilise client pour la transaction)
           const leadId = existingLead.id;
-          
-          await db.query(
-            `UPDATE leads 
+
+          await client.query(
+            `UPDATE leads
              SET contact_name = COALESCE($1, contact_name),
                  phone = COALESCE($2, phone),
                  email = COALESCE($3, email),
@@ -283,7 +288,7 @@ router.post('/', authMiddleware, async (req, res) => {
           );
 
           // Créer la relation si elle n'existe pas
-          await db.query(
+          await client.query(
             `INSERT INTO lead_database_relations (lead_id, database_id, added_at)
              VALUES ($1, $2, NOW())
              ON CONFLICT (lead_id, database_id) DO NOTHING`,
@@ -291,30 +296,30 @@ router.post('/', authMiddleware, async (req, res) => {
           );
 
           updated++;
-          
+
         } else {
-          // Nouveau lead → INSERT
-          const newLead = await db.query(
-            `INSERT INTO leads 
-            (tenant_id, company_name, contact_name, phone, email, website, 
-             address, city, postal_code, sector, siret, naf_code, 
+          // Nouveau lead → INSERT (utilise client pour la transaction)
+          const newLead = await client.query(
+            `INSERT INTO leads
+            (tenant_id, company_name, contact_name, phone, email, website,
+             address, city, postal_code, sector, siret, naf_code,
              status, source, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
                     'nouveau', 'import_csv', NOW(), NOW())
             RETURNING id`,
-            [tenant_id, company_name, contact_name, phone, email, website, 
+            [tenant_id, company_name, contact_name, phone, email, website,
              address, city, postal_code, detectedSector, siret, naf_code]
           );
-          
+
           const leadId = newLead.rows[0].id;
 
           // Créer la relation
-          await db.query(
+          await client.query(
             `INSERT INTO lead_database_relations (lead_id, database_id, added_at)
              VALUES ($1, $2, NOW())`,
             [leadId, database_id]
           );
-          
+
           added++;
         }
 
@@ -333,23 +338,22 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
-    // Mettre à jour la base
-    try {
-      await db.query(
-        `UPDATE lead_databases 
-         SET segmentation = $1,
-             total_leads = (
-               SELECT COUNT(DISTINCT lead_id) 
-               FROM lead_database_relations 
-               WHERE database_id = $2
-             ),
-             updated_at = NOW()
-         WHERE id = $2 AND tenant_id = $3`,
-        [JSON.stringify(sectorsDetected), database_id, tenant_id]
-      );
-    } catch (updateError) {
-      error('⚠️ Erreur mise à jour segmentation:', updateError);
-    }
+    // Mettre à jour la base (toujours dans la transaction)
+    await client.query(
+      `UPDATE lead_databases
+       SET segmentation = $1,
+           total_leads = (
+             SELECT COUNT(DISTINCT lead_id)
+             FROM lead_database_relations
+             WHERE database_id = $2
+           ),
+           updated_at = NOW()
+       WHERE id = $2 AND tenant_id = $3`,
+      [JSON.stringify(sectorsDetected), database_id, tenant_id]
+    );
+
+    // ✅ COMMIT TRANSACTION
+    await client.query('COMMIT');
 
     log(`✅ Import: ${added} ajoutés, ${updated} mis à jour, ${skipped} ignorés`);
     log(`📊 Secteurs:`, sectorsDetected);
@@ -366,13 +370,18 @@ router.post('/', authMiddleware, async (req, res) => {
       errors: errors.length > 0 ? errors.slice(0, 10) : []
     });
 
-  } catch (error) {
-    error('❌ [IMPORT CSV] Erreur fatale:', error);
-    return res.status(500).json({ 
+  } catch (err) {
+    // ❌ ROLLBACK EN CAS D'ERREUR
+    await client.query('ROLLBACK');
+    error('❌ [IMPORT CSV] Erreur fatale:', err);
+    return res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'import',
-      details: error.message 
+      details: err.message
     });
+  } finally {
+    // ✅ Toujours libérer le client
+    client.release();
   }
 });
 

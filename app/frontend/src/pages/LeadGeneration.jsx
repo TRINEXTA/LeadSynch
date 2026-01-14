@@ -144,12 +144,6 @@ export default function LeadGeneration() {
       return;
     }
 
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    if (!token) {
-      toast.error("Session expirée. Veuillez vous reconnecter.");
-      return;
-    }
-
     // Reset des états
     setIsGenerating(true);
     setIsPaused(false);
@@ -171,9 +165,9 @@ export default function LeadGeneration() {
       const response = await fetch(`${API_BASE}/api/generate-leads-v2`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Content-Type": "application/json"
         },
+        credentials: "include", // ✅ Envoie automatiquement le cookie HttpOnly
         body: JSON.stringify({
           sector,
           city,
@@ -339,10 +333,10 @@ export default function LeadGeneration() {
 
   // Contrôles de recherche
   const handlePause = async () => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     await fetch(`${API_BASE}/api/generate-leads-v2/pause`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ searchId: searchIdRef.current })
     });
     setIsPaused(true);
@@ -350,10 +344,10 @@ export default function LeadGeneration() {
   };
 
   const handleResume = async () => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     await fetch(`${API_BASE}/api/generate-leads-v2/resume`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ searchId: searchIdRef.current })
     });
     setIsPaused(false);
@@ -361,10 +355,10 @@ export default function LeadGeneration() {
   };
 
   const handleStop = async () => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     await fetch(`${API_BASE}/api/generate-leads-v2/stop`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ searchId: searchIdRef.current })
     });
     setIsGenerating(false);
