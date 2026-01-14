@@ -131,10 +131,10 @@ async function handler(req, res) {
     // GET - Session active
     if (req.method === 'GET' && req.url.includes('/active')) {
       const activeSession = await queryAll(
-        `SELECT * FROM prospection_sessions 
-         WHERE user_id = $1 
+        `SELECT * FROM prospection_sessions
+         WHERE user_id = $1
          AND status IN ('active', 'paused')
-         ORDER BY start_time DESC 
+         ORDER BY start_time DESC
          LIMIT 1`,
         [user_id]
       );
@@ -142,6 +142,87 @@ async function handler(req, res) {
       return res.json({
         success: true,
         session: activeSession[0] || null
+      });
+    }
+
+    // ✅ GET - Leads restants pour la session active (Reprise intelligente)
+    if (req.method === 'GET' && req.url.includes('/remaining-leads')) {
+      const { campaign_id, filter_stage } = req.query;
+
+      if (!campaign_id || campaign_id === 'all') {
+        return res.status(400).json({ error: 'campaign_id requis (ne peut pas être "all")' });
+      }
+
+      // 1. Récupérer la session active pour cette campagne
+      const activeSessions = await queryAll(
+        `SELECT * FROM prospection_sessions
+         WHERE user_id = $1 AND campaign_id = $2 AND status IN ('active', 'paused')
+         ORDER BY start_time DESC LIMIT 1`,
+        [user_id, campaign_id]
+      );
+      const activeSession = activeSessions[0] || null;
+
+      // 2. Construire la requête pour les leads restants
+      let query;
+      let params;
+
+      if (activeSession) {
+        // Si une session existe, EXCLURE les leads déjà appelés dans cette session
+        query = `
+          SELECT l.*, pl.stage, pl.campaign_id, pl.assigned_user_id
+          FROM pipeline_leads pl
+          JOIN leads l ON pl.lead_id = l.id
+          WHERE pl.campaign_id = $1
+          AND pl.tenant_id = $2
+          AND pl.assigned_user_id = $3
+          ${filter_stage && filter_stage !== 'all' ? 'AND pl.stage = $4' : ''}
+          AND l.id NOT IN (
+            SELECT lead_id FROM call_history
+            WHERE user_id = $3
+            AND session_id = $5
+            AND lead_id IS NOT NULL
+          )
+          AND pl.stage NOT IN ('gagne', 'perdu')
+          ORDER BY pl.updated_at DESC
+        `;
+        params = filter_stage && filter_stage !== 'all'
+          ? [campaign_id, tenant_id, user_id, filter_stage, activeSession.id]
+          : [campaign_id, tenant_id, user_id, activeSession.id];
+
+        // Ajuster l'index du paramètre session_id
+        if (filter_stage && filter_stage !== 'all') {
+          query = query.replace('$5', '$5');
+        } else {
+          query = query.replace('$5', '$4');
+        }
+      } else {
+        // Pas de session active : retourner tous les leads du filtre
+        query = `
+          SELECT l.*, pl.stage, pl.campaign_id, pl.assigned_user_id
+          FROM pipeline_leads pl
+          JOIN leads l ON pl.lead_id = l.id
+          WHERE pl.campaign_id = $1
+          AND pl.tenant_id = $2
+          AND pl.assigned_user_id = $3
+          ${filter_stage && filter_stage !== 'all' ? 'AND pl.stage = $4' : ''}
+          AND pl.stage NOT IN ('gagne', 'perdu')
+          ORDER BY pl.updated_at DESC
+        `;
+        params = filter_stage && filter_stage !== 'all'
+          ? [campaign_id, tenant_id, user_id, filter_stage]
+          : [campaign_id, tenant_id, user_id];
+      }
+
+      const leads = await queryAll(query, params);
+
+      log(`[PROSPECTION] Remaining leads: ${leads.length} pour user ${user_id}, campaign ${campaign_id}, session ${activeSession?.id || 'nouvelle'}`);
+
+      return res.json({
+        success: true,
+        leads,
+        session: activeSession,
+        remaining_count: leads.length,
+        has_active_session: !!activeSession
       });
     }
 
