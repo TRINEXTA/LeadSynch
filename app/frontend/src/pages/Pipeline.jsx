@@ -1,10 +1,10 @@
 import { log, error, warn } from "../lib/logger.js";
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { TrendingUp, Users, DollarSign, Clock, Filter, Search, Plus, Target, ChevronDown, ChevronUp, BarChart3, X, User } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import ProspectingMode from './ProspectingMode';
 import LeadModal from '../components/LeadModal';
 import LeadCard from '../components/pipeline/LeadCard';
 import QuickEmailModal from '../components/pipeline/QuickEmailModal';
@@ -29,6 +29,7 @@ const STAGES = [
 
 export default function Pipeline() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -51,7 +52,6 @@ export default function Pipeline() {
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [creatingLeadStage, setCreatingLeadStage] = useState(null);
-  const [prospectionMode, setProspectionMode] = useState(false);
 
   // Quick Actions Modals
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -287,25 +287,14 @@ export default function Pipeline() {
     loadData();
   }, [loadData]);
 
-  if (prospectionMode) {
-    // Trouver la campagne sélectionnée si elle existe
-    const selectedCampaignData = selectedCampaign !== 'all'
-      ? campaigns.find(c => c.id === selectedCampaign)
-      : null;
-
-    return (
-      <ProspectingMode
-        leads={filteredLeads}
-        campaign={selectedCampaignData}
-        filterType={selectedCampaign !== 'all' ? 'campaign' : 'all'}
-        onExit={() => {
-          setProspectionMode(false);
-          loadData();
-        }}
-        onLeadUpdated={loadData}
-      />
-    );
-  }
+  // Navigation vers le mode prospection avec la campagne pré-sélectionnée
+  const handleStartProspection = useCallback(() => {
+    const params = new URLSearchParams();
+    if (selectedCampaign !== 'all') {
+      params.set('campaign', selectedCampaign);
+    }
+    navigate(`/ProspectingMode${params.toString() ? '?' + params.toString() : ''}`);
+  }, [selectedCampaign, navigate]);
 
   if (loading) {
     return (
@@ -394,9 +383,9 @@ export default function Pipeline() {
               </select>
             )}
 
-            {/* Mode Prospection */}
+            {/* Mode Prospection - redirige vers la page complète */}
             <button
-              onClick={() => setProspectionMode(true)}
+              onClick={handleStartProspection}
               className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all shadow flex items-center gap-2 text-sm"
             >
               <TrendingUp className="w-4 h-4" />

@@ -37,12 +37,13 @@ const loadSavedProgression = (campaignId, filter) => {
 };
 
 // Sauvegarder la progression
-const saveProgression = (campaignId, filter, processedLeadIds, stats) => {
+const saveProgression = (campaignId, filter, processedLeadIds, stats, totalLeads) => {
   try {
     const key = getProgressionKey(campaignId, filter);
     localStorage.setItem(key, JSON.stringify({
       processedLeadIds,
       stats,
+      totalLeads, // Sauvegarder le total initial
       savedAt: Date.now()
     }));
   } catch (e) {
@@ -65,6 +66,26 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
   // Charger la progression sauvegardée au montage
   const savedProgression = useRef(loadSavedProgression(campaign?.id, filterType));
+
+  // Total de leads pour cette session (ne change pas pendant la session)
+  // Utilise le total sauvegardé s'il existe, sinon le nombre de leads actuels
+  const [totalLeadsForSession, setTotalLeadsForSession] = useState(() => {
+    const saved = savedProgression.current;
+    // Si on a une progression sauvegardée avec un total, utiliser ce total
+    if (saved?.totalLeads && saved.totalLeads > 0) {
+      return saved.totalLeads;
+    }
+    // Sinon, utiliser le nombre de leads actuels comme total initial
+    return leads.length;
+  });
+
+  // Mettre à jour le total si c'est une nouvelle session et que les leads viennent d'être chargés
+  useEffect(() => {
+    // Si on n'a pas encore de total (=0) et qu'on a des leads, initialiser le total
+    if (totalLeadsForSession === 0 && leads.length > 0 && processedLeadIds.length === 0) {
+      setTotalLeadsForSession(leads.length);
+    }
+  }, [leads.length, totalLeadsForSession, processedLeadIds.length]);
 
   // Utiliser un ref EN PLUS de state pour éviter les race conditions
   // Le ref est mis à jour immédiatement, le state déclenche les re-renders
@@ -134,14 +155,15 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
   // Sauvegarder la progression à chaque changement
   useEffect(() => {
-    if (processedLeadIds.length > 0) {
+    // Toujours sauvegarder dès qu'on a traité au moins un lead OU qu'on a un total défini
+    if (processedLeadIds.length > 0 || totalLeadsForSession > 0) {
       saveProgression(campaign?.id, filterType, processedLeadIds, {
         processed,
         qualified,
         rdvCount
-      });
+      }, totalLeadsForSession);
     }
-  }, [processedLeadIds, processed, qualified, rdvCount, campaign?.id, filterType]);
+  }, [processedLeadIds, processed, qualified, rdvCount, campaign?.id, filterType, totalLeadsForSession]);
 
   // Démarrer la session au montage
   useEffect(() => {
@@ -149,9 +171,10 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
     // Si une progression a été restaurée, afficher un message
     if (savedProgression.current && savedProgression.current.processedLeadIds?.length > 0) {
-      const remaining = leads.length - savedProgression.current.processedLeadIds.length;
+      const totalSaved = savedProgression.current.totalLeads || totalLeadsForSession;
+      const remaining = totalSaved - savedProgression.current.processedLeadIds.length;
       if (remaining > 0) {
-        toast.success(`Session reprise ! ${remaining} leads restants à traiter.`, { duration: 3000 });
+        toast.success(`Session reprise ! ${remaining} leads restants sur ${totalSaved}.`, { duration: 3000 });
       }
     }
 
@@ -350,7 +373,18 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     // IMPORTANT: Utiliser processedLeadIdsRef.current (synchrone) au lieu de processedLeadIds (state async)
     const currentProcessedIds = processedLeadIdsRef.current;
 
-    // Trouver le prochain lead non traité
+    // Vérifier si on a traité tous les leads de la session initiale
+    if (currentProcessedIds.length >= totalLeadsForSession) {
+      // Tous les leads sont traités - effacer la progression
+      processedLeadIdsRef.current = [];
+      setProcessedLeadIds([]);
+      clearProgression(campaign?.id, filterType);
+      toast.success(`🎉 Tous les ${totalLeadsForSession} leads traités ! Félicitations !`);
+      setTimeout(() => handleExit(), 1500);
+      return;
+    }
+
+    // Trouver le prochain lead non traité parmi les leads restants
     const nextIndex = leads.findIndex((lead, idx) =>
       idx > currentIndex && !currentProcessedIds.includes(lead.id)
     );
@@ -365,12 +399,23 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
       if (remainingBefore >= 0) {
         setCurrentIndex(remainingBefore);
+      } else if (leads.length === 0) {
+        // Plus de leads disponibles dans la liste actuelle mais session non terminée
+        toast.info(`Plus de leads disponibles. ${currentProcessedIds.length}/${totalLeadsForSession} traités.`);
+        setTimeout(() => handleExit(), 2000);
       } else {
-        // Tous les leads sont traités - effacer la progression et le ref
-        processedLeadIdsRef.current = [];
-        clearProgression(campaign?.id, filterType);
-        toast.success('Tous les leads traités ! Félicitations !');
-        setTimeout(() => handleExit(), 1500);
+        // On a parcouru tous les leads disponibles - revenir au premier non traité
+        const firstUnprocessed = leads.findIndex(lead => !currentProcessedIds.includes(lead.id));
+        if (firstUnprocessed >= 0) {
+          setCurrentIndex(firstUnprocessed);
+        } else {
+          // Vraiment terminé
+          processedLeadIdsRef.current = [];
+          setProcessedLeadIds([]);
+          clearProgression(campaign?.id, filterType);
+          toast.success('🎉 Session terminée ! Tous les leads ont été traités.');
+          setTimeout(() => handleExit(), 1500);
+        }
       }
     }
   };
@@ -541,7 +586,19 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
           <Target className="w-16 h-16 text-purple-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-4">Aucun lead à prospecter</h2>
+          <h2 className="text-2xl font-bold mb-4">
+            {processedLeadIds.length > 0 ? 'Session terminée !' : 'Aucun lead à prospecter'}
+          </h2>
+          {processedLeadIds.length > 0 && (
+            <div className="mb-4 p-4 bg-green-50 rounded-xl">
+              <p className="text-green-700 font-semibold">
+                🎉 {processedLeadIds.length} / {totalLeadsForSession} leads traités
+              </p>
+              <p className="text-green-600 text-sm mt-1">
+                {qualified} qualifiés • {rdvCount} RDV
+              </p>
+            </div>
+          )}
           <button
             onClick={onExit}
             className="bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 transition-all"
@@ -630,16 +687,16 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold text-gray-700">
-            Leads traités : {processedLeadIds.length} / {leads.length}
+            Leads traités : {processedLeadIds.length} / {totalLeadsForSession}
           </span>
           <span className="text-sm text-gray-600">
-            {Math.round((processedLeadIds.length / leads.length) * 100)}% • Lead actuel : {currentIndex + 1}
+            {totalLeadsForSession > 0 ? Math.round((processedLeadIds.length / totalLeadsForSession) * 100) : 0}% • Restants : {leads.length}
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3">
           <div
             className="bg-gradient-to-r from-purple-600 to-pink-600 h-3 rounded-full transition-all duration-500"
-            style={{ width: `${(processedLeadIds.length / leads.length) * 100}%` }}
+            style={{ width: `${totalLeadsForSession > 0 ? (processedLeadIds.length / totalLeadsForSession) * 100 : 0}%` }}
           ></div>
         </div>
       </div>
