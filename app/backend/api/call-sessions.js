@@ -206,11 +206,15 @@ export default async function handler(req, res) {
           [userId, tenantId]
         );
 
+        // Si une session existe, la terminer automatiquement et en créer une nouvelle
         if (existingSession) {
-          return res.status(400).json({
-            error: 'Une session est déjà en cours',
-            session: existingSession
-          });
+          await execute(
+            `UPDATE call_sessions
+             SET status = 'completed', ended_at = NOW(), updated_at = NOW()
+             WHERE id = $1`,
+            [existingSession.id]
+          );
+          console.log(`Session ${existingSession.id} terminée automatiquement`);
         }
 
         // Créer la nouvelle session avec valeurs numériques à 0
