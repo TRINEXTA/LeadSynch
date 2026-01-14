@@ -11,7 +11,9 @@ const api = axios.create({
   baseURL: `${API_BASE}/api`,
   headers: {
     "Content-Type": "application/json"
-  }
+  },
+  // ✅ SÉCURITÉ : Indispensable pour que les cookies HttpOnly soient envoyés
+  withCredentials: true
 });
 
 // Interceptor pour ajouter le token automatiquement
