@@ -120,7 +120,8 @@ export default function RappelModal({
             followup: response.data.followup,
             date: formData.date,
             time: formData.time,
-            type: formData.type
+            type: formData.type,
+            notes: formData.notes  // Retourner les notes du modal au parent
           });
         }
 

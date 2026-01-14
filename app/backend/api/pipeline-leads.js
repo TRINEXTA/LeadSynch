@@ -825,21 +825,23 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       }
     }
 
-    // Mise à jour du stage + won_date si gagné
+    // Mise à jour du stage + won_date si gagné + incrémentation calls_made
     const { rows } = await q(
       `UPDATE pipeline_leads
        SET stage = $1,
            updated_at = NOW(),
            won_date = CASE WHEN $1 = 'gagne' THEN NOW() ELSE won_date END,
-           deal_value = COALESCE($4, deal_value)
+           deal_value = COALESCE($4, deal_value),
+           calls_made = COALESCE(calls_made, 0) + 1
        WHERE id = $2 AND tenant_id = $3
        RETURNING *`,
       [newStage, id, tenantId, deal_value]
     );
+    log(`📞 Appel comptabilisé pour pipeline_lead ${id} (calls_made incrémenté)`);
 
     if (pipelineLead.lead_id) {
       await q(
-        `UPDATE leads 
+        `UPDATE leads
          SET pipeline_stage = $1,
              last_call_date = NOW(),
              next_follow_up = $2,
@@ -850,32 +852,33 @@ router.post('/:id/qualify', authenticateToken, async (req, res) => {
       );
     }
 
-    if (notes && notes.trim()) {
-      // 1. Sauvegarder dans l'historique des appels
-      await q(
-        `INSERT INTO lead_call_history
-         (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type,
-          stage_before, stage_after, qualification, notes, call_duration,
-          next_action, scheduled_date, deal_value, created_by)
-         VALUES ($1, $2, $3, $4, 'qualification', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [
-          tenantId,
-          pipelineLead.lead_id,
-          pipelineLead.id,
-          campaignId,
-          oldStage,
-          newStage,
-          qualification,
-          notes.trim(),
-          call_duration || null,
-          next_action || null,
-          scheduled_date || null,
-          deal_value || null,
-          userId
-        ]
-      );
+    // TOUJOURS enregistrer dans l'historique des appels (même sans notes)
+    await q(
+      `INSERT INTO lead_call_history
+       (tenant_id, lead_id, pipeline_lead_id, campaign_id, action_type,
+        stage_before, stage_after, qualification, notes, call_duration,
+        next_action, scheduled_date, deal_value, created_by)
+       VALUES ($1, $2, $3, $4, 'qualification', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        tenantId,
+        pipelineLead.lead_id,
+        pipelineLead.id,
+        campaignId,
+        oldStage,
+        newStage,
+        qualification,
+        notes?.trim() || null,
+        call_duration || null,
+        next_action || null,
+        scheduled_date || null,
+        deal_value || null,
+        userId
+      ]
+    );
+    log(`📝 Action enregistrée dans l'historique: ${oldStage} → ${newStage}`);
 
-      // 2. Mettre à jour aussi leads.notes pour affichage dans la fiche
+    // Mettre à jour leads.notes si des notes sont fournies
+    if (notes && notes.trim()) {
       const noteDate = new Date().toLocaleDateString('fr-FR', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
@@ -1253,22 +1256,38 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 // =============================
 // GET /pipeline-leads/:id/history
 // Récupère l'historique complet des actions sur un lead
+// Accepte soit un pipeline_lead_id soit un lead_id directement
 // =============================
 router.get('/:id/history', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const { id } = req.params;
 
-    const { rows: plRows } = await q(
+    // Essayer d'abord de trouver par pipeline_lead_id
+    let { rows: plRows } = await q(
       `SELECT lead_id FROM pipeline_leads WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
 
-    if (!plRows.length) {
-      return res.status(404).json({ error: 'Lead pipeline non trouvé' });
-    }
+    let leadId;
 
-    const leadId = plRows[0].lead_id;
+    if (plRows.length > 0) {
+      // Trouvé par pipeline_lead_id
+      leadId = plRows[0].lead_id;
+    } else {
+      // Essayer de trouver par lead_id directement
+      const { rows: directRows } = await q(
+        `SELECT id FROM leads WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId]
+      );
+
+      if (directRows.length > 0) {
+        leadId = id;
+        log(`📜 Historique chargé via lead_id direct: ${id}`);
+      } else {
+        return res.status(404).json({ error: 'Lead non trouvé' });
+      }
+    }
 
     const { rows } = await q(
       `SELECT 
