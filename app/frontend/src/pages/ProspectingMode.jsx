@@ -205,6 +205,19 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
 
   const startSession = async () => {
     try {
+      // D'abord vérifier s'il y a une session active
+      const activeResponse = await api.get('/call-sessions', {
+        params: { action: 'active' }
+      });
+
+      // S'il y a une session active, l'utiliser
+      if (activeResponse.data.session) {
+        setSessionId(activeResponse.data.session.id);
+        console.log('Session existante reprise:', activeResponse.data.session.id);
+        return;
+      }
+
+      // Sinon, créer une nouvelle session
       const response = await api.post('/call-sessions', {
         action: 'start',
         campaign_id: campaign?.id,
@@ -216,7 +229,12 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       }
     } catch (error) {
       console.error('Erreur démarrage session:', error);
-      // Ne pas bloquer si la création échoue (peut être que la table n'existe pas encore)
+      // Si c'est une erreur 400 (session déjà active), récupérer la session existante
+      if (error.response?.status === 400 && error.response?.data?.session) {
+        setSessionId(error.response.data.session.id);
+        console.log('Session existante utilisée:', error.response.data.session.id);
+      }
+      // Ne pas bloquer si la création échoue
     }
   };
 
