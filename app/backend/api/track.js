@@ -1,8 +1,23 @@
 import { log, error, warn } from "../lib/logger.js";
 import { Router } from "express";
 import { execute, queryOne } from "../lib/db.js";
+import rateLimit from 'express-rate-limit'; // ✅ AJOUT : Protection Rate Limiting
 
 const router = Router();
+
+// ========== CONFIGURATION RATE LIMIT ==========
+// Limite stricte pour le tracking : 60 requêtes/min par IP
+// Cela permet le fonctionnement normal mais bloque les abus massifs
+const trackingLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // limite chaque IP à 60 requêtes par fenêtre
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many tracking requests from this IP'
+});
+
+// Appliquer le rate limiting à toutes les routes de ce fichier
+router.use(trackingLimiter);
 
 // ========== VALIDATION UUID ==========
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -38,6 +53,14 @@ function isValidRedirectUrl(urlString) {
 // 📩 Ouverture d'email (supporte les relances avec follow_up_id)
 router.get("/open", async (req, res) => {
   try {
+    // ✅ AJOUT : Headers de sécurité et anti-cache pour le pixel
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Content-Type-Options': 'nosniff'
+    });
+
     const { lead_id, campaign_id, follow_up_id } = req.query;
 
     // Validation des paramètres UUID
@@ -54,11 +77,12 @@ router.get("/open", async (req, res) => {
       return res.status(400).send("Invalid follow_up_id format");
     }
 
-    // Vérifier que le lead et la campagne existent et appartiennent au même tenant
     const lead = await queryOne('SELECT tenant_id FROM leads WHERE id = $1', [lead_id]);
+
+    // Pixel transparent 1x1 - défini une seule fois
+    const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
+
     if (!lead) {
-      // Retourner le pixel quand même pour ne pas révéler si le lead existe
-      const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
       res.writeHead(200, { "Content-Type": "image/gif" });
       return res.end(pixel);
     }
@@ -68,35 +92,26 @@ router.get("/open", async (req, res) => {
       [campaign_id, lead.tenant_id]
     );
 
-    if (!campaign) {
-      const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
-      res.writeHead(200, { "Content-Type": "image/gif" });
-      return res.end(pixel);
-    }
-
-    // Enregistrer l'ouverture (avec follow_up_id si relance)
-    await execute(`
-      INSERT INTO email_tracking (tenant_id, campaign_id, lead_id, follow_up_id, event_type, created_at)
-      VALUES ($3, $2, $1, $4, 'open', NOW())
-      ON CONFLICT DO NOTHING
-    `, [lead_id, campaign_id, lead.tenant_id, follow_up_id || null]);
-
-    // Si c'est une relance, mettre à jour les stats
-    if (follow_up_id) {
+    if (campaign) {
       await execute(`
-        UPDATE campaign_follow_ups
-        SET total_opened = total_opened + 1, updated_at = NOW()
-        WHERE id = $1
-      `, [follow_up_id]);
+        INSERT INTO email_tracking (tenant_id, campaign_id, lead_id, follow_up_id, event_type, created_at)
+        VALUES ($3, $2, $1, $4, 'open', NOW())
+        ON CONFLICT DO NOTHING
+      `, [lead_id, campaign_id, lead.tenant_id, follow_up_id || null]);
+
+      if (follow_up_id) {
+        await execute(`
+          UPDATE campaign_follow_ups
+          SET total_opened = total_opened + 1, updated_at = NOW()
+          WHERE id = $1
+        `, [follow_up_id]);
+      }
     }
 
-    // Pixel transparent 1x1 pour les ouvertures
-    const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
     res.writeHead(200, { "Content-Type": "image/gif" });
     res.end(pixel);
   } catch (err) {
     error('Track open error:', err.message);
-    // Retourner le pixel même en cas d'erreur pour ne pas bloquer l'affichage email
     const pixel = Buffer.from("R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", "base64");
     res.writeHead(200, { "Content-Type": "image/gif" });
     res.end(pixel);
