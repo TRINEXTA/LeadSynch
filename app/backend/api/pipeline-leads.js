@@ -1,5 +1,5 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import express from 'express';
+import express from 'express';
 import { authMiddleware as authenticateToken } from '../middleware/auth.js';
 import db from '../config/db.js';
 
