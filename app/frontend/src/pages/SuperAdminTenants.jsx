@@ -2,7 +2,7 @@ import { log, error, warn } from "../lib/logger.js";
 import { useState, useEffect } from 'react';
 import {
   Users, Search, Plus, Eye, Pause, Play, X, Mail, FileText,
-  Building, Calendar, CheckCircle, XCircle, Clock, AlertCircle
+  Building, Calendar, CheckCircle, XCircle, Clock, AlertCircle, AlertTriangle
 } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
@@ -31,6 +31,10 @@ export default function SuperAdminTenants() {
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
+  // ✅ États pour modale de suspension moderne
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [tenantToSuspend, setTenantToSuspend] = useState(null);
+  const [suspensionReason, setSuspensionReason] = useState('');
   const [newClient, setNewClient] = useState({
     name: '',
     billing_email: '',
@@ -142,18 +146,30 @@ export default function SuperAdminTenants() {
     }
   };
 
-  const handleSuspend = async (tenantId) => {
-    if (!await confirmAction('Suspendre ce client ? Il n\'aura plus accès à LeadSynch.')) return;
+  // ✅ Ouvrir la modale de suspension (remplace window.prompt)
+  const openSuspendModal = (tenant) => {
+    setTenantToSuspend(tenant);
+    setSuspensionReason('');
+    setShowSuspendModal(true);
+  };
 
-    const reason = window.prompt('Raison de la suspension:');
-    if (!reason) return;
+  // ✅ Confirmer la suspension
+  const handleSuspend = async () => {
+    if (!tenantToSuspend) return;
+    if (!suspensionReason.trim()) {
+      toast.error('La raison est obligatoire');
+      return;
+    }
 
     try {
-      await api.post(`/super-admin/tenants/${tenantId}/suspend`, { reason });
+      await api.post(`/super-admin/tenants/${tenantToSuspend.id}/suspend`, { reason: suspensionReason });
       toast.success('Client suspendu');
+      setShowSuspendModal(false);
+      setTenantToSuspend(null);
+      setSuspensionReason('');
       loadTenants();
-    } catch (error) {
-      error('Erreur suspension:', error);
+    } catch (err) {
+      warn('Erreur suspension:', err);
       toast.error('Erreur lors de la suspension');
     }
   };
@@ -326,7 +342,7 @@ export default function SuperAdminTenants() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => handleSuspend(tenant.id)}
+                        onClick={() => openSuspendModal(tenant)}
                         className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg transition-all"
                         title="Suspendre"
                       >
@@ -631,6 +647,58 @@ export default function SuperAdminTenants() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MODALE SUSPENSION MODERNE (remplace window.prompt) */}
+      {showSuspendModal && tenantToSuspend && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="bg-red-50 p-6 border-b border-red-100 flex items-center gap-4">
+              <div className="p-3 bg-red-100 rounded-full">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-red-900">Suspendre le client</h3>
+                <p className="text-sm text-red-700">{tenantToSuspend.name}</p>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">
+                Cette action coupera immédiatement l'accès de tous les utilisateurs de ce client.
+              </p>
+
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Raison de la suspension (obligatoire)
+              </label>
+              <textarea
+                value={suspensionReason}
+                onChange={(e) => setSuspensionReason(e.target.value)}
+                className="w-full h-32 px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                placeholder="Ex: Défaut de paiement, violation des conditions..."
+                autoFocus
+              ></textarea>
+            </div>
+
+            <div className="p-6 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setShowSuspendModal(false);
+                  setTenantToSuspend(null);
+                }}
+                className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSuspend}
+                className="px-5 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg hover:shadow-xl transition-all"
+              >
+                Confirmer la suspension
+              </button>
+            </div>
           </div>
         </div>
       )}

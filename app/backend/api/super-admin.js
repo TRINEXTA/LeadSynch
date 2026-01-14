@@ -7,6 +7,7 @@ import { log, error, warn } from "../lib/logger.js";
 
 import express from 'express';
 import { z } from 'zod';
+import crypto from 'crypto'; // ✅ Import crypto pour génération sécurisée
 import { query as q, queryAll, queryOne } from '../lib/db.js';
 import { requireSuperAdmin } from '../middleware/super-admin-auth.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -321,7 +322,8 @@ router.post('/tenants', async (req, res) => {
     );
 
     // 2. Créer l'admin user
-    const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'; // Mot de passe temporaire
+    // 🔒 Génération sécurisée avec crypto (remplace Math.random non cryptographique)
+    const tempPassword = crypto.randomBytes(12).toString('hex') + '!A1'; // 24 chars + complexité
     const bcrypt = await import('bcryptjs');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
