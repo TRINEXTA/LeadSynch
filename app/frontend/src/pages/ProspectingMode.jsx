@@ -79,6 +79,13 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     return leads.length;
   });
 
+  // Utiliser un ref EN PLUS de state pour éviter les race conditions
+  // Le ref est mis à jour immédiatement, le state déclenche les re-renders
+  const processedLeadIdsRef = useRef(savedProgression.current?.processedLeadIds || []);
+  const [processedLeadIds, setProcessedLeadIds] = useState(() => {
+    return savedProgression.current?.processedLeadIds || [];
+  });
+
   // Mettre à jour le total si c'est une nouvelle session et que les leads viennent d'être chargés
   useEffect(() => {
     // Si on n'a pas encore de total (=0) et qu'on a des leads, initialiser le total
@@ -86,13 +93,6 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       setTotalLeadsForSession(leads.length);
     }
   }, [leads.length, totalLeadsForSession, processedLeadIds.length]);
-
-  // Utiliser un ref EN PLUS de state pour éviter les race conditions
-  // Le ref est mis à jour immédiatement, le state déclenche les re-renders
-  const processedLeadIdsRef = useRef(savedProgression.current?.processedLeadIds || []);
-  const [processedLeadIds, setProcessedLeadIds] = useState(() => {
-    return savedProgression.current?.processedLeadIds || [];
-  });
 
   // Fonction helper pour ajouter un lead traité - met à jour ref ET state de manière synchrone
   const addProcessedLead = useCallback((leadId) => {
