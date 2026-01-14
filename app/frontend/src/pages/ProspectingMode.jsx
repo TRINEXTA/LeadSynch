@@ -86,17 +86,37 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     return savedProgression.current?.processedLeadIds || [];
   });
 
-  // Mettre à jour le total si c'est une nouvelle session et que les leads viennent d'être chargés
+  // Ref pour garder le total initial de la session (ne change jamais après l'initialisation)
+  const initialTotalRef = useRef(null);
+
+  // Mettre à jour le total dynamiquement en fonction des leads restants + traités
   useEffect(() => {
-    // Si on n'a pas encore de total valide (=0) et qu'on a des leads, initialiser le total
-    // Le total = leads actuels + leads déjà traités (qui ont peut-être changé de stage)
-    if (totalLeadsForSession === 0 && (leads.length > 0 || processedLeadIds.length > 0)) {
-      const calculatedTotal = leads.length + processedLeadIds.length;
-      if (calculatedTotal > 0) {
-        setTotalLeadsForSession(calculatedTotal);
+    const saved = savedProgression.current;
+
+    // Si on a déjà un total initial fixé dans la ref, ne pas le changer
+    if (initialTotalRef.current !== null) {
+      // Mais s'assurer que totalLeadsForSession reflète bien le total initial
+      if (totalLeadsForSession !== initialTotalRef.current) {
+        setTotalLeadsForSession(initialTotalRef.current);
       }
+      return;
     }
-  }, [leads.length, totalLeadsForSession, processedLeadIds.length]);
+
+    // Cas 1: On a une progression sauvegardée avec un total valide
+    if (saved?.totalLeads && saved.totalLeads > 0) {
+      initialTotalRef.current = saved.totalLeads;
+      setTotalLeadsForSession(saved.totalLeads);
+      return;
+    }
+
+    // Cas 2: Nouvelle session - calculer le total initial
+    // Le total = leads disponibles actuellement + leads déjà traités (si reprise)
+    const calculatedTotal = leads.length + processedLeadIds.length;
+    if (calculatedTotal > 0) {
+      initialTotalRef.current = calculatedTotal;
+      setTotalLeadsForSession(calculatedTotal);
+    }
+  }, [leads.length, processedLeadIds.length, totalLeadsForSession]);
 
   // Fonction helper pour ajouter un lead traité - met à jour ref ET state de manière synchrone
   const addProcessedLead = useCallback((leadId) => {
@@ -154,8 +174,8 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [pendingQualification, setPendingQualification] = useState(null);
 
-  // Protection contre leads undefined ou vide
-  const currentLead = leads && leads.length > 0 ? leads[currentIndex] : null;
+  // Protection contre leads undefined, vide ou index hors limites
+  const currentLead = leads && leads.length > 0 && currentIndex < leads.length ? leads[currentIndex] : null;
 
   // Sauvegarder la progression à chaque changement
   useEffect(() => {
@@ -168,6 +188,22 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       }, totalLeadsForSession);
     }
   }, [processedLeadIds, processed, qualified, rdvCount, campaign?.id, filterType, totalLeadsForSession]);
+
+  // Réajuster l'index si les leads changent et que l'index est hors limites
+  useEffect(() => {
+    if (leads.length === 0) return;
+
+    // Si l'index actuel est hors limites, trouver le premier lead non traité
+    if (currentIndex >= leads.length) {
+      const firstUnprocessed = leads.findIndex(lead => !processedLeadIdsRef.current.includes(lead.id));
+      if (firstUnprocessed >= 0) {
+        setCurrentIndex(firstUnprocessed);
+      } else {
+        // Tous les leads ont été traités, rester sur le dernier
+        setCurrentIndex(Math.max(0, leads.length - 1));
+      }
+    }
+  }, [leads, currentIndex]);
 
   // Démarrer la session au montage
   useEffect(() => {
@@ -395,18 +431,29 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     // IMPORTANT: Utiliser processedLeadIdsRef.current (synchrone) au lieu de processedLeadIds (state async)
     const currentProcessedIds = processedLeadIdsRef.current;
 
-    // Vérifier si on a traité tous les leads de la session initiale
-    if (currentProcessedIds.length >= totalLeadsForSession) {
+    // Compter les leads non traités restants dans la liste actuelle
+    const unprocessedLeads = leads.filter(lead => !currentProcessedIds.includes(lead.id));
+    const remainingCount = unprocessedLeads.length;
+
+    // Vérifier si on a traité tous les leads de la session initiale OU tous les leads disponibles
+    if (currentProcessedIds.length >= totalLeadsForSession || remainingCount === 0) {
       // Tous les leads sont traités - effacer la progression
+      const finalCount = currentProcessedIds.length;
       processedLeadIdsRef.current = [];
       setProcessedLeadIds([]);
       clearProgression(campaign?.id, filterType);
-      toast.success(`🎉 Tous les ${totalLeadsForSession} leads traités ! Félicitations !`);
+
+      // Afficher le message approprié
+      if (finalCount >= totalLeadsForSession) {
+        toast.success(`🎉 Tous les ${totalLeadsForSession} leads traités ! Félicitations !`);
+      } else {
+        toast.success(`🎉 Session terminée ! ${finalCount} leads traités sur ${totalLeadsForSession}.`);
+      }
       setTimeout(() => handleExit(), 1500);
       return;
     }
 
-    // Trouver le prochain lead non traité parmi les leads restants
+    // Trouver le prochain lead non traité parmi les leads restants (après l'index actuel)
     const nextIndex = leads.findIndex((lead, idx) =>
       idx > currentIndex && !currentProcessedIds.includes(lead.id)
     );
@@ -414,30 +461,18 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     if (nextIndex >= 0) {
       setCurrentIndex(nextIndex);
     } else {
-      // Vérifier s'il reste des leads non traités avant l'index actuel
-      const remainingBefore = leads.findIndex(lead =>
-        !currentProcessedIds.includes(lead.id) && lead.id !== currentLead?.id
-      );
-
-      if (remainingBefore >= 0) {
-        setCurrentIndex(remainingBefore);
-      } else if (leads.length === 0) {
-        // Plus de leads disponibles dans la liste actuelle mais session non terminée
-        toast.info(`Plus de leads disponibles. ${currentProcessedIds.length}/${totalLeadsForSession} traités.`);
-        setTimeout(() => handleExit(), 2000);
+      // Chercher un lead non traité depuis le début de la liste
+      const firstUnprocessed = leads.findIndex(lead => !currentProcessedIds.includes(lead.id));
+      if (firstUnprocessed >= 0) {
+        setCurrentIndex(firstUnprocessed);
       } else {
-        // On a parcouru tous les leads disponibles - revenir au premier non traité
-        const firstUnprocessed = leads.findIndex(lead => !currentProcessedIds.includes(lead.id));
-        if (firstUnprocessed >= 0) {
-          setCurrentIndex(firstUnprocessed);
-        } else {
-          // Vraiment terminé
-          processedLeadIdsRef.current = [];
-          setProcessedLeadIds([]);
-          clearProgression(campaign?.id, filterType);
-          toast.success('🎉 Session terminée ! Tous les leads ont été traités.');
-          setTimeout(() => handleExit(), 1500);
-        }
+        // Vraiment plus de leads - terminer la session
+        const finalCount = currentProcessedIds.length;
+        processedLeadIdsRef.current = [];
+        setProcessedLeadIds([]);
+        clearProgression(campaign?.id, filterType);
+        toast.success(`🎉 Session terminée ! ${finalCount} leads traités.`);
+        setTimeout(() => handleExit(), 1500);
       }
     }
   };
@@ -712,7 +747,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
             Leads traités : {processedLeadIds.length} / {totalLeadsForSession}
           </span>
           <span className="text-sm text-gray-600">
-            {totalLeadsForSession > 0 ? Math.round((processedLeadIds.length / totalLeadsForSession) * 100) : 0}% • Restants : {leads.length}
+            {totalLeadsForSession > 0 ? Math.round((processedLeadIds.length / totalLeadsForSession) * 100) : 0}% • Restants : {Math.max(0, totalLeadsForSession - processedLeadIds.length)}
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3">
