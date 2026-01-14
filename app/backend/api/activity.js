@@ -459,19 +459,56 @@ router.get('/users-status', authenticateToken, async (req, res) => {
       log(`[Activity] SIMPLIFIED query returned ${rows.length} users`);
     }
 
+    // ✅ FILTRAGE POST-REQUÊTE POUR MANAGERS : Ne voir que leur équipe
+    let filteredRows = rows;
+    if (userRole === 'manager' && !req.user.is_super_admin) {
+      try {
+        // Récupérer les IDs des membres de l'équipe du manager
+        const { rows: teamMembers } = await q(`
+          SELECT DISTINCT tm.user_id
+          FROM team_members tm
+          JOIN teams t ON tm.team_id = t.id
+          WHERE t.manager_id = $1
+        `, [userId]);
+
+        const teamMemberIds = new Set(teamMembers.map(m => m.user_id));
+        teamMemberIds.add(userId); // Inclure le manager lui-même
+
+        filteredRows = rows.filter(u => teamMemberIds.has(u.id));
+        log(`[Activity] Manager filter: ${rows.length} -> ${filteredRows.length} users (team size: ${teamMemberIds.size})`);
+      } catch (filterErr) {
+        warn(`[Activity] Team filtering failed, returning all:`, filterErr.message);
+      }
+    } else if (userRole === 'supervisor' && !req.user.is_super_admin) {
+      try {
+        // Récupérer les IDs des subordonnés du supervisor
+        const { rows: subordinates } = await q(`
+          SELECT id FROM users WHERE supervisor_id = $1
+        `, [userId]);
+
+        const subordinateIds = new Set(subordinates.map(s => s.id));
+        subordinateIds.add(userId); // Inclure le supervisor lui-même
+
+        filteredRows = rows.filter(u => subordinateIds.has(u.id));
+        log(`[Activity] Supervisor filter: ${rows.length} -> ${filteredRows.length} users`);
+      } catch (filterErr) {
+        warn(`[Activity] Supervisor filtering failed, returning all:`, filterErr.message);
+      }
+    }
+
     // Compter par statut
     const stats = {
-      online: rows.filter(u => u.presence_status === 'online').length,
-      idle: rows.filter(u => u.presence_status === 'idle').length,
-      offline: rows.filter(u => u.presence_status === 'offline' || !u.presence_status).length,
-      total: rows.length
+      online: filteredRows.filter(u => u.presence_status === 'online').length,
+      idle: filteredRows.filter(u => u.presence_status === 'idle').length,
+      offline: filteredRows.filter(u => u.presence_status === 'offline' || !u.presence_status).length,
+      total: filteredRows.length
     };
 
     log(`[Activity] ======= RESPONSE =======`);
-    log(`[Activity] Returning ${rows.length} users`);
+    log(`[Activity] Returning ${filteredRows.length} users`);
     log(`[Activity] Stats: ${JSON.stringify(stats)}`);
 
-    res.json({ success: true, users: rows, stats });
+    res.json({ success: true, users: filteredRows, stats });
   } catch (err) {
     error('[Activity] ❌ CRITICAL ERROR in users-status:', err);
     res.status(500).json({ error: err.message, stack: err.stack });
@@ -480,16 +517,17 @@ router.get('/users-status', authenticateToken, async (req, res) => {
 
 // =============================
 // GET /activity/logs
-// Récupère les logs d'activité (pour admin)
+// Récupère les logs d'activité (admin voit tout, manager voit son équipe)
 // =============================
 router.get('/logs', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const userRole = req.user.role;
+    const userId = req.user.id;
     const { user_id, category, action, limit = 100, offset = 0 } = req.query;
 
-    // Seuls admin peuvent voir tous les logs
-    if (!['admin'].includes(userRole) && !req.user.is_super_admin) {
+    // ✅ Admin, manager, supervisor peuvent voir les logs
+    if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
       return res.status(403).json({ error: 'Non autorisé' });
     }
 
@@ -505,6 +543,24 @@ router.get('/logs', authenticateToken, async (req, res) => {
     `;
     const params = [tenantId];
     let paramIndex = 2;
+
+    // ✅ FILTRAGE PAR RÔLE : Manager ne voit que son équipe + lui-même
+    if (userRole === 'manager' && !req.user.is_super_admin) {
+      query += ` AND (al.user_id = $${paramIndex} OR al.user_id IN (
+        SELECT tm.user_id FROM team_members tm
+        JOIN teams t ON tm.team_id = t.id
+        WHERE t.manager_id = $${paramIndex}
+      ))`;
+      params.push(userId);
+      paramIndex++;
+    } else if (userRole === 'supervisor' && !req.user.is_super_admin) {
+      // Supervisor ne voit que lui-même et ses subordonnés directs
+      query += ` AND (al.user_id = $${paramIndex} OR al.user_id IN (
+        SELECT id FROM users WHERE supervisor_id = $${paramIndex}
+      ))`;
+      params.push(userId);
+      paramIndex++;
+    }
 
     if (user_id) {
       query += ` AND al.user_id = $${paramIndex}`;
@@ -529,11 +585,26 @@ router.get('/logs', authenticateToken, async (req, res) => {
 
     const { rows } = await q(query, params);
 
-    // Compter le total
-    const { rows: countRows } = await q(
-      `SELECT COUNT(*) as total FROM activity_logs WHERE tenant_id = $1`,
-      [tenantId]
-    );
+    // ✅ Compter le total avec le même filtrage
+    let countQuery = `SELECT COUNT(*) as total FROM activity_logs al WHERE al.tenant_id = $1`;
+    let countParams = [tenantId];
+    let countIdx = 2;
+
+    if (userRole === 'manager' && !req.user.is_super_admin) {
+      countQuery += ` AND (al.user_id = $${countIdx} OR al.user_id IN (
+        SELECT tm.user_id FROM team_members tm
+        JOIN teams t ON tm.team_id = t.id
+        WHERE t.manager_id = $${countIdx}
+      ))`;
+      countParams.push(userId);
+    } else if (userRole === 'supervisor' && !req.user.is_super_admin) {
+      countQuery += ` AND (al.user_id = $${countIdx} OR al.user_id IN (
+        SELECT id FROM users WHERE supervisor_id = $${countIdx}
+      ))`;
+      countParams.push(userId);
+    }
+
+    const { rows: countRows } = await q(countQuery, countParams);
 
     res.json({
       success: true,
@@ -556,12 +627,35 @@ router.get('/user/:id/history', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const userRole = req.user.role;
+    const userId = req.user.id;
     const targetUserId = req.params.id;
     const { days = 7 } = req.query;
 
-    // Seuls admin/manager peuvent voir
-    if (!['admin', 'manager'].includes(userRole) && !req.user.is_super_admin) {
+    // Seuls admin/manager/supervisor peuvent voir
+    if (!['admin', 'manager', 'supervisor'].includes(userRole) && !req.user.is_super_admin) {
       return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    // ✅ Vérifier que le manager/supervisor a accès à cet utilisateur
+    if (userRole === 'manager' && !req.user.is_super_admin && targetUserId !== userId) {
+      const { rows: teamCheck } = await q(`
+        SELECT 1 FROM team_members tm
+        JOIN teams t ON tm.team_id = t.id
+        WHERE t.manager_id = $1 AND tm.user_id = $2
+        LIMIT 1
+      `, [userId, targetUserId]);
+
+      if (teamCheck.length === 0) {
+        return res.status(403).json({ error: 'Cet utilisateur ne fait pas partie de votre équipe' });
+      }
+    } else if (userRole === 'supervisor' && !req.user.is_super_admin && targetUserId !== userId) {
+      const { rows: subCheck } = await q(`
+        SELECT 1 FROM users WHERE id = $1 AND supervisor_id = $2
+      `, [targetUserId, userId]);
+
+      if (subCheck.length === 0) {
+        return res.status(403).json({ error: 'Cet utilisateur n\'est pas sous votre supervision' });
+      }
     }
 
     // Sessions des X derniers jours
