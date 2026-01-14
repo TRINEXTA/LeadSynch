@@ -1,9 +1,9 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error as logError, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { FileCheck, Download, Mail, Eye, Trash2, Search, CheckCircle, Clock, Send, XCircle, Loader2, Sparkles, RefreshCw, Shield, PenTool } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import toast from 'react-hot-toast';
+import { toast } from '../lib/toast'; // ✅ Utilise le wrapper toast unifié
 
 const STATUS_CONFIG = {
   draft: { label: 'Brouillon', icon: Clock, bgClass: 'bg-gray-100', textClass: 'text-gray-700' },
@@ -52,8 +52,8 @@ export default function Contracts() {
 
       const response = await api.get(`/contracts?${params.toString()}`);
       setContracts(response.data.contracts || []);
-    } catch (error) {
-      error('Error loading contracts:', error);
+    } catch (err) {
+      logError('Error loading contracts:', err);
     } finally {
       setLoading(false);
     }
@@ -82,8 +82,8 @@ export default function Contracts() {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }
-    } catch (error) {
-      error('Error downloading PDF:', error);
+    } catch (err) {
+      logError('Error downloading PDF:', err);
       toast.error('Erreur lors du téléchargement');
     } finally {
       setDownloading(null);
@@ -114,8 +114,8 @@ export default function Contracts() {
 
       toast.success('Contrat validé avec succès !');
       loadContracts();
-    } catch (error) {
-      error('Error:', error);
+    } catch (err) {
+      logError('Error validating contract:', err);
       toast.error('Erreur lors de la validation');
     } finally {
       setValidating(null);
@@ -175,8 +175,9 @@ L'équipe Trinexta`;
       await api.put(`/contracts/${contract.id}`, { status: 'sent' });
       loadContracts();
 
-    } catch (error) {
-      error('Error:', error);
+    } catch (err) {
+      logError('Error sending for signature:', err);
+      toast.error('Erreur lors de l\'envoi');
     } finally {
       setSendingEmail(null);
     }
@@ -194,9 +195,9 @@ L'équipe Trinexta`;
                 await api.delete(`/contracts/${contractId}`);
                 toast.success('Contrat supprimé');
                 loadContracts();
-              } catch (error) {
-                error('Error:', error);
-                toast.error(error.response?.data?.error || 'Erreur lors de la suppression');
+              } catch (err) {
+                logError('Error deleting contract:', err);
+                toast.error(err.response?.data?.error || 'Erreur lors de la suppression');
               }
             }}
             className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"

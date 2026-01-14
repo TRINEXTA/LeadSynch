@@ -69,10 +69,10 @@ async function getContractForSigning(req, res, token) {
     return res.status(404).json({ error: 'Contrat non trouvé ou lien expiré' });
   }
 
-  // Check if already signed
+  // ✅ SÉCURITÉ : Masquer les données si déjà signé
   if (contract.status === 'signed') {
     return res.json({
-      contract: formatContractForClient(contract),
+      contract: null, // Données masquées pour éviter fuite d'informations
       already_signed: true,
       signed_at: contract.signed_at,
       message: 'Ce contrat a déjà été signé'
@@ -282,6 +282,7 @@ async function verifyCodeAndSign(req, res, token) {
   const userAgent = req.headers['user-agent'] || 'unknown';
 
   // Sign the contract!
+  // ✅ SÉCURITÉ : Invalider le token de signature (signature_token = NULL)
   await execute(
     `UPDATE contracts
      SET status = 'signed',
@@ -289,7 +290,8 @@ async function verifyCodeAndSign(req, res, token) {
          signer_ip = $2,
          signer_user_agent = $3,
          verification_code = NULL,
-         verification_code_expires_at = NULL
+         verification_code_expires_at = NULL,
+         signature_token = NULL
      WHERE id = $1`,
     [contract.id, clientIp, userAgent]
   );

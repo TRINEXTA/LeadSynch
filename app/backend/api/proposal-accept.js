@@ -59,20 +59,20 @@ async function getProposalForAcceptance(req, res, token) {
     return res.status(404).json({ error: 'Proposition non trouvée ou lien expiré' });
   }
 
-  // Check if already accepted
+  // ✅ SÉCURITÉ : Ne pas renvoyer les données si déjà accepté
   if (proposal.status === 'accepted') {
     return res.json({
-      proposal: formatProposalForClient(proposal),
+      proposal: null, // Données masquées pour éviter fuite d'informations
       already_accepted: true,
       accepted_at: proposal.accepted_at,
       message: 'Cette proposition a déjà été acceptée'
     });
   }
 
-  // Check if expired
+  // ✅ SÉCURITÉ : Ne pas renvoyer les données si expiré
   if (proposal.valid_until && new Date(proposal.valid_until) < new Date()) {
     return res.json({
-      proposal: formatProposalForClient(proposal),
+      proposal: null, // Données masquées pour éviter fuite d'informations
       expired: true,
       message: 'Cette proposition a expiré'
     });
@@ -133,13 +133,15 @@ async function acceptProposal(req, res, token) {
   const userAgent = req.headers['user-agent'] || 'unknown';
 
   // Update proposal status to accepted
+  // ✅ SÉCURITÉ : Invalider le token après acceptation (acceptance_token = NULL)
   await execute(
     `UPDATE proposals
      SET status = 'accepted',
          accepted_at = NOW(),
          acceptor_email = $2,
          acceptor_ip = $3,
-         acceptor_user_agent = $4
+         acceptor_user_agent = $4,
+         acceptance_token = NULL
      WHERE id = $1`,
     [proposal.id, acceptor_email, clientIp, userAgent]
   );
