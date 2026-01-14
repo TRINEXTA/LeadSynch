@@ -617,58 +617,58 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const tenantId = req.user?.tenant_id;
     const campaignId = req.params.id;
-    const updates = req.body;
+
+    // ✅ AJOUT : Validation Zod partielle pour la mise à jour
+    const updateSchema = createCampaignSchema.partial();
+    let updates;
+    try {
+      updates = updateSchema.parse(req.body);
+    } catch (err) {
+      return res.status(400).json({
+        error: 'Données invalides',
+        details: err.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+      });
+    }
 
     log('📝 Mise à jour campagne:', campaignId, 'avec:', updates);
 
-    // Construire la requête dynamiquement pour ne mettre à jour que les champs fournis
+    // Construire la requête dynamiquement basée sur les données validées
     const updateFields = [];
     const values = [];
     let paramIndex = 1;
 
-    if (updates.name !== undefined) {
-      updateFields.push(`name = $${paramIndex++}`);
-      values.push(updates.name);
-    }
-    if (updates.subject !== undefined) {
-      updateFields.push(`subject = $${paramIndex++}`);
-      values.push(updates.subject);
-    }
-    if (updates.description !== undefined || updates.goal_description !== undefined) {
-      updateFields.push(`description = $${paramIndex++}`);
-      values.push(updates.description || updates.goal_description);
-    }
-    if (updates.template_id !== undefined) {
-      updateFields.push(`template_id = $${paramIndex++}`);
-      values.push(updates.template_id || null); // Convertir chaîne vide en null pour UUID
-    }
-    if (updates.send_days !== undefined) {
-      updateFields.push(`send_days = $${paramIndex++}`);
-      values.push(JSON.stringify(updates.send_days));
-    }
-    if (updates.send_time_start !== undefined) {
-      updateFields.push(`send_time_start = $${paramIndex++}`);
-      values.push(updates.send_time_start || null);
-    }
-    if (updates.send_time_end !== undefined) {
-      updateFields.push(`send_time_end = $${paramIndex++}`);
-      values.push(updates.send_time_end || null);
-    }
-    if (updates.start_date !== undefined) {
-      updateFields.push(`start_date = $${paramIndex++}`);
-      values.push(updates.start_date || null); // Convertir chaîne vide en null pour date
-    }
-    if (updates.emails_per_cycle !== undefined) {
-      updateFields.push(`emails_per_cycle = $${paramIndex++}`);
-      values.push(updates.emails_per_cycle);
-    }
-    if (updates.assigned_users !== undefined) {
-      updateFields.push(`assigned_users = $${paramIndex++}`);
-      values.push(JSON.stringify(updates.assigned_users));
-    }
-    if (updates.supervisor_id !== undefined) {
-      updateFields.push(`supervisor_id = $${paramIndex++}`);
-      values.push(updates.supervisor_id || null);
+    // Champs interdits à la modification directe
+    const forbiddenFields = ['id', 'tenant_id', 'created_at', 'created_by'];
+
+    for (const [key, value] of Object.entries(updates)) {
+      // Ignorer les champs interdits
+      if (forbiddenFields.includes(key)) continue;
+
+      // Gestion des champs JSON
+      if (['send_days', 'assigned_users', 'sectors', 'cities', 'attachments'].includes(key)) {
+        updateFields.push(`${key} = $${paramIndex++}`);
+        values.push(JSON.stringify(value));
+      }
+      // Gestion des UUID optionnels (convertir chaîne vide en null)
+      else if (['template_id', 'supervisor_id', 'database_id'].includes(key)) {
+        updateFields.push(`${key} = $${paramIndex++}`);
+        values.push(value || null);
+      }
+      // Gestion des dates (convertir chaîne vide en null)
+      else if (['start_date'].includes(key)) {
+        updateFields.push(`${key} = $${paramIndex++}`);
+        values.push(value || null);
+      }
+      // Gestion du champ description (peut venir de goal_description)
+      else if (key === 'goal_description') {
+        updateFields.push(`description = $${paramIndex++}`);
+        values.push(value);
+      }
+      // Autres champs
+      else {
+        updateFields.push(`${key} = $${paramIndex++}`);
+        values.push(value);
+      }
     }
 
     // Toujours mettre à jour updated_at
