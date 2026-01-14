@@ -1,8 +1,8 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error as logError, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { Mail, User, Reply, Server, Send, Shield, Save, Eye, EyeOff, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Building } from 'lucide-react';
 import api from '../api/axios';
-import toast from 'react-hot-toast';
+import { toast } from '../lib/toast'; // ✅ Utilisation du wrapper unifié
 
 export default function MailingSettings() {
   const [loading, setLoading] = useState(true);
@@ -38,8 +38,9 @@ export default function MailingSettings() {
         setSettings(response.data.settings);
       }
       setLoading(false);
-    } catch (error) {
-      error('Erreur chargement settings:', error);
+    } catch (err) {
+      logError('Erreur chargement settings:', err);
+      toast.error("Impossible de charger les paramètres");
       setLoading(false);
     }
   };
@@ -59,29 +60,29 @@ export default function MailingSettings() {
     }
 
     setSaving(true);
-    try {
-      await api.post('/mailing-settings', settings);
-      // Recharger les settings pour obtenir le statut 'configured'
-      await loadSettings();
-      toast.success('Configuration enregistree ! Vous pouvez maintenant envoyer un email de test.');
-    } catch (error) {
-      error('Erreur save:', error);
-      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de la sauvegarde';
-      toast.error(errorMsg);
-    } finally {
-      setSaving(false);
-    }
+    // ✅ Utilisation de toast.promise pour une meilleure UX
+    toast.promise(
+      api.post('/mailing-settings', settings).then(async () => {
+        await loadSettings();
+      }),
+      {
+        loading: 'Enregistrement de la configuration...',
+        success: 'Configuration enregistrée avec succès !',
+        error: (err) => err.response?.data?.message || err.response?.data?.error || 'Erreur lors de la sauvegarde'
+      }
+    ).finally(() => setSaving(false));
   };
 
   const handleTestEmail = async () => {
-    try {
-      await api.post('/mailing-settings/test', { test_email: settings.from_email });
-      toast.success('Email de test envoye ! Verifiez votre boite de reception.');
-    } catch (error) {
-      error('Erreur test:', error);
-      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'envoi du test';
-      toast.error(errorMsg);
-    }
+    // ✅ Utilisation de toast.promise pour une meilleure UX
+    toast.promise(
+      api.post('/mailing-settings/test', { test_email: settings.from_email }),
+      {
+        loading: 'Envoi de l\'email de test...',
+        success: 'Email de test envoyé ! Vérifiez votre boîte de réception.',
+        error: (err) => err.response?.data?.message || err.response?.data?.error || 'Erreur lors de l\'envoi du test'
+      }
+    );
   };
 
   if (loading) {

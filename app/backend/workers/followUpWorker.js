@@ -81,13 +81,14 @@ const processFollowUpQueue = async () => {
 const checkSurveillanceCampaigns = async () => {
   try {
     // Trouver les campagnes en surveillance depuis plus de 15 jours
+    // ✅ SÉCURITÉ : Utilisation de paramètre au lieu d'interpolation
     const campaignsToClose = await queryAll(`
       SELECT id, name, surveillance_started_at
       FROM campaigns
       WHERE status = 'surveillance'
       AND surveillance_started_at IS NOT NULL
-      AND surveillance_started_at < NOW() - INTERVAL '${SURVEILLANCE_DAYS} days'
-    `);
+      AND surveillance_started_at < NOW() - INTERVAL '1 day' * $1
+    `, [SURVEILLANCE_DAYS]);
 
     if (campaignsToClose.length === 0) {
       return;
@@ -95,17 +96,17 @@ const checkSurveillanceCampaigns = async () => {
 
     log(`🔒 [FOLLOW-UP WORKER] ${campaignsToClose.length} campagne(s) à clôturer après surveillance`);
 
-    for (const campaign of campaignsToClose) {
-      await execute(`
-        UPDATE campaigns
-        SET status = 'closed',
-            closed_at = NOW(),
-            updated_at = NOW()
-        WHERE id = $1
-      `, [campaign.id]);
+    // ✅ OPTIMISATION : Batch update au lieu de boucle (évite N requêtes)
+    const ids = campaignsToClose.map(c => c.id);
+    await execute(`
+      UPDATE campaigns
+      SET status = 'closed',
+          closed_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ANY($1::uuid[])
+    `, [ids]);
 
-      log(`✅ [FOLLOW-UP WORKER] Campagne "${campaign.name}" clôturée automatiquement`);
-    }
+    log(`✅ [FOLLOW-UP WORKER] ${ids.length} campagnes clôturées automatiquement`);
 
   } catch (err) {
     error('❌ [FOLLOW-UP WORKER] Erreur vérification surveillance:', err);
@@ -445,17 +446,17 @@ const populateFollowUpQueue = async (campaign, followUp) => {
     return;
   }
 
-  // Insérer dans la queue de relance
-  const values = eligibleLeads.map(lead =>
-    `('${followUp.id}', '${campaign.id}', '${lead.lead_id}', '${campaign.tenant_id}', '${lead.email}', 'pending', NOW())`
-  ).join(',\n');
+  // ✅ SÉCURITÉ : Insertion de masse sécurisée avec UNNEST (paramètres)
+  // Prépare les tableaux de données (évite l'injection SQL via apostrophes dans emails)
+  const leadIds = eligibleLeads.map(l => l.lead_id);
+  const emails = eligibleLeads.map(l => l.email);
 
   await execute(`
     INSERT INTO follow_up_queue
     (follow_up_id, campaign_id, lead_id, tenant_id, recipient_email, status, created_at)
-    VALUES ${values}
+    SELECT $1, $2, unnest($3::uuid[]), $4, unnest($5::text[]), 'pending', NOW()
     ON CONFLICT (follow_up_id, lead_id) DO NOTHING
-  `);
+  `, [followUp.id, campaign.id, leadIds, campaign.tenant_id, emails]);
 
   // Mettre à jour le total éligible
   await execute(`
@@ -464,7 +465,7 @@ const populateFollowUpQueue = async (campaign, followUp) => {
     WHERE id = $2
   `, [eligibleLeads.length, followUp.id]);
 
-  log(`✅ [FOLLOW-UP] ${eligibleLeads.length} leads ajoutés à la queue`);
+  log(`✅ [FOLLOW-UP] ${eligibleLeads.length} leads ajoutés à la queue (insertion sécurisée)`);
 };
 
 // ==================== SEND FOLLOW-UP EMAILS ====================
