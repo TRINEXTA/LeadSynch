@@ -82,10 +82,11 @@ async function handler(req, res) {
 
     // ✅ SÉCURITÉ : Envoi du token via Cookie HttpOnly
     // Le cookie n'est pas accessible via JavaScript (protection contre XSS)
+    // sameSite: 'none' + secure: true requis pour cross-domain (frontend Vercel / backend Render)
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // HTTPS uniquement en prod
-      sameSite: 'strict', // Protection CSRF
+      secure: true, // HTTPS requis pour sameSite: 'none'
+      sameSite: 'none', // Permet cross-domain (frontend ≠ backend domain)
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 jours
       path: '/'
     });
