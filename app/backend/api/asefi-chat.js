@@ -589,12 +589,56 @@ async function executeAction(action, params, userId, tenantId) {
 
     case AVAILABLE_ACTIONS.CREATE_TASK: {
       const { leadId, title, description, dueDate } = params;
+
+      // Fonction pour créer une date en heure de Paris
+      const createParisDateForTask = (year, month, day, hours = 9, minutes = 0) => {
+        const date = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+        // Paris: UTC+1 (hiver) ou UTC+2 (été) - en janvier c'est UTC+1
+        const month0Based = date.getUTCMonth();
+        const isDST = month0Based >= 3 && month0Based <= 9; // Approximation: avril-octobre
+        const parisOffset = isDST ? 2 : 1;
+        date.setUTCHours(hours - parisOffset, minutes, 0, 0);
+        return date;
+      };
+
+      let scheduledDate;
+      if (dueDate) {
+        // Si c'est une date ISO, la parser et ajuster pour Paris
+        const parsed = new Date(dueDate);
+        if (!isNaN(parsed.getTime())) {
+          // Extraire heure demandée et recréer en heure Paris
+          const hours = parsed.getHours() || parsed.getUTCHours() || 9;
+          const minutes = parsed.getMinutes() || parsed.getUTCMinutes() || 0;
+          scheduledDate = createParisDateForTask(
+            parsed.getFullYear(), parsed.getMonth(), parsed.getDate(),
+            hours, minutes
+          );
+        } else {
+          // Fallback: demain 9h Paris
+          const now = new Date();
+          scheduledDate = createParisDateForTask(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+        }
+      } else {
+        // Par défaut: demain 9h Paris
+        const now = new Date();
+        scheduledDate = createParisDateForTask(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+      }
+
       await execute(
         `INSERT INTO follow_ups (tenant_id, lead_id, user_id, title, notes, scheduled_date, completed, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW())`,
-        [tenantId, leadId, userId, title, description || '', dueDate || new Date(Date.now() + 24*60*60*1000)]
+        [tenantId, leadId, userId, title, description || '', scheduledDate]
       );
-      return { success: true, message: `Tâche créée: ${title}` };
+
+      const dateStr = scheduledDate.toLocaleString('fr-FR', {
+        timeZone: 'Europe/Paris',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      return { success: true, message: `✅ Tâche créée: ${title} - ${dateStr}` };
     }
 
     case AVAILABLE_ACTIONS.ASSIGN_LEAD: {
