@@ -214,42 +214,94 @@ async function searchLeads(tenantId, searchTerm, limit = 20) {
  * Trouve UN lead par son nom (fuzzy search) - retourne le meilleur match
  */
 async function findLeadByName(tenantId, companyName) {
+  log(`🔍 findLeadByName: recherche "${companyName}" pour tenant ${tenantId}`);
+
   try {
-    // Recherche exacte d'abord
+    // 1. Recherche exacte d'abord
     let lead = await queryOne(
       `SELECT * FROM leads WHERE tenant_id = $1 AND LOWER(company_name) = LOWER($2)`,
       [tenantId, companyName]
     );
 
-    if (lead) return lead;
+    if (lead) {
+      log(`✅ Trouvé par recherche exacte: ${lead.company_name}`);
+      return lead;
+    }
 
-    // Sinon recherche fuzzy
-    const { rows } = await query(
-      `SELECT *,
-        SIMILARITY(LOWER(company_name), LOWER($2)) as sim_score
-       FROM leads
+    // 2. Recherche ILIKE (contient)
+    const { rows: iLikeRows } = await query(
+      `SELECT * FROM leads
        WHERE tenant_id = $1
-         AND (company_name ILIKE $2 OR company_name ILIKE $3)
-       ORDER BY sim_score DESC, score DESC
+         AND company_name ILIKE $2
+       ORDER BY score DESC NULLS LAST
        LIMIT 1`,
-      [tenantId, `%${companyName}%`, `${companyName}%`]
+      [tenantId, `%${companyName}%`]
     );
 
-    return rows && rows.length > 0 ? rows[0] : null;
+    if (iLikeRows && iLikeRows.length > 0) {
+      log(`✅ Trouvé par ILIKE: ${iLikeRows[0].company_name}`);
+      return iLikeRows[0];
+    }
+
+    // 3. Recherche par mots-clés (si le nom contient plusieurs mots)
+    const words = companyName.split(/\s+/).filter(w => w.length > 2);
+    if (words.length > 1) {
+      // Construire une requête qui cherche tous les mots
+      const conditions = words.map((_, i) => `company_name ILIKE $${i + 2}`).join(' AND ');
+      const params = [tenantId, ...words.map(w => `%${w}%`)];
+
+      const { rows: multiWordRows } = await query(
+        `SELECT * FROM leads
+         WHERE tenant_id = $1
+           AND (${conditions})
+         ORDER BY score DESC NULLS LAST
+         LIMIT 1`,
+        params
+      );
+
+      if (multiWordRows && multiWordRows.length > 0) {
+        log(`✅ Trouvé par mots-clés (${words.join(', ')}): ${multiWordRows[0].company_name}`);
+        return multiWordRows[0];
+      }
+    }
+
+    // 4. Recherche par le premier mot significatif
+    const firstWord = words.find(w => w.length > 3);
+    if (firstWord) {
+      const { rows: firstWordRows } = await query(
+        `SELECT * FROM leads
+         WHERE tenant_id = $1
+           AND company_name ILIKE $2
+         ORDER BY
+           CASE WHEN company_name ILIKE $3 THEN 0 ELSE 1 END,
+           score DESC NULLS LAST
+         LIMIT 1`,
+        [tenantId, `%${firstWord}%`, `${firstWord}%`]
+      );
+
+      if (firstWordRows && firstWordRows.length > 0) {
+        log(`✅ Trouvé par premier mot (${firstWord}): ${firstWordRows[0].company_name}`);
+        return firstWordRows[0];
+      }
+    }
+
+    log(`❌ Aucun lead trouvé pour "${companyName}"`);
+    return null;
   } catch (e) {
-    // Si SIMILARITY n'existe pas, fallback
+    log('⚠️ Erreur recherche lead par nom:', e.message);
+    // Fallback simple
     try {
       const { rows } = await query(
         `SELECT * FROM leads
          WHERE tenant_id = $1
-           AND (company_name ILIKE $2 OR company_name ILIKE $3)
+           AND company_name ILIKE $2
          ORDER BY score DESC
          LIMIT 1`,
-        [tenantId, `%${companyName}%`, `${companyName}%`]
+        [tenantId, `%${companyName}%`]
       );
       return rows && rows.length > 0 ? rows[0] : null;
     } catch (e2) {
-      log('⚠️ Erreur recherche lead par nom:', e2.message);
+      log('⚠️ Erreur fallback:', e2.message);
       return null;
     }
   }
@@ -259,26 +311,61 @@ async function findLeadByName(tenantId, companyName) {
  * Détecte les noms d'entreprises mentionnés dans un message
  */
 function extractCompanyNames(message) {
-  // Patterns communs pour les noms d'entreprises
-  const patterns = [
-    /(?:lead|entreprise|société|client|prospect|contact)\s+(?:de\s+)?["']?([^"'\n,]+?)["']?(?:\s|$|,)/gi,
-    /(?:à|pour|sur|chez)\s+["']?([A-Z][A-Za-z\s&'-]+(?:SARL|SAS|SA|EURL|Group|Corp|Inc|Ltd)?)/g,
-    /["']([^"']{3,50})["']/g, // Noms entre guillemets
-    /(?:mail|email|appel|rdv|rendez-vous)\s+(?:à|pour|avec)?\s*["']?([A-Z][A-Za-z\s&'-]{2,40})/gi
-  ];
-
   const names = new Set();
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(message)) !== null) {
-      const name = match[1].trim();
-      if (name.length > 2 && name.length < 60 && !/^(le|la|les|un|une|des|ce|cette|mon|ma|mes)$/i.test(name)) {
-        names.add(name);
-      }
+
+  // Pattern 1: "trouve/cherche/ouvre le lead [NOM]" - capture jusqu'à la fin ou ponctuation
+  const directLeadPattern = /(?:trouve|cherche|ouvre|affiche|montre)\s+(?:le\s+)?(?:lead\s+)?["']?([A-Za-z][A-Za-z0-9\s&''\-\.]+?)["']?\s*(?:$|[?!,;:])/gi;
+  let match;
+  while ((match = directLeadPattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 2 && name.length < 80) {
+      names.add(name);
     }
   }
 
-  return Array.from(names);
+  // Pattern 2: "lead [NOM COMPLET]" - capture tout après "lead" jusqu'à la fin
+  const leadPattern = /\blead\s+["']?([A-Za-z][A-Za-z0-9\s&''\-\.]+?)["']?\s*(?:$|[?!,;:])/gi;
+  while ((match = leadPattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 2 && name.length < 80) {
+      names.add(name);
+    }
+  }
+
+  // Pattern 3: Noms entre guillemets
+  const quotedPattern = /["']([^"']{3,60})["']/g;
+  while ((match = quotedPattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 2) {
+      names.add(name);
+    }
+  }
+
+  // Pattern 4: "email/note/tâche pour/à [NOM]"
+  const actionPattern = /(?:mail|email|appel|note|tâche|rdv)\s+(?:à|pour|sur|avec|chez)?\s*["']?([A-Z][A-Za-z0-9\s&''\-\.]{2,50})/gi;
+  while ((match = actionPattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 2 && !/^(le|la|les|un|une|des|ce|cette|mon|ma|mes)$/i.test(name)) {
+      names.add(name);
+    }
+  }
+
+  // Pattern 5: Noms propres avec majuscule (fallback)
+  const properNamePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+(?:\s+(?:Group|SARL|SAS|SA|Corp|Inc|Ltd))?)\b/g;
+  while ((match = properNamePattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 4 && name.length < 60) {
+      names.add(name);
+    }
+  }
+
+  // Filtrer les mots communs
+  const filtered = Array.from(names).filter(name => {
+    const lower = name.toLowerCase();
+    return !['le lead', 'ce lead', 'un lead', 'mon lead', 'la fiche', 'cette fiche'].includes(lower);
+  });
+
+  return filtered;
 }
 
 /**
