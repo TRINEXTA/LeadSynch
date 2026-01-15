@@ -80,6 +80,10 @@ import rgpdController from '../controllers/rgpdController.js';
 import unsubscribeController from '../controllers/unsubscribeController.js';
 import * as emailTrackingController from '../controllers/emailTrackingController.js';
 import * as imageUploadController from '../controllers/imageUploadController.js';
+import leadIntelligenceRoute from '../api/lead-intelligence.js';
+import asefiChatRoute from '../api/asefi-chat.js';
+import sequencesRoute from '../api/sequences.js';
+import whatsappRoute from '../api/whatsapp.js';
 
 /**
  * Setup all routes on the Express app
@@ -250,6 +254,18 @@ export function setupRoutes(app) {
 
   // User reports (for admin reports)
   app.use('/api/user-reports', userReportsRoute);
+
+  // ========== LEAD INTELLIGENCE (AI, Health Labels, Next Best Action, Duplicates) ==========
+  app.use('/api/lead-intelligence', leadIntelligenceRoute);
+
+  // ========== ASEFI CHAT (Contextual AI Assistant) ==========
+  app.use('/api/asefi-chat', asefiChatRoute);
+
+  // ========== SALES SEQUENCES (Automated Multi-Step Campaigns) ==========
+  app.use('/api/sequences', sequencesRoute);
+
+  // ========== WHATSAPP INTEGRATION ==========
+  app.use('/api/whatsapp', whatsappRoute);
 
   log('✅ Routes configurées');
 }

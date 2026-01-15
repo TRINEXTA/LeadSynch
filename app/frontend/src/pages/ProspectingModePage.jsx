@@ -56,9 +56,12 @@ export default function ProspectingModePage() {
     }
   }, [selectedCampaign, selectedFilter]);
 
-  const loadData = async () => {
+  const loadData = async (showLoader = true) => {
     try {
-      setLoading(true);
+      // Ne pas afficher le loader si on est en mode prospection (évite de démonter le composant)
+      if (showLoader && !isProspecting) {
+        setLoading(true);
+      }
       const [leadsRes, campaignsRes] = await Promise.all([
         api.get('/pipeline-leads', { params: { mode: 'prospection' } }),
         api.get('/campaigns/my-campaigns')
@@ -157,8 +160,9 @@ export default function ProspectingModePage() {
     navigate('/pipeline');
   };
 
+  // Rafraîchir les leads sans démonter le composant ProspectionMode
   const handleLeadUpdated = () => {
-    loadData();
+    loadData(false); // false = ne pas afficher le loader
   };
 
   // ✅ Démarrer ou reprendre une session de prospection

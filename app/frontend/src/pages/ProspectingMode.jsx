@@ -375,7 +375,10 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     try {
       if (!currentLead) return;
 
-      await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
+      // Sauvegarder l'ID du lead AVANT les appels API (pour éviter les problèmes de timing)
+      const qualifiedLeadId = currentLead.id;
+
+      await api.post(`/pipeline-leads/${qualifiedLeadId}/qualify`, {
         qualification: qualification.id,
         notes: notes.trim() || '',
         call_duration: leadDuration,
@@ -390,7 +393,7 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
             action: 'log-call',
             session_id: sessionId,
             lead_id: currentLead.lead_id,
-            pipeline_lead_id: currentLead.id,
+            pipeline_lead_id: qualifiedLeadId,
             duration: leadDuration,
             qualification: qualification.id,
             notes: notes.trim() || '',
@@ -401,21 +404,25 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         }
       }
 
-      // Notifier le parent que le lead a été mis à jour
-      if (onLeadUpdated) {
-        onLeadUpdated();
-      }
+      // IMPORTANT: Mettre à jour les stats AVANT de notifier le parent
+      // Cela garantit que les stats sont sauvegardées même si le parent recharge les données
 
       // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
-      addProcessedLead(currentLead.id);
+      addProcessedLead(qualifiedLeadId);
 
-      // Stats
+      // Stats locales
       setProcessed(prev => prev + 1);
       if (qualification.stage === 'qualifie' || qualification.stage === 'tres_qualifie') {
         setQualified(prev => prev + 1);
       }
 
       toast.success(`Lead qualifié : ${qualification.label}`);
+
+      // Notifier le parent que le lead a été mis à jour (APRÈS avoir mis à jour les stats locales)
+      if (onLeadUpdated) {
+        onLeadUpdated();
+      }
+
       moveToNextLead();
     } catch (err) {
       console.error('Erreur qualification:', err);
@@ -482,10 +489,14 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
     try {
       if (!currentLead) return;
 
+      // Sauvegarder les infos du lead AVANT les appels API
+      const qualifiedLeadId = currentLead.id;
+      const qualifiedLeadLeadId = currentLead.lead_id;
+
       // Utiliser les notes du modal si fournies, sinon celles du composant parent
       const finalNotes = rappelData?.notes?.trim() || notes.trim() || '';
 
-      await api.post(`/pipeline-leads/${currentLead.id}/qualify`, {
+      await api.post(`/pipeline-leads/${qualifiedLeadId}/qualify`, {
         qualification: 'a_relancer',
         notes: finalNotes,
         call_duration: leadDuration,
@@ -493,17 +504,14 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         scheduled_date: rappelData?.date ? `${rappelData.date}T${rappelData.time || '10:00'}:00` : null
       });
 
-      // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
-      addProcessedLead(currentLead.id);
-
       // Logger l'appel dans la session
       if (sessionId) {
         try {
           await api.post('/call-sessions', {
             action: 'log-call',
             session_id: sessionId,
-            lead_id: currentLead.lead_id,
-            pipeline_lead_id: currentLead.id,
+            lead_id: qualifiedLeadLeadId,
+            pipeline_lead_id: qualifiedLeadId,
             duration: leadDuration,
             qualification: 'a_relancer',
             notes: finalNotes,
@@ -514,17 +522,19 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         }
       }
 
-      // Notifier le parent
+      // IMPORTANT: Mettre à jour les stats AVANT de notifier le parent
+      addProcessedLead(qualifiedLeadId);
+      setProcessed(prev => prev + 1);
+
+      // Fermer le modal
+      setShowRappelModal(false);
+      setPendingQualification(null);
+
+      // Notifier le parent APRÈS avoir mis à jour les stats
       if (onLeadUpdated) {
         onLeadUpdated();
       }
 
-      // Mettre à jour les stats
-      setProcessed(prev => prev + 1);
-
-      // Fermer le modal et passer au suivant
-      setShowRappelModal(false);
-      setPendingQualification(null);
       moveToNextLead();
     } catch (err) {
       console.error('Erreur qualification rappel:', err);
@@ -533,12 +543,14 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
   };
 
   const handleRDVSuccess = async (rdvData) => {
-    // Ajouter le lead aux leads traités pour la persistance (utilise ref + state)
-    if (currentLead) {
-      addProcessedLead(currentLead.id);
-    }
+    if (!currentLead) return;
 
-    // Mettre à jour les stats
+    // Sauvegarder les infos du lead AVANT les appels API
+    const qualifiedLeadId = currentLead.id;
+    const qualifiedLeadLeadId = currentLead.lead_id;
+
+    // IMPORTANT: Mettre à jour les stats AVANT de notifier le parent
+    addProcessedLead(qualifiedLeadId);
     setProcessed(prev => prev + 1);
     setQualified(prev => prev + 1);
     setRdvCount(prev => prev + 1);
@@ -549,8 +561,8 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
         await api.post('/call-sessions', {
           action: 'log-call',
           session_id: sessionId,
-          lead_id: currentLead?.lead_id,
-          pipeline_lead_id: currentLead?.id,
+          lead_id: qualifiedLeadLeadId,
+          pipeline_lead_id: qualifiedLeadId,
           duration: leadDuration,
           qualification: 'tres_qualifie',
           notes: notes.trim() || '',
@@ -563,14 +575,15 @@ export default function ProspectionMode({ leads = [], campaign, filterType, onEx
       }
     }
 
-    // Notifier le parent
+    // Fermer le modal
+    setShowRDVModal(false);
+    setPendingQualification(null);
+
+    // Notifier le parent APRÈS avoir mis à jour les stats
     if (onLeadUpdated) {
       onLeadUpdated();
     }
 
-    // Fermer le modal et passer au suivant
-    setShowRDVModal(false);
-    setPendingQualification(null);
     moveToNextLead();
   };
 
