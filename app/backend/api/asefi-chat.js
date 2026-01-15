@@ -40,16 +40,11 @@ const AVAILABLE_ACTIONS = {
  * @param {string} tenantId - ID du tenant
  */
 async function getLeadDetails(leadId, tenantId) {
+  // Requête simplifiée - sans les sous-requêtes qui peuvent échouer si tables manquantes
   const lead = await queryOne(
     `SELECT l.*,
       ld.name as database_name,
-      u.first_name || ' ' || u.last_name as assigned_to_name,
-      COALESCE((SELECT COUNT(*) FROM email_events WHERE lead_id = l.id AND event_type = 'open'), 0) as email_opens,
-      COALESCE((SELECT COUNT(*) FROM email_events WHERE lead_id = l.id AND event_type = 'click'), 0) as email_clicks,
-      COALESCE((SELECT COUNT(*) FROM email_queue WHERE lead_id = l.id AND status = 'sent'), 0) as emails_sent,
-      COALESCE((SELECT COUNT(*) FROM call_logs WHERE lead_id = l.id), 0) as total_calls,
-      (SELECT MAX(created_at) FROM email_events WHERE lead_id = l.id) as last_email_interaction,
-      (SELECT MAX(created_at) FROM call_logs WHERE lead_id = l.id) as last_call
+      u.first_name || ' ' || u.last_name as assigned_to_name
      FROM leads l
      LEFT JOIN lead_databases ld ON l.database_id = ld.id
      LEFT JOIN users u ON l.assigned_to = u.id
@@ -59,23 +54,87 @@ async function getLeadDetails(leadId, tenantId) {
 
   if (!lead) return null;
 
+  // Essayer de récupérer les stats d'interaction (optionnel)
+  let emailOpens = 0, emailClicks = 0, emailsSent = 0, totalCalls = 0;
+  let lastEmailInteraction = null, lastCall = null;
+
+  try {
+    // Stats email
+    const emailStats = await queryOne(
+      `SELECT
+        COALESCE(SUM(CASE WHEN event_type = 'open' THEN 1 ELSE 0 END), 0) as opens,
+        COALESCE(SUM(CASE WHEN event_type = 'click' THEN 1 ELSE 0 END), 0) as clicks,
+        MAX(created_at) as last_interaction
+       FROM email_events WHERE lead_id = $1`,
+      [leadId]
+    );
+    if (emailStats) {
+      emailOpens = parseInt(emailStats.opens) || 0;
+      emailClicks = parseInt(emailStats.clicks) || 0;
+      lastEmailInteraction = emailStats.last_interaction;
+    }
+  } catch (e) { /* Table email_events n'existe peut-être pas */ }
+
+  try {
+    // Emails envoyés
+    const sentStats = await queryOne(
+      `SELECT COUNT(*) as count FROM email_queue WHERE lead_id = $1 AND status = 'sent'`,
+      [leadId]
+    );
+    if (sentStats) {
+      emailsSent = parseInt(sentStats.count) || 0;
+    }
+  } catch (e) { /* Table email_queue n'existe peut-être pas */ }
+
+  try {
+    // Stats appels
+    const callStats = await queryOne(
+      `SELECT COUNT(*) as count, MAX(created_at) as last_call FROM call_logs WHERE lead_id = $1`,
+      [leadId]
+    );
+    if (callStats) {
+      totalCalls = parseInt(callStats.count) || 0;
+      lastCall = callStats.last_call;
+    }
+  } catch (e) { /* Table call_logs n'existe peut-être pas */ }
+
   // Calculer le score et le health label
   const interactions = {
-    opens: parseInt(lead.email_opens) || 0,
-    clicks: parseInt(lead.email_clicks) || 0,
-    emails_sent: parseInt(lead.emails_sent) || 0
+    opens: emailOpens,
+    clicks: emailClicks,
+    emails_sent: emailsSent
   };
 
   const callHistory = {
-    total_calls: parseInt(lead.total_calls) || 0
+    total_calls: totalCalls
   };
 
-  const { score, grade, breakdown } = calculateLeadScore(lead, interactions);
-  const healthLabel = calculateHealthLabel(lead, interactions);
-  const nextAction = calculateNextBestAction(lead, interactions, callHistory);
+  // Utiliser le score existant si disponible, sinon calculer
+  let score = lead.score || 0;
+  let grade = lead.score_grade || 'F';
+  let breakdown = {};
+  let healthLabel = lead.health_label || 'new';
+  let nextAction = null;
+
+  try {
+    const result = calculateLeadScore(lead, interactions);
+    score = result.score;
+    grade = result.grade;
+    breakdown = result.breakdown;
+    healthLabel = calculateHealthLabel(lead, interactions);
+    nextAction = calculateNextBestAction(lead, interactions, callHistory);
+  } catch (e) {
+    log('⚠️ Erreur calcul score (utilise valeurs existantes):', e.message);
+  }
 
   return {
     ...lead,
+    email_opens: emailOpens,
+    email_clicks: emailClicks,
+    emails_sent: emailsSent,
+    total_calls: totalCalls,
+    last_email_interaction: lastEmailInteraction,
+    last_call: lastCall,
     score,
     grade,
     healthLabel,
@@ -91,37 +150,48 @@ async function getLeadDetails(leadId, tenantId) {
  * @param {string} tenantId - ID du tenant
  */
 async function getLeadHistory(leadId, tenantId) {
-  // Emails envoyés
-  const { rows: emails } = await query(
-    `SELECT 'email' as type, subject, created_at, status
-     FROM email_queue
-     WHERE lead_id = $1 AND tenant_id = $2
-     ORDER BY created_at DESC
-     LIMIT 10`,
-    [leadId, tenantId]
-  );
+  let emails = [], calls = [], notes = [];
 
-  // Appels
-  const { rows: calls } = await query(
-    `SELECT 'call' as type, outcome, notes, duration_seconds, created_at
-     FROM call_logs
-     WHERE lead_id = $1
-     ORDER BY created_at DESC
-     LIMIT 10`,
-    [leadId]
-  );
+  // Emails envoyés (optionnel)
+  try {
+    const { rows } = await query(
+      `SELECT 'email' as type, subject, created_at, status
+       FROM email_queue
+       WHERE lead_id = $1 AND tenant_id = $2
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [leadId, tenantId]
+    );
+    emails = rows || [];
+  } catch (e) { /* Table email_queue n'existe peut-être pas */ }
 
-  // Notes
-  const { rows: notes } = await query(
-    `SELECT 'note' as type, content, created_at,
-       u.first_name || ' ' || u.last_name as author
-     FROM lead_notes ln
-     LEFT JOIN users u ON ln.created_by = u.id
-     WHERE ln.lead_id = $1
-     ORDER BY ln.created_at DESC
-     LIMIT 10`,
-    [leadId]
-  );
+  // Appels (optionnel)
+  try {
+    const { rows } = await query(
+      `SELECT 'call' as type, outcome, notes, duration_seconds, created_at
+       FROM call_logs
+       WHERE lead_id = $1
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [leadId]
+    );
+    calls = rows || [];
+  } catch (e) { /* Table call_logs n'existe peut-être pas */ }
+
+  // Notes (optionnel)
+  try {
+    const { rows } = await query(
+      `SELECT 'note' as type, content, created_at,
+         u.first_name || ' ' || u.last_name as author
+       FROM lead_notes ln
+       LEFT JOIN users u ON ln.created_by = u.id
+       WHERE ln.lead_id = $1
+       ORDER BY ln.created_at DESC
+       LIMIT 10`,
+      [leadId]
+    );
+    notes = rows || [];
+  } catch (e) { /* Table lead_notes n'existe peut-être pas */ }
 
   // Fusionner et trier par date
   const history = [...emails, ...calls, ...notes]
@@ -354,27 +424,34 @@ router.post('/chat', authMiddleware, async (req, res) => {
     let history = null;
 
     if (leadId) {
-      lead = await getLeadDetails(leadId, tenantId);
-      if (!lead) {
-        return res.status(404).json({ error: 'Lead non trouvé' });
+      try {
+        lead = await getLeadDetails(leadId, tenantId);
+        if (lead) {
+          history = await getLeadHistory(leadId, tenantId);
+        }
+      } catch (leadErr) {
+        log('⚠️ Erreur récupération lead (continue sans contexte):', leadErr.message);
       }
-      history = await getLeadHistory(leadId, tenantId);
     }
 
     // Construire le prompt système
     const systemPrompt = buildSystemPrompt(req.user, lead, history);
 
-    // Récupérer l'historique de conversation si existant
+    // Récupérer l'historique de conversation si existant (optionnel)
     let messages = [];
     if (conversationId) {
-      const { rows } = await query(
-        `SELECT role, content FROM asefi_messages
-         WHERE conversation_id = $1
-         ORDER BY created_at ASC
-         LIMIT 20`,
-        [conversationId]
-      );
-      messages = rows.map(m => ({ role: m.role, content: m.content }));
+      try {
+        const { rows } = await query(
+          `SELECT role, content FROM asefi_messages
+           WHERE conversation_id = $1
+           ORDER BY created_at ASC
+           LIMIT 20`,
+          [conversationId]
+        );
+        messages = rows.map(m => ({ role: m.role, content: m.content }));
+      } catch (historyErr) {
+        log('⚠️ Erreur récupération historique (continue sans):', historyErr.message);
+      }
     }
 
     // Ajouter le nouveau message
@@ -398,40 +475,51 @@ router.post('/chat', authMiddleware, async (req, res) => {
     const executedActions = [];
     if (executeActions && actions.length > 0) {
       for (const action of actions) {
-        const result = await executeAction(action.type, action.params, userId, tenantId);
-        executedActions.push({ ...action, result });
+        try {
+          const result = await executeAction(action.type, action.params, userId, tenantId);
+          executedActions.push({ ...action, result });
+        } catch (actionErr) {
+          log('⚠️ Erreur exécution action:', actionErr.message);
+          executedActions.push({ ...action, result: { success: false, message: actionErr.message } });
+        }
       }
     }
 
-    // Sauvegarder la conversation
+    // Sauvegarder la conversation (optionnel - ne bloque pas si tables manquantes)
     let currentConversationId = conversationId;
-    if (!currentConversationId) {
-      const { rows } = await query(
-        `INSERT INTO asefi_conversations (tenant_id, user_id, lead_id, title, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, NOW(), NOW())
-         RETURNING id`,
-        [tenantId, userId, leadId, message.substring(0, 100)]
+    try {
+      if (!currentConversationId) {
+        const { rows } = await query(
+          `INSERT INTO asefi_conversations (tenant_id, user_id, lead_id, title, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, NOW(), NOW())
+           RETURNING id`,
+          [tenantId, userId, leadId, message.substring(0, 100)]
+        );
+        currentConversationId = rows[0].id;
+      }
+
+      // Sauvegarder les messages
+      await execute(
+        `INSERT INTO asefi_messages (conversation_id, role, content, tokens_used, action_executed, created_at)
+         VALUES ($1, 'user', $2, 0, NULL, NOW())`,
+        [currentConversationId, message]
       );
-      currentConversationId = rows[0].id;
+
+      await execute(
+        `INSERT INTO asefi_messages (conversation_id, role, content, tokens_used, action_executed, created_at)
+         VALUES ($1, 'assistant', $2, $3, $4, NOW())`,
+        [
+          currentConversationId,
+          cleanResponse,
+          response.usage.input_tokens + response.usage.output_tokens,
+          executedActions.length > 0 ? JSON.stringify(executedActions) : null
+        ]
+      );
+    } catch (saveErr) {
+      // Tables de conversation probablement manquantes - continue sans sauvegarder
+      log('⚠️ Impossible de sauvegarder la conversation (tables manquantes?):', saveErr.message);
+      currentConversationId = null;
     }
-
-    // Sauvegarder les messages
-    await execute(
-      `INSERT INTO asefi_messages (conversation_id, role, content, tokens_used, action_executed, created_at)
-       VALUES ($1, 'user', $2, 0, NULL, NOW())`,
-      [currentConversationId, message]
-    );
-
-    await execute(
-      `INSERT INTO asefi_messages (conversation_id, role, content, tokens_used, action_executed, created_at)
-       VALUES ($1, 'assistant', $2, $3, $4, NOW())`,
-      [
-        currentConversationId,
-        cleanResponse,
-        response.usage.input_tokens + response.usage.output_tokens,
-        executedActions.length > 0 ? JSON.stringify(executedActions) : null
-      ]
-    );
 
     res.json({
       success: true,
