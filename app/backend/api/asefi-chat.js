@@ -24,6 +24,7 @@ const anthropic = new Anthropic({
 const AVAILABLE_ACTIONS = {
   UPDATE_STATUS: 'update_status',
   CREATE_TASK: 'create_task',
+  COMPLETE_TASK: 'complete_task',
   SEND_EMAIL: 'send_email',
   ADD_NOTE: 'add_note',
   ASSIGN_LEAD: 'assign_lead',
@@ -33,6 +34,181 @@ const AVAILABLE_ACTIONS = {
   GENERATE_MESSAGE: 'generate_message',
   UPDATE_FIELD: 'update_field'
 };
+
+// ========== FONCTIONS D'ACCÈS AUX DONNÉES UTILISATEUR ==========
+
+/**
+ * Récupère les tâches/follow-ups de l'utilisateur
+ */
+async function getUserTasks(userId, tenantId, filter = 'all') {
+  try {
+    let whereClause = 'WHERE f.tenant_id = $1';
+    const params = [tenantId];
+    let paramIndex = 2;
+
+    // Filtrer par assignation ou création
+    whereClause += ` AND (f.assigned_to = $${paramIndex} OR f.created_by = $${paramIndex})`;
+    params.push(userId);
+    paramIndex++;
+
+    // Filtres additionnels
+    if (filter === 'pending' || filter === 'all') {
+      whereClause += ` AND f.status IN ('pending', 'in_progress')`;
+    } else if (filter === 'today') {
+      whereClause += ` AND f.due_date::date = CURRENT_DATE AND f.status != 'completed'`;
+    } else if (filter === 'overdue') {
+      whereClause += ` AND f.due_date < NOW() AND f.status != 'completed'`;
+    } else if (filter === 'completed') {
+      whereClause += ` AND f.status = 'completed'`;
+    }
+
+    const { rows } = await query(
+      `SELECT f.*,
+        l.company_name as lead_name,
+        l.email as lead_email,
+        l.phone as lead_phone,
+        u.first_name || ' ' || u.last_name as assigned_to_name
+       FROM follow_ups f
+       LEFT JOIN leads l ON f.lead_id = l.id
+       LEFT JOIN users u ON f.assigned_to = u.id
+       ${whereClause}
+       ORDER BY
+         CASE WHEN f.due_date < NOW() THEN 0 ELSE 1 END,
+         f.due_date ASC NULLS LAST,
+         f.priority DESC NULLS LAST
+       LIMIT 50`,
+      params
+    );
+
+    return rows || [];
+  } catch (e) {
+    log('⚠️ Erreur récupération tâches:', e.message);
+    return [];
+  }
+}
+
+/**
+ * Récupère les statistiques du jour pour l'utilisateur
+ */
+async function getUserDailyStats(userId, tenantId) {
+  const stats = {
+    leads_today: 0,
+    leads_total: 0,
+    tasks_pending: 0,
+    tasks_overdue: 0,
+    tasks_completed_today: 0,
+    emails_sent_today: 0,
+    calls_today: 0,
+    hot_leads: 0,
+    warm_leads: 0,
+    cold_leads: 0
+  };
+
+  try {
+    // Leads créés aujourd'hui
+    const leadsToday = await queryOne(
+      `SELECT COUNT(*) as count FROM leads WHERE tenant_id = $1 AND created_at::date = CURRENT_DATE`,
+      [tenantId]
+    );
+    stats.leads_today = parseInt(leadsToday?.count) || 0;
+
+    // Total leads
+    const leadsTotal = await queryOne(
+      `SELECT COUNT(*) as count FROM leads WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    stats.leads_total = parseInt(leadsTotal?.count) || 0;
+
+    // Tâches en attente
+    const tasksPending = await queryOne(
+      `SELECT COUNT(*) as count FROM follow_ups
+       WHERE tenant_id = $1 AND status IN ('pending', 'in_progress')
+       AND (assigned_to = $2 OR created_by = $2)`,
+      [tenantId, userId]
+    );
+    stats.tasks_pending = parseInt(tasksPending?.count) || 0;
+
+    // Tâches en retard
+    const tasksOverdue = await queryOne(
+      `SELECT COUNT(*) as count FROM follow_ups
+       WHERE tenant_id = $1 AND status != 'completed' AND due_date < NOW()
+       AND (assigned_to = $2 OR created_by = $2)`,
+      [tenantId, userId]
+    );
+    stats.tasks_overdue = parseInt(tasksOverdue?.count) || 0;
+
+    // Tâches complétées aujourd'hui
+    const tasksCompleted = await queryOne(
+      `SELECT COUNT(*) as count FROM follow_ups
+       WHERE tenant_id = $1 AND status = 'completed' AND completed_at::date = CURRENT_DATE
+       AND (assigned_to = $2 OR created_by = $2)`,
+      [tenantId, userId]
+    );
+    stats.tasks_completed_today = parseInt(tasksCompleted?.count) || 0;
+
+    // Leads par health label
+    const healthStats = await query(
+      `SELECT health_label, COUNT(*) as count FROM leads
+       WHERE tenant_id = $1 AND status NOT IN ('gagne', 'perdu')
+       GROUP BY health_label`,
+      [tenantId]
+    );
+    for (const row of healthStats.rows || []) {
+      if (row.health_label === 'hot') stats.hot_leads = parseInt(row.count) || 0;
+      if (row.health_label === 'warm') stats.warm_leads = parseInt(row.count) || 0;
+      if (row.health_label === 'cold') stats.cold_leads = parseInt(row.count) || 0;
+    }
+
+  } catch (e) {
+    log('⚠️ Erreur récupération stats:', e.message);
+  }
+
+  return stats;
+}
+
+/**
+ * Récupère les leads chauds (hot) de l'utilisateur
+ */
+async function getHotLeads(tenantId, limit = 10) {
+  try {
+    const { rows } = await query(
+      `SELECT id, company_name, contact_name, email, phone, sector, city,
+              score, health_label, status, next_best_action, created_at
+       FROM leads
+       WHERE tenant_id = $1
+         AND (health_label = 'hot' OR score >= 70)
+         AND status NOT IN ('gagne', 'perdu')
+       ORDER BY score DESC, last_activity_at DESC NULLS LAST
+       LIMIT $2`,
+      [tenantId, limit]
+    );
+    return rows || [];
+  } catch (e) {
+    log('⚠️ Erreur récupération hot leads:', e.message);
+    return [];
+  }
+}
+
+/**
+ * Recherche des leads par critères
+ */
+async function searchLeads(tenantId, searchTerm, limit = 20) {
+  try {
+    const { rows } = await query(
+      `SELECT id, company_name, contact_name, email, phone, sector, city, score, health_label, status
+       FROM leads
+       WHERE tenant_id = $1
+         AND (company_name ILIKE $2 OR contact_name ILIKE $2 OR email ILIKE $2 OR phone ILIKE $2)
+       ORDER BY score DESC
+       LIMIT $3`,
+      [tenantId, `%${searchTerm}%`, limit]
+    );
+    return rows || [];
+  } catch (e) {
+    log('⚠️ Erreur recherche leads:', e.message);
+    return [];
+  }
+}
 
 /**
  * Récupère les informations détaillées d'un lead
@@ -275,6 +451,20 @@ async function executeAction(action, params, userId, tenantId) {
       return { success: true, message: 'Email ajouté à la queue d\'envoi' };
     }
 
+    case AVAILABLE_ACTIONS.COMPLETE_TASK:
+    case 'complete_task': {
+      const { taskId } = params;
+      if (!taskId) {
+        return { success: false, message: 'ID de tâche requis' };
+      }
+      await execute(
+        `UPDATE follow_ups SET status = 'completed', completed_at = NOW()
+         WHERE id = $1 AND tenant_id = $2`,
+        [taskId, tenantId]
+      );
+      return { success: true, message: 'Tâche marquée comme terminée ✅' };
+    }
+
     default:
       return { success: false, message: `Action inconnue: ${action}` };
   }
@@ -283,24 +473,88 @@ async function executeAction(action, params, userId, tenantId) {
 /**
  * Construit le prompt système avec le contexte du lead
  */
-function buildSystemPrompt(user, lead, history) {
-  let context = `Tu es ASEFI, l'assistant IA intelligent de LeadSynch, une plateforme CRM B2B.
+function buildSystemPrompt(user, fullContext) {
+  const { lead, history, tasks, stats, hotLeads } = fullContext;
 
-Tu peux:
-1. Répondre aux questions sur les leads et l'activité commerciale
-2. Générer du contenu personnalisé (emails, messages)
-3. Exécuter des actions (avec la permission de l'utilisateur)
+  let context = `Tu es ASEFI, l'assistant IA ULTRA-INTELLIGENT de LeadSynch. Tu as un accès COMPLET à toutes les données du CRM.
 
-INFORMATIONS UTILISATEUR:
+🧠 TU ES CAPABLE DE:
+1. Voir et analyser TOUTES les tâches de l'utilisateur
+2. Voir et analyser TOUS les leads et leur statut
+3. Voir les statistiques en temps réel
+4. EXÉCUTER des actions concrètes (créer tâches, envoyer emails, compléter tâches, etc.)
+5. Générer du contenu personnalisé (emails, messages WhatsApp)
+
+═══════════════════════════════════════════
+👤 UTILISATEUR CONNECTÉ
+═══════════════════════════════════════════
 - Nom: ${user.first_name} ${user.last_name}
+- Email: ${user.email}
 - Rôle: ${user.role}
-- Tenant ID: ${user.tenant_id}
+- Permissions: FULL ACCESS
+
+═══════════════════════════════════════════
+📊 STATISTIQUES EN TEMPS RÉEL
+═══════════════════════════════════════════
+- Leads total: ${stats?.leads_total || 0}
+- Leads créés aujourd'hui: ${stats?.leads_today || 0}
+- 🔥 Leads chauds (hot): ${stats?.hot_leads || 0}
+- 🟡 Leads tièdes (warm): ${stats?.warm_leads || 0}
+- ❄️ Leads froids (cold): ${stats?.cold_leads || 0}
+- ✅ Tâches complétées aujourd'hui: ${stats?.tasks_completed_today || 0}
+- ⏳ Tâches en attente: ${stats?.tasks_pending || 0}
+- ⚠️ Tâches en retard: ${stats?.tasks_overdue || 0}
 
 `;
 
+  // Ajouter les tâches
+  if (tasks && tasks.length > 0) {
+    context += `═══════════════════════════════════════════
+📋 TÂCHES DE L'UTILISATEUR (${tasks.length})
+═══════════════════════════════════════════
+`;
+    tasks.forEach((task, i) => {
+      const dueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Sans échéance';
+      const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
+      const overdueFlag = isOverdue ? '⚠️ EN RETARD' : '';
+      context += `${i + 1}. [ID:${task.id}] ${task.title || task.description?.substring(0, 50) || 'Tâche sans titre'}
+   - Lead: ${task.lead_name || 'Aucun lead'}
+   - Échéance: ${dueDate} ${overdueFlag}
+   - Statut: ${task.status}
+   - Priorité: ${task.priority || 'normale'}
+`;
+    });
+    context += '\n';
+  } else {
+    context += `═══════════════════════════════════════════
+📋 TÂCHES DE L'UTILISATEUR
+═══════════════════════════════════════════
+✨ Aucune tâche en attente. Bravo !
+
+`;
+  }
+
+  // Ajouter les hot leads
+  if (hotLeads && hotLeads.length > 0) {
+    context += `═══════════════════════════════════════════
+🔥 LEADS CHAUDS À TRAITER EN PRIORITÉ (${hotLeads.length})
+═══════════════════════════════════════════
+`;
+    hotLeads.forEach((l, i) => {
+      context += `${i + 1}. [ID:${l.id}] ${l.company_name} - Score: ${l.score}/100
+   - Contact: ${l.contact_name || 'N/A'} | Email: ${l.email || 'N/A'} | Tel: ${l.phone || 'N/A'}
+   - Secteur: ${l.sector || 'N/A'} | Ville: ${l.city || 'N/A'}
+   - Action suggérée: ${l.next_best_action || 'Appeler'}
+`;
+    });
+    context += '\n';
+  }
+
+  // Ajouter le contexte du lead actuel si présent
   if (lead) {
-    context += `
-CONTEXTE DU LEAD ACTUEL:
+    context += `═══════════════════════════════════════════
+🎯 LEAD ACTUELLEMENT CONSULTÉ
+═══════════════════════════════════════════
 - ID: ${lead.id}
 - Entreprise: ${lead.company_name}
 - Contact: ${lead.contact_name || 'Non renseigné'}
@@ -314,14 +568,11 @@ CONTEXTE DU LEAD ACTUEL:
 - Score: ${lead.score}/100 (Grade ${lead.grade})
 - Health Label: ${lead.healthLabel} - ${lead.healthLabelConfig?.description || ''}
 - Prochaine action suggérée: ${lead.nextAction?.reason || 'Aucune'}
-- Emails envoyés: ${lead.emails_sent}
-- Emails ouverts: ${lead.email_opens}
-- Appels: ${lead.total_calls}
+- Emails envoyés: ${lead.emails_sent || 0}
+- Emails ouverts: ${lead.email_opens || 0}
+- Appels: ${lead.total_calls || 0}
 - Assigné à: ${lead.assigned_to_name || 'Non assigné'}
-- Base de données: ${lead.database_name || 'Aucune'}
 - Créé le: ${lead.created_at}
-- Dernière activité email: ${lead.last_email_interaction || 'Aucune'}
-- Dernier appel: ${lead.last_call || 'Aucun'}
 `;
 
     if (history && history.length > 0) {
@@ -334,36 +585,45 @@ HISTORIQUE RÉCENT (${history.length} événements):
         } else if (h.type === 'call') {
           context += `${i + 1}. [Appel] ${h.outcome} - ${h.notes || 'Pas de notes'} (${new Date(h.created_at).toLocaleDateString('fr-FR')})\n`;
         } else if (h.type === 'note') {
-          context += `${i + 1}. [Note] ${h.content.substring(0, 100)}... par ${h.author} (${new Date(h.created_at).toLocaleDateString('fr-FR')})\n`;
+          context += `${i + 1}. [Note] ${h.content?.substring(0, 100) || ''}... par ${h.author} (${new Date(h.created_at).toLocaleDateString('fr-FR')})\n`;
         }
       });
     }
+    context += '\n';
   }
 
-  context += `
+  context += `═══════════════════════════════════════════
+⚡ ACTIONS QUE TU PEUX EXÉCUTER
+═══════════════════════════════════════════
+Tu peux DIRECTEMENT exécuter ces actions quand l'utilisateur te le demande:
 
-ACTIONS DISPONIBLES:
-Tu peux suggérer ou exécuter les actions suivantes (demande confirmation avant d'exécuter):
-- update_status: Changer le statut du lead
-- add_note: Ajouter une note au lead
-- create_task: Créer une tâche de suivi
-- send_email: Envoyer un email (préparé dans la queue)
-- update_field: Modifier un champ du lead
+1. complete_task - Marquer une tâche comme terminée
+   Exemple: [ACTION:complete_task]{"taskId":"uuid-de-la-tache"}[/ACTION]
 
-FORMAT DE RÉPONSE POUR LES ACTIONS:
-Si l'utilisateur demande d'exécuter une action, réponds avec:
-[ACTION:type_action]{"param1":"valeur1","param2":"valeur2"}[/ACTION]
+2. create_task - Créer une nouvelle tâche
+   Exemple: [ACTION:create_task]{"leadId":"uuid","title":"Rappeler client","dueDate":"2024-01-20"}[/ACTION]
 
-Exemple pour mettre à jour le statut:
-[ACTION:update_status]{"leadId":"xxx","status":"qualifie"}[/ACTION]
+3. update_status - Changer le statut d'un lead
+   Exemple: [ACTION:update_status]{"leadId":"uuid","status":"qualifie"}[/ACTION]
 
-RÈGLES:
-1. Sois concis et professionnel
-2. Utilise les données réelles fournies ci-dessus
-3. Ne jamais inventer d'informations
-4. Toujours demander confirmation avant d'exécuter une action
-5. Suggère des actions pertinentes basées sur le contexte
-6. Génère du contenu personnalisé en utilisant les infos du lead
+4. add_note - Ajouter une note à un lead
+   Exemple: [ACTION:add_note]{"leadId":"uuid","content":"Client intéressé par..."}[/ACTION]
+
+5. send_email - Mettre un email en queue d'envoi
+   Exemple: [ACTION:send_email]{"leadId":"uuid","subject":"Objet","body":"Contenu"}[/ACTION]
+
+═══════════════════════════════════════════
+📝 RÈGLES D'INTERACTION
+═══════════════════════════════════════════
+1. UTILISE LES VRAIES DONNÉES ci-dessus - ne jamais inventer
+2. Quand on te demande "mes tâches", LISTE-LES directement depuis les données
+3. Quand on te demande d'exécuter une action, FAIS-LE avec le format [ACTION:xxx]{...}[/ACTION]
+4. Sois PROACTIF: suggère des actions pertinentes
+5. Pour les emails/messages, GÉNÈRE un contenu personnalisé basé sur les infos du lead
+6. Réponds en français, de manière concise et professionnelle
+7. N'hésite pas à utiliser des emojis pour la clarté
+
+IMPORTANT: Tu as VRAIMENT accès aux données. Utilise-les !
 `;
 
   return context;
@@ -419,6 +679,9 @@ router.post('/chat', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Message requis' });
     }
 
+    // ========== RÉCUPÉRER TOUTES LES DONNÉES UTILISATEUR ==========
+    log('📊 Chargement du contexte complet pour ASEFI...');
+
     // Récupérer les infos du lead si spécifié
     let lead = null;
     let history = null;
@@ -434,8 +697,29 @@ router.post('/chat', authMiddleware, async (req, res) => {
       }
     }
 
-    // Construire le prompt système
-    const systemPrompt = buildSystemPrompt(req.user, lead, history);
+    // Récupérer les tâches de l'utilisateur
+    const tasks = await getUserTasks(userId, tenantId, 'pending');
+    log(`📋 ${tasks.length} tâches chargées`);
+
+    // Récupérer les stats du jour
+    const stats = await getUserDailyStats(userId, tenantId);
+    log(`📊 Stats: ${stats.leads_total} leads, ${stats.tasks_pending} tâches en attente`);
+
+    // Récupérer les leads chauds
+    const hotLeads = await getHotLeads(tenantId, 10);
+    log(`🔥 ${hotLeads.length} leads chauds chargés`);
+
+    // Construire le contexte complet
+    const fullContext = {
+      lead,
+      history,
+      tasks,
+      stats,
+      hotLeads
+    };
+
+    // Construire le prompt système avec TOUTES les données
+    const systemPrompt = buildSystemPrompt(req.user, fullContext);
 
     // Récupérer l'historique de conversation si existant (optionnel)
     let messages = [];
