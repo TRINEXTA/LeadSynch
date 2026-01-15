@@ -845,6 +845,105 @@ async function executeAction(action, params, userId, tenantId) {
       };
     }
 
+    // ========== ACTIONS DE LECTURE ==========
+
+    case 'get_tasks_by_date':
+    case 'get_tasks': {
+      const { date, filter } = params;
+      let dateFilter = '';
+      const queryParams = [tenantId, userId];
+
+      if (date) {
+        // Parser la date
+        let targetDate;
+        const lowerDate = (date || '').toLowerCase();
+
+        if (lowerDate.includes('demain')) {
+          targetDate = new Date();
+          targetDate.setDate(targetDate.getDate() + 1);
+        } else if (lowerDate.includes('aujourd')) {
+          targetDate = new Date();
+        } else {
+          targetDate = new Date(date);
+        }
+
+        if (!isNaN(targetDate.getTime())) {
+          dateFilter = ` AND due_date::date = $3`;
+          queryParams.push(targetDate.toISOString().split('T')[0]);
+        }
+      }
+
+      try {
+        const { rows } = await query(
+          `SELECT f.*, l.company_name as lead_name
+           FROM follow_ups f
+           LEFT JOIN leads l ON f.lead_id = l.id
+           WHERE f.tenant_id = $1
+             AND (f.assigned_to = $2 OR f.created_by = $2)
+             AND f.status != 'completed'
+             ${dateFilter}
+           ORDER BY f.due_date ASC
+           LIMIT 10`,
+          queryParams
+        );
+
+        if (rows.length === 0) {
+          return {
+            success: true,
+            message: `📋 Aucune tâche trouvée${date ? ` pour ${date}` : ''}`,
+            tasks: []
+          };
+        }
+
+        const taskList = rows.map(t => ({
+          id: t.id,
+          title: t.title,
+          lead: t.lead_name,
+          due_date: t.due_date,
+          status: t.status
+        }));
+
+        return {
+          success: true,
+          message: `📋 ${rows.length} tâche(s) trouvée(s)`,
+          tasks: taskList
+        };
+      } catch (e) {
+        return { success: false, message: `Erreur: ${e.message}` };
+      }
+    }
+
+    case 'get_lead_info': {
+      const { companyName, leadId: directLeadId } = params;
+
+      let lead;
+      if (directLeadId) {
+        lead = await queryOne(`SELECT * FROM leads WHERE id = $1 AND tenant_id = $2`, [directLeadId, tenantId]);
+      } else if (companyName) {
+        lead = await findLeadByName(tenantId, companyName);
+      }
+
+      if (!lead) {
+        return { success: false, message: `Lead non trouvé` };
+      }
+
+      return {
+        success: true,
+        message: `📋 Informations du lead`,
+        lead: {
+          id: lead.id,
+          company_name: lead.company_name,
+          contact_name: lead.contact_name,
+          email: lead.email,
+          phone: lead.phone,
+          sector: lead.sector,
+          city: lead.city,
+          score: lead.score,
+          status: lead.status
+        }
+      };
+    }
+
     default:
       return { success: false, message: `Action inconnue: ${action}` };
   }
