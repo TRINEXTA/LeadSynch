@@ -112,4 +112,13 @@ async function startBackgroundWorkers() {
   } catch (err) {
     error('❌ Erreur polling:', err);
   }
+
+  // Sequence worker (automated sales sequences)
+  try {
+    const { startSequenceWorker } = await import('./workers/sequenceWorker.js');
+    log('🔁 [SEQUENCE WORKER] Démarrage');
+    startSequenceWorker();
+  } catch (err) {
+    error('❌ Erreur sequence worker:', err);
+  }
 }
