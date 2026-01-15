@@ -1,8 +1,10 @@
-import { log, error, warn } from "../lib/logger.js";
+import { log, error as logError, warn } from "../lib/logger.js";
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building, Mail, Phone, MapPin, Globe, Calendar, User, Tag, DollarSign, BarChart3, History, FileText, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Building, Mail, Phone, MapPin, Globe, Calendar, User, Tag, DollarSign, BarChart3, History, FileText, MessageSquare, TrendingUp, Sparkles } from 'lucide-react';
 import api from '../api/axios';
+import { HealthLabelBadge, HealthLabelCard, ScoreGauge, NextBestActionBadge, LeadIntelligencePanel } from '../components/ui/HealthLabelBadge';
+import toast from 'react-hot-toast';
 
 export default function LeadDetails() {
   const [searchParams] = useSearchParams();
@@ -25,12 +27,12 @@ export default function LeadDetails() {
   const loadLeadDetails = async () => {
     try {
       const response = await api.get(`/leads/${leadId}`);
-      setLead(response.data.lead);
+      setLead(response.data.lead || response.data);
       setLoading(false);
-    } catch (error) {
-      error('Erreur chargement lead:', error);
+    } catch (err) {
+      logError('Erreur chargement lead:', err);
       // Si 404, le lead n'existe pas/plus
-      if (error.response?.status === 404) {
+      if (err.response?.status === 404) {
         setLead(null);
       }
       setLoading(false);
@@ -41,8 +43,8 @@ export default function LeadDetails() {
     try {
       const response = await api.get(`/pipeline-leads/${leadId}/history`);
       setHistory(response.data.history || []);
-    } catch (error) {
-      error('Erreur chargement historique:', error);
+    } catch (err) {
+      logError('Erreur chargement historique:', err);
     }
   };
 
@@ -50,9 +52,14 @@ export default function LeadDetails() {
     try {
       const response = await api.get(`/follow-ups?lead_id=${leadId}`);
       setTasks(response.data.followups || []);
-    } catch (error) {
-      error('Erreur chargement tâches:', error);
+    } catch (err) {
+      logError('Erreur chargement tâches:', err);
     }
+  };
+
+  // Gérer l'action suggérée par l'IA
+  const handleNextAction = (action) => {
+    toast.success(`Action recommandée: ${action.reason || action}`);
   };
 
   if (loading) {
@@ -109,7 +116,11 @@ export default function LeadDetails() {
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{lead.company_name}</h1>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">{lead.company_name}</h1>
+                {/* Health Label Badge */}
+                <HealthLabelBadge healthLabel={lead.health_label || 'new'} size="md" />
+              </div>
               {lead.contact_name && (
                 <p className="text-xl text-gray-600 flex items-center gap-2">
                   <User className="w-5 h-5" />
@@ -117,12 +128,16 @@ export default function LeadDetails() {
                 </p>
               )}
             </div>
-            {lead.score && (
-              <div className="bg-yellow-100 text-yellow-800 px-6 py-3 rounded-xl">
-                <p className="text-sm font-semibold">Score</p>
-                <p className="text-3xl font-bold">{lead.score}</p>
+            {/* Score avec Gauge */}
+            <div className="text-right">
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 px-6 py-3 rounded-xl border border-purple-200">
+                <p className="text-sm font-semibold text-purple-600 mb-1">Score d'engagement</p>
+                <p className="text-3xl font-bold text-purple-700">{lead.score || 0}<span className="text-lg text-gray-500">/100</span></p>
+                <div className="mt-2 w-32">
+                  <ScoreGauge score={lead.score || 0} size="sm" />
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -238,8 +253,14 @@ export default function LeadDetails() {
           )}
         </div>
 
-        {/* Colonne droite - Historique & Tâches */}
+        {/* Colonne droite - Intelligence, Tâches, Historique */}
         <div className="space-y-6">
+          {/* Intelligence Panel - Health Label + Score + Next Best Action */}
+          <LeadIntelligencePanel
+            lead={lead}
+            onActionClick={handleNextAction}
+          />
+
           {/* Tâches */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
