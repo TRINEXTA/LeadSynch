@@ -23,11 +23,11 @@ export default function DashboardLayout() {
       {/* Notification flottante des rappels */}
       <RappelNotification />
 
-      {/* Bouton flottant ASEFI - visible sur toutes les pages */}
+      {/* Bouton flottant ASEFI - visible sur toutes les pages (à gauche de la cloche) */}
       {!isChatbotOpen && (
         <button
           onClick={() => setIsChatbotOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 flex items-center justify-center group"
+          className="fixed bottom-6 right-24 z-50 w-14 h-14 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 flex items-center justify-center group"
           title="Ouvrir Asefi - Assistant IA"
         >
           <Sparkles className="w-6 h-6 text-white group-hover:animate-pulse" />
