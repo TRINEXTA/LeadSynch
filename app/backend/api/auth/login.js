@@ -80,9 +80,20 @@ async function handler(req, res) {
 
     log('✅ Login successful:', email);
 
-    // Retourner first_name, last_name et is_super_admin
+    // ✅ SÉCURITÉ : Envoi du token via Cookie HttpOnly
+    // Le cookie n'est pas accessible via JavaScript (protection contre XSS)
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // HTTPS uniquement en prod
+      sameSite: 'strict', // Protection CSRF
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 jours
+      path: '/'
+    });
+
     return res.json({
       success: true,
+      // 🔒 Token toujours renvoyé pour rétrocompatibilité (phase de transition)
+      // À terme, supprimer cette ligne une fois le frontend entièrement migré
       token,
       user: {
         id: user.id,

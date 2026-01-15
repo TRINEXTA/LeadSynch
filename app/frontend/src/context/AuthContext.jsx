@@ -1,5 +1,4 @@
-
-﻿import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext(null);
@@ -12,6 +11,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    // ✅ Le cookie sera envoyé automatiquement par le navigateur (withCredentials: true)
     api.get('/auth/me')
       .then(r => mounted && setUser(r.data))
       .catch(() => mounted && setUser(null))
@@ -21,39 +21,29 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, rememberMe = false) => {
     try {
-      const loginResponse = await api.post('/auth/login', { email, password, rememberMe });
+      // ✅ Plus besoin de gérer le stockage du token manuellement
+      // Le backend (login.js) définit maintenant un cookie HttpOnly
+      await api.post('/auth/login', { email, password, rememberMe });
 
-      // Sauvegarder le token
-      if (loginResponse.data.token) {
-        // Si "Se souvenir de moi" est coché, utiliser localStorage (persistant)
-        // Sinon, utiliser sessionStorage (effacé à la fermeture du navigateur)
-        const storage = rememberMe ? localStorage : sessionStorage;
-        storage.setItem('token', loginResponse.data.token);
-
-        // Nettoyer l'autre storage pour éviter les conflits
-        const otherStorage = rememberMe ? sessionStorage : localStorage;
-        otherStorage.removeItem('token');
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
+      // On récupère immédiatement les infos utilisateur pour mettre à jour le contexte
       const me = await api.get('/auth/me');
       setUser(me.data);
 
       return { success: true };
 
     } catch (error) {
+      console.error("Login failed", error);
       return { success: false, error: 'Identifiants incorrects' };
     }
   };
 
   const logout = async () => {
     try {
-      await api.post('/auth/logout');
+      await api.post('/auth/logout'); // Le backend supprime le cookie
     } catch {
-      // Erreur ignorée - on déconnecte quand même
+      // Erreur ignorée
     }
-    // Supprimer le token des deux storages
+    // ✅ Nettoyage sécurité : on s'assure que rien ne traîne (rétrocompatibilité)
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     setUser(null);

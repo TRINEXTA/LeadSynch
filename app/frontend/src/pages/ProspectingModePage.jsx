@@ -41,11 +41,20 @@ export default function ProspectingModePage() {
   const [selectedFilter, setSelectedFilter] = useState(searchParams.get('filter') || 'all');
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
+  // ✅ État pour la session active (reprise intelligente)
+  const [activeSessionData, setActiveSessionData] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // ✅ Recharger quand la campagne ou le filtre change
+  useEffect(() => {
+    if (selectedCampaign !== 'all') {
+      loadRemainingLeads();
+    }
+  }, [selectedCampaign, selectedFilter]);
 
   const loadData = async (showLoader = true) => {
     try {
@@ -72,6 +81,40 @@ export default function ProspectingModePage() {
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ Charger les leads restants pour la session active (mode reprise)
+  const loadRemainingLeads = async () => {
+    if (selectedCampaign === 'all') return;
+
+    try {
+      const response = await api.get('/prospection-sessions/remaining-leads', {
+        params: {
+          campaign_id: selectedCampaign,
+          filter_stage: selectedFilter
+        }
+      });
+
+      if (response.data.success) {
+        // Mettre à jour les leads avec ceux restants à traiter
+        setAllLeads(prevLeads => {
+          // Garder les leads des autres campagnes + les leads restants de cette campagne
+          const otherCampaignLeads = prevLeads.filter(l => l.campaign_id !== selectedCampaign);
+          return [...otherCampaignLeads, ...response.data.leads];
+        });
+
+        // Stocker les données de session si elle existe
+        if (response.data.session) {
+          setActiveSessionData(response.data.session);
+          toast.success(`Session retrouvée : ${response.data.session.calls_made || 0} appels déjà effectués`);
+        } else {
+          setActiveSessionData(null);
+        }
+      }
+    } catch (err) {
+      console.error('Erreur chargement leads restants:', err);
+      // Ne pas afficher d'erreur, fallback sur les leads chargés normalement
     }
   };
 
@@ -122,12 +165,46 @@ export default function ProspectingModePage() {
     loadData(false); // false = ne pas afficher le loader
   };
 
-  const handleStartProspecting = () => {
+  // ✅ Démarrer ou reprendre une session de prospection
+  const handleStartProspecting = async () => {
     if (filteredLeads.length === 0) {
       toast.warning('Aucun lead disponible pour cette sélection');
       return;
     }
-    setIsProspecting(true);
+
+    // Vérifier qu'une campagne est sélectionnée
+    if (selectedCampaign === 'all') {
+      toast.warning('Veuillez sélectionner une campagne spécifique');
+      return;
+    }
+
+    try {
+      // Si pas de session active, en créer une nouvelle
+      if (!activeSessionData) {
+        const startRes = await api.post('/prospection-sessions/start', {
+          campaign_id: selectedCampaign
+        });
+        if (startRes.data.success) {
+          setActiveSessionData(startRes.data.session);
+          toast.success('Nouvelle session de prospection démarrée');
+        }
+      } else {
+        // Session existante - reprendre si en pause
+        if (activeSessionData.status === 'paused') {
+          await api.patch('/prospection-sessions/resume', {
+            session_id: activeSessionData.id
+          });
+          toast.success('Session reprise');
+        }
+      }
+
+      setIsProspecting(true);
+    } catch (err) {
+      console.error('Erreur démarrage session:', err);
+      toast.error('Impossible de démarrer la session');
+      // Démarrer quand même en mode local
+      setIsProspecting(true);
+    }
   };
 
   const selectedCampaignData = campaigns.find(c => c.id === selectedCampaign);
@@ -150,6 +227,7 @@ export default function ProspectingModePage() {
         leads={filteredLeads}
         campaign={selectedCampaignData}
         filterType={selectedFilter}
+        sessionData={activeSessionData} // ✅ Passer les données de session pour la progression
         onExit={handleExit}
         onLeadUpdated={handleLeadUpdated}
       />
@@ -277,11 +355,46 @@ export default function ProspectingModePage() {
           </div>
         </div>
 
+        {/* ✅ Indicateur de session active à reprendre */}
+        {activeSessionData && (
+          <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl shadow-lg p-6 mb-6 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Session en cours</h3>
+                  <p className="text-green-100">
+                    Vous avez une session active à reprendre
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-6 text-center">
+                <div>
+                  <div className="text-3xl font-bold">{activeSessionData.calls_made || 0}</div>
+                  <div className="text-green-100 text-sm">Appels faits</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold">{activeSessionData.meetings_obtained || 0}</div>
+                  <div className="text-green-100 text-sm">RDV obtenus</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold">{filteredLeads.length}</div>
+                  <div className="text-green-100 text-sm">Restants</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Résumé et bouton démarrer */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-xl p-8 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-2xl font-bold mb-2">Prêt à prospecter ?</h3>
+              <h3 className="text-2xl font-bold mb-2">
+                {activeSessionData ? 'Reprendre la prospection ?' : 'Prêt à prospecter ?'}
+              </h3>
               <p className="text-purple-100">
                 {filteredLeads.length === 0 ? (
                   <span className="flex items-center gap-2">
@@ -312,12 +425,17 @@ export default function ProspectingModePage() {
               </button>
               <button
                 onClick={handleStartProspecting}
-                disabled={filteredLeads.length === 0}
+                disabled={filteredLeads.length === 0 || selectedCampaign === 'all'}
                 className="flex items-center gap-2 px-8 py-3 bg-white text-purple-600 rounded-xl font-bold hover:bg-purple-50 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Target className="w-5 h-5" />
-                Commencer ({filteredLeads.length})
+                {activeSessionData ? `Reprendre (${filteredLeads.length} restants)` : `Commencer (${filteredLeads.length})`}
               </button>
+              {selectedCampaign === 'all' && filteredLeads.length > 0 && (
+                <p className="text-purple-200 text-sm mt-2">
+                  ⚠️ Sélectionnez une campagne spécifique pour démarrer
+                </p>
+              )}
             </div>
           </div>
         </div>

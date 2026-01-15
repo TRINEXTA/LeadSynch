@@ -1,41 +1,44 @@
-import axios from "axios";
+import axios from 'axios';
 
-// Détection automatique de l'environnement
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://localhost:3000'
-  : 'https://leadsynch-api.onrender.com';
-
-console.log('✅ API URL:', API_BASE);
+// Déterminer l'URL de base selon l'environnement
+// Priorité: variable d'env > détection auto
+const API_URL = import.meta.env.VITE_API_URL || (
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:3000/api'
+    : 'https://leadsynch-api.onrender.com/api'
+);
 
 const api = axios.create({
-  baseURL: `${API_BASE}/api`,
+  baseURL: API_URL,
   headers: {
-    "Content-Type": "application/json"
-  }
+    'Content-Type': 'application/json',
+  },
+  // ✅ SÉCURITÉ : Indispensable pour que les cookies HttpOnly soient envoyés
+  withCredentials: true,
+  timeout: 30000, // Timeout raisonnable de 30s
 });
 
-// Interceptor pour ajouter le token automatiquement
+// Intercepteur de requête - Rétrocompatibilité avec token localStorage
+// À supprimer une fois la migration cookies complète
 api.interceptors.request.use(
   (config) => {
-    // Chercher le token dans localStorage (remember me) OU sessionStorage (session temporaire)
+    // Fallback: token dans storage si pas encore migré vers cookies
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Interceptor de réponse pour gérer les erreurs
+// Intercepteur de réponse pour gérer les erreurs globales
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.warn('⚠️ Non autorisé (401) - Token invalide ou expiré');
-      // Supprimer le token des deux storages
+      console.warn('⚠️ Session expirée ou non autorisé (401)');
+      // Nettoyage des anciens tokens (rétrocompatibilité)
       localStorage.removeItem('token');
       sessionStorage.removeItem('token');
     }

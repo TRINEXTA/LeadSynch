@@ -1,29 +1,48 @@
 import { log, error, warn } from "../lib/logger.js";
-﻿import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import db from '../config/database.js'; // ✅ CORRECTION ICI
+
+/**
+ * ✅ Helper pour extraire le token (Header OU Cookie)
+ * Priorité : Authorization header > Cookie
+ */
+function extractToken(req) {
+  // 1. Essayer d'abord le header Authorization (Bearer token)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+
+  // 2. Sinon, essayer le cookie 'token'
+  if (req.cookies && req.cookies.token) {
+    return req.cookies.token;
+  }
+
+  return null;
+}
 
 /**
  * Middleware d'authentification HYBRIDE
  * Compatible : Express (router) ET Serverless (wrapper)
+ * ✅ Supporte : Authorization header ET cookies HttpOnly
  */
 export function authMiddleware(handlerOrReq, res, next) {
   // CAS 1: Utilisé comme wrapper serverless - authMiddleware(handler)
   if (typeof handlerOrReq === 'function') {
     const handler = handlerOrReq;
-    
+
     return async (req, res) => {
       // Note: CORS est géré par server.js avec liste blanche d'origines
       if (req.method === 'OPTIONS') {
         return res.status(200).end();
       }
       try {
-        const authHeader = req.headers.authorization;
-        
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        const token = extractToken(req);
+
+        if (!token) {
           log('⚠️ Token manquant');
           return res.status(401).json({ error: 'Non autorisé - Token manquant' });
         }
-        const token = authHeader.substring(7);
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         log('✅ Token valide pour:', decoded.email || decoded.id);
@@ -70,16 +89,15 @@ export function authMiddleware(handlerOrReq, res, next) {
   
   // CAS 2: Utilisé comme middleware Express - router.use(authMiddleware)
   const req = handlerOrReq;
-  
+
   (async () => {
     try {
-      const authHeader = req.headers.authorization;
-      
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      const token = extractToken(req);
+
+      if (!token) {
         log('⚠️ Token manquant');
         return res.status(401).json({ error: 'Non autorisé - Token manquant' });
       }
-      const token = authHeader.substring(7);
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       log('✅ Token valide pour:', decoded.email || decoded.id);
@@ -129,16 +147,16 @@ export function authMiddleware(handlerOrReq, res, next) {
 /**
  * Helper pour vérifier l'authentification dans les endpoints serverless
  * Retourne { authenticated: true, userId, tenantId, role, user } ou { authenticated: false, error }
+ * ✅ Supporte : Authorization header ET cookies HttpOnly
  */
 export async function verifyAuth(req) {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extractToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return { authenticated: false, error: 'Token manquant' };
     }
 
-    const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Charger les infos complètes de l'utilisateur depuis la DB (avec permissions)

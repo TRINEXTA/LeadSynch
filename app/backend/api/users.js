@@ -11,7 +11,7 @@ const createUserSchema = z.object({
   first_name: z.string().min(1, 'Prénom requis'),
   last_name: z.string().min(1, 'Nom requis'),
   role: z.enum(['admin', 'manager', 'supervisor', 'user', 'commercial']).default('user'),
-  phone: z.string().optional(),
+  phone: z.string().optional().nullable(),
   team_id: z.string().optional().nullable(),
   permissions: z.record(z.boolean()).optional(), // Permissions pour les managers
   // Nouveaux champs hiérarchie et commissions
@@ -20,6 +20,14 @@ const createUserSchema = z.object({
   team_commission_rate: z.number().min(0).max(100).optional().default(0),
   commission_type: z.enum(['percentage', 'fixed', 'mixed']).optional().default('percentage'),
   base_salary: z.number().optional().nullable()
+});
+
+// ✅ Schéma pour la mise à jour (tous les champs optionnels sauf ceux validés côté logique)
+const updateUserSchema = createUserSchema.partial().omit({ email: true });
+
+// ✅ Schéma pour la suppression (body optionnel avec reassign_to)
+const deleteUserSchema = z.object({
+  reassign_to: z.string().uuid('ID de réassignation invalide').optional().nullable()
 });
 
 // Permissions par défaut pour un manager (toutes désactivées)
@@ -268,10 +276,21 @@ async function handler(req, res) {
         }
       }
 
+      // ✅ VALIDATION ZOD pour les données de mise à jour
+      let validatedData;
+      try {
+        validatedData = updateUserSchema.parse(req.body);
+      } catch (zodError) {
+        return res.status(400).json({
+          error: 'Données invalides',
+          details: zodError.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+        });
+      }
+
       const {
         first_name, last_name, role, phone, team_id, permissions,
         hierarchical_level, commission_rate, team_commission_rate, commission_type, base_salary
-      } = req.body;
+      } = validatedData;
 
       if (!first_name || !last_name || !role) {
         return res.status(400).json({
@@ -292,14 +311,6 @@ async function handler(req, res) {
         return res.status(403).json({
           error: 'Accès refusé',
           message: 'Seuls les administrateurs peuvent modifier les permissions'
-        });
-      }
-
-      // Vérifier que le rôle est valide
-      const validRoles = ['admin', 'manager', 'supervisor', 'user', 'commercial'];
-      if (!validRoles.includes(role)) {
-        return res.status(400).json({
-          error: 'Rôle invalide'
         });
       }
 
@@ -481,7 +492,18 @@ async function handler(req, res) {
       // req.url contient le chemin APRÈS /api/users, donc /{userId}
       const urlParts = req.url.split('/').filter(p => p);
       const userId = urlParts[0];
-      const { reassign_to } = req.body; // ID du commercial qui récupère les leads, ou null pour admin
+
+      // ✅ VALIDATION ZOD pour les données de suppression
+      let validatedBody = {};
+      try {
+        validatedBody = deleteUserSchema.parse(req.body || {});
+      } catch (zodError) {
+        return res.status(400).json({
+          error: 'Données invalides',
+          details: zodError.errors?.map(e => `${e.path.join('.')}: ${e.message}`)
+        });
+      }
+      const { reassign_to } = validatedBody;
 
       log(`🗑️ DELETE user: userId=${userId}`);
 
