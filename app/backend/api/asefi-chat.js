@@ -1012,10 +1012,15 @@ Exemple de réponse CORRECTE quand on te demande de trouver "Company XYZ":
 - 🌡️ Statut: qualifié
 - 📊 Score: 75/100"
 
-⚠️ RÈGLE CONTEXTE DE CONVERSATION:
-Quand l'utilisateur dit "ouvre le lead" ou "ce lead" ou "lui", regarde la section
-"LEAD EN CONTEXTE DE CONVERSATION" ci-dessous - c'est le dernier lead dont on parlait.
-NE DEMANDE PAS quel lead si un lead est déjà en contexte !
+⚠️ RÈGLE CONTEXTE DE CONVERSATION - TRÈS IMPORTANT:
+Si un lead apparaît dans "LEADS TROUVÉS" ou "LEAD EN CONTEXTE DE CONVERSATION",
+UTILISE-LE AUTOMATIQUEMENT pour toute action demandée (créer tâche, envoyer email, etc.)
+NE DEMANDE JAMAIS "pour quel lead ?" si un lead est déjà en contexte !
+
+Exemple:
+- Utilisateur trouve "Company ABC"
+- Puis dit "créer une tâche rappel demain"
+→ Tu crées la tâche pour Company ABC SANS demander quel lead !
 
 1. ✅ EXÉCUTE les actions IMMÉDIATEMENT quand demandé
 2. ✅ Utilise les actions "by_name" pour agir sur un lead par son nom
@@ -1175,12 +1180,21 @@ router.post('/chat', authMiddleware, async (req, res) => {
     }
 
     // ========== GESTION DU CONTEXTE DE CONVERSATION ==========
-    // Si l'utilisateur utilise des références contextuelles ("ce lead", "ouvre le", "lui")
-    // et qu'on a un lead en contexte de conversation, l'utiliser
-    const contextualReferences = /\b(ce lead|le lead|ouvre[- ]?le|celui[- ]?ci|lui|cette entreprise|ce prospect|ouvrir le lead)\b/i;
-    if (contextualReferences.test(message) && conversationContextLead && mentionedLeads.length === 0) {
-      mentionedLeads.push(conversationContextLead);
-      log(`🔄 Utilisation du lead en contexte de conversation: ${conversationContextLead.company_name}`);
+    // RÈGLE IMPORTANTE: Si on a un lead en contexte de conversation et que l'utilisateur
+    // demande une action SANS spécifier de lead, on utilise automatiquement le lead en contexte
+
+    // Mots-clés d'action qui impliquent un lead
+    const actionKeywords = /\b(créer|creer|envoyer|envoie|ajouter|ajoute|noter|note|tâche|tache|rappel|email|mail|appeler|appel|relance|statut|ouvre|ouvrir|affiche|montre)\b/i;
+
+    // Références contextuelles explicites
+    const contextualReferences = /\b(ce lead|le lead|ouvre[- ]?le|celui[- ]?ci|lui|cette entreprise|ce prospect|ouvrir le lead|pour lui|sur lui)\b/i;
+
+    // Si on a un lead en contexte ET (action demandée OU référence contextuelle) ET pas de lead spécifié
+    if (conversationContextLead && mentionedLeads.length === 0) {
+      if (contextualReferences.test(message) || actionKeywords.test(message)) {
+        mentionedLeads.push(conversationContextLead);
+        log(`🔄 Utilisation automatique du lead en contexte: ${conversationContextLead.company_name}`);
+      }
     }
 
     // Construire le contexte complet avec TOUT ce qu'on a trouvé
