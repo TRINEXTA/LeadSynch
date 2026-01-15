@@ -715,15 +715,65 @@ async function executeAction(action, params, userId, tenantId) {
         return { success: false, message: `Lead "${companyName}" non trouvé` };
       }
 
+      // Parser la date (supporte ISO, "demain", "dans X jours", etc.)
+      let parsedDate = null;
+      if (dueDate) {
+        // Essayer de parser comme date ISO
+        const isoDate = new Date(dueDate);
+        if (!isNaN(isoDate.getTime())) {
+          parsedDate = isoDate;
+        } else {
+          // Parser les expressions françaises
+          const now = new Date();
+          const lowerDate = dueDate.toLowerCase();
+
+          if (lowerDate.includes('demain')) {
+            parsedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          } else if (lowerDate.includes('après-demain') || lowerDate.includes('apres-demain')) {
+            parsedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+          } else if (lowerDate.includes('dans')) {
+            const match = lowerDate.match(/dans\s+(\d+)\s*(jour|semaine|heure)/i);
+            if (match) {
+              const num = parseInt(match[1]);
+              if (match[2].includes('jour')) {
+                parsedDate = new Date(now.getTime() + num * 24 * 60 * 60 * 1000);
+              } else if (match[2].includes('semaine')) {
+                parsedDate = new Date(now.getTime() + num * 7 * 24 * 60 * 60 * 1000);
+              } else if (match[2].includes('heure')) {
+                parsedDate = new Date(now.getTime() + num * 60 * 60 * 1000);
+              }
+            }
+          }
+
+          // Extraire l'heure si présente (ex: "9h", "14h30", "9:00")
+          if (parsedDate) {
+            const timeMatch = dueDate.match(/(\d{1,2})[h:](\d{2})?/i);
+            if (timeMatch) {
+              parsedDate.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2] || '0'), 0, 0);
+            } else {
+              parsedDate.setHours(9, 0, 0, 0); // Par défaut 9h
+            }
+          }
+        }
+      }
+
+      // Par défaut: demain 9h
+      if (!parsedDate) {
+        parsedDate = new Date();
+        parsedDate.setDate(parsedDate.getDate() + 1);
+        parsedDate.setHours(9, 0, 0, 0);
+      }
+
       await execute(
-        `INSERT INTO follow_ups (tenant_id, lead_id, title, description, due_date, status, created_by, created_at)
-         VALUES ($1, $2, $3, $4, $5, 'pending', $6, NOW())`,
-        [tenantId, lead.id, title, description || '', dueDate || new Date(Date.now() + 24*60*60*1000), userId]
+        `INSERT INTO follow_ups (tenant_id, lead_id, title, description, due_date, status, assigned_to, created_by, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'pending', $6, $6, NOW())`,
+        [tenantId, lead.id, title, description || '', parsedDate, userId]
       );
 
+      const dateStr = parsedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
       return {
         success: true,
-        message: `✅ Tâche "${title}" créée pour ${lead.company_name}`,
+        message: `✅ Tâche "${title}" créée pour ${lead.company_name} - ${dateStr}`,
         leadId: lead.id,
         leadName: lead.company_name
       };
@@ -806,232 +856,103 @@ async function executeAction(action, params, userId, tenantId) {
 function buildSystemPrompt(user, fullContext) {
   const { lead, history, tasks, stats, hotLeads, mentionedLeads, conversationContextLead } = fullContext;
 
-  let context = `Tu es ASEFI, un AGENT IA AUTONOME et INTELLIGENT de LeadSynch.
-Tu as un accès TOTAL à la base de données CRM et tu peux EXÉCUTER des actions IMMÉDIATEMENT.
+  // ========== RÈGLES CRITIQUES EN PREMIER (avant toute donnée) ==========
+  let context = `🚨🚨🚨 RÈGLES OBLIGATOIRES - LIS CECI EN PREMIER 🚨🚨🚨
 
-🤖 TU ES UN VRAI AGENT AUTONOME:
-1. Tu CHERCHES automatiquement les leads mentionnés dans les messages
-2. Tu EXÉCUTES les actions demandées SANS confirmation (l'utilisateur te fait confiance)
-3. Tu as accès à TOUTES les données: tâches, leads, stats, historique
-4. Tu GÉNÈRES des emails/messages personnalisés et tu les ENVOIES
-5. Tu NAVIGUES l'utilisateur vers les bonnes pages
+Tu es ASEFI, un agent IA AUTONOME. Tu DOIS suivre ces règles SANS EXCEPTION:
 
-⚠️ RÈGLE CRITIQUE: Quand l'utilisateur te demande quelque chose, TU LE FAIS directement.
-Ne dis JAMAIS "je ne peux pas accéder" ou "je n'ai pas les informations" - TU AS TOUT !
+1. SI UN LEAD APPARAÎT DANS "LEAD EN CONTEXTE" OU "LEADS TROUVÉS" CI-DESSOUS:
+   → UTILISE-LE pour TOUTE action demandée (tâche, email, note, etc.)
+   → NE DEMANDE JAMAIS "pour quel lead ?" ou "quelle entreprise ?"
+
+2. EXÉCUTE les actions IMMÉDIATEMENT avec le format:
+   [ACTION:nom_action]{"param":"valeur"}[/ACTION]
+
+3. Pour les DATES, utilise TOUJOURS le format ISO: "2025-01-20T09:00:00"
+   - "demain 9h" → calcule la date et écris "2025-01-21T09:00:00"
+   - "dans 2 jours" → calcule et écris la date ISO
+
+4. AFFICHE toutes les données RÉELLES des leads - JAMAIS de "[En cours...]"
+
+5. NE DIS JAMAIS: "je ne peux pas", "pour quel lead ?", "précisez"
 
 ═══════════════════════════════════════════
-👤 UTILISATEUR CONNECTÉ
+👤 UTILISATEUR: ${user.first_name} ${user.last_name} (${user.role})
 ═══════════════════════════════════════════
-- Nom: ${user.first_name} ${user.last_name}
-- Email: ${user.email}
-- Rôle: ${user.role}
-- Permissions: FULL ACCESS
-
-═══════════════════════════════════════════
-📊 STATISTIQUES EN TEMPS RÉEL
-═══════════════════════════════════════════
-- Leads total: ${stats?.leads_total || 0}
-- Leads créés aujourd'hui: ${stats?.leads_today || 0}
-- 🔥 Leads chauds (hot): ${stats?.hot_leads || 0}
-- 🟡 Leads tièdes (warm): ${stats?.warm_leads || 0}
-- ❄️ Leads froids (cold): ${stats?.cold_leads || 0}
-- ✅ Tâches complétées aujourd'hui: ${stats?.tasks_completed_today || 0}
-- ⏳ Tâches en attente: ${stats?.tasks_pending || 0}
-- ⚠️ Tâches en retard: ${stats?.tasks_overdue || 0}
 
 `;
 
-  // Ajouter les tâches
-  if (tasks && tasks.length > 0) {
-    context += `═══════════════════════════════════════════
-📋 TÂCHES DE L'UTILISATEUR (${tasks.length})
-═══════════════════════════════════════════
-`;
-    tasks.forEach((task, i) => {
-      const dueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Sans échéance';
-      const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
-      const overdueFlag = isOverdue ? '⚠️ EN RETARD' : '';
-      context += `${i + 1}. [ID:${task.id}] ${task.title || task.description?.substring(0, 50) || 'Tâche sans titre'}
-   - Lead: ${task.lead_name || 'Aucun lead'}
-   - Échéance: ${dueDate} ${overdueFlag}
-   - Statut: ${task.status}
-   - Priorité: ${task.priority || 'normale'}
-`;
-    });
-    context += '\n';
-  } else {
-    context += `═══════════════════════════════════════════
-📋 TÂCHES DE L'UTILISATEUR
-═══════════════════════════════════════════
-✨ Aucune tâche en attente. Bravo !
-
-`;
-  }
-
-  // Ajouter les hot leads
-  if (hotLeads && hotLeads.length > 0) {
-    context += `═══════════════════════════════════════════
-🔥 LEADS CHAUDS À TRAITER EN PRIORITÉ (${hotLeads.length})
-═══════════════════════════════════════════
-`;
-    hotLeads.forEach((l, i) => {
-      context += `${i + 1}. [ID:${l.id}] ${l.company_name} - Score: ${l.score}/100
-   - Contact: ${l.contact_name || 'N/A'} | Email: ${l.email || 'N/A'} | Tel: ${l.phone || 'N/A'}
-   - Secteur: ${l.sector || 'N/A'} | Ville: ${l.city || 'N/A'}
-   - Action suggérée: ${l.next_best_action || 'Appeler'}
-`;
-    });
-    context += '\n';
-  }
-
-  // Ajouter le contexte du lead actuel si présent
-  if (lead) {
-    context += `═══════════════════════════════════════════
-🎯 LEAD ACTUELLEMENT CONSULTÉ
-═══════════════════════════════════════════
-- ID: ${lead.id}
-- Entreprise: ${lead.company_name}
-- Contact: ${lead.contact_name || 'Non renseigné'}
-- Email: ${lead.email || 'Non renseigné'}
-- Téléphone: ${lead.phone || 'Non renseigné'}
-- Secteur: ${lead.sector || 'Non renseigné'}
-- Ville: ${lead.city || 'Non renseignée'}
-- Site web: ${lead.website || 'Non renseigné'}
-- SIRET: ${lead.siret || 'Non renseigné'}
-- Statut: ${lead.status}
-- Score: ${lead.score}/100 (Grade ${lead.grade})
-- Health Label: ${lead.healthLabel} - ${lead.healthLabelConfig?.description || ''}
-- Prochaine action suggérée: ${lead.nextAction?.reason || 'Aucune'}
-- Emails envoyés: ${lead.emails_sent || 0}
-- Emails ouverts: ${lead.email_opens || 0}
-- Appels: ${lead.total_calls || 0}
-- Assigné à: ${lead.assigned_to_name || 'Non assigné'}
-- Créé le: ${lead.created_at}
-`;
-
-    if (history && history.length > 0) {
-      context += `
-HISTORIQUE RÉCENT (${history.length} événements):
-`;
-      history.forEach((h, i) => {
-        if (h.type === 'email') {
-          context += `${i + 1}. [Email] ${h.subject} - ${h.status} (${new Date(h.created_at).toLocaleDateString('fr-FR')})\n`;
-        } else if (h.type === 'call') {
-          context += `${i + 1}. [Appel] ${h.outcome} - ${h.notes || 'Pas de notes'} (${new Date(h.created_at).toLocaleDateString('fr-FR')})\n`;
-        } else if (h.type === 'note') {
-          context += `${i + 1}. [Note] ${h.content?.substring(0, 100) || ''}... par ${h.author} (${new Date(h.created_at).toLocaleDateString('fr-FR')})\n`;
-        }
-      });
-    }
-    context += '\n';
-  }
-
-  // ========== LEAD EN CONTEXTE DE CONVERSATION ==========
-  // C'est le dernier lead dont on a parlé dans cette conversation
+  // ========== LEAD EN CONTEXTE (prioritaire) ==========
   if (conversationContextLead) {
-    context += `═══════════════════════════════════════════
-📌 LEAD EN CONTEXTE DE CONVERSATION (dernier lead discuté)
-═══════════════════════════════════════════
-C'est le lead dont on parlait dans cette conversation. Si l'utilisateur dit
-"ce lead", "ouvre le", "lui", "cette entreprise", c'est CE lead qu'il veut:
-
-🎯 ${conversationContextLead.company_name}
-   - ID: ${conversationContextLead.id}
-   - Contact: ${conversationContextLead.contact_name || 'N/A'}
-   - Email: ${conversationContextLead.email || 'N/A'}
-   - Téléphone: ${conversationContextLead.phone || 'N/A'}
-   - Secteur: ${conversationContextLead.sector || 'N/A'}
-   - Ville: ${conversationContextLead.city || 'N/A'}
-   - Score: ${conversationContextLead.score || 0}/100
-   - Statut: ${conversationContextLead.status || 'nouveau'}
+    context += `🎯🎯🎯 LEAD EN CONTEXTE (UTILISE CELUI-CI POUR LES ACTIONS) 🎯🎯🎯
+Nom: ${conversationContextLead.company_name}
+ID: ${conversationContextLead.id}
+Email: ${conversationContextLead.email || 'N/A'}
+Téléphone: ${conversationContextLead.phone || 'N/A'}
+Secteur: ${conversationContextLead.sector || 'N/A'}
+Ville: ${conversationContextLead.city || 'N/A'}
+Score: ${conversationContextLead.score || 0}/100
+Statut: ${conversationContextLead.status || 'nouveau'}
 
 `;
   }
 
-  // ========== LEADS MENTIONNÉS DANS LE MESSAGE ==========
+  // ========== LEADS MENTIONNÉS ==========
   if (mentionedLeads && mentionedLeads.length > 0) {
-    context += `═══════════════════════════════════════════
-🔍 LEADS TROUVÉS DANS TA DEMANDE
-═══════════════════════════════════════════
-J'ai trouvé ces leads correspondant à ta demande:
+    context += `🔍 LEADS TROUVÉS (${mentionedLeads.length}):
 `;
     mentionedLeads.forEach((ml, i) => {
-      context += `
-${i + 1}. ${ml.company_name}
-   - ID: ${ml.id}
-   - Contact: ${ml.contact_name || 'N/A'}
-   - Email: ${ml.email || 'N/A'}
-   - Téléphone: ${ml.phone || 'N/A'}
-   - Secteur: ${ml.sector || 'N/A'}
-   - Ville: ${ml.city || 'N/A'}
-   - Score: ${ml.score || 0}/100
-   - Statut: ${ml.status || 'nouveau'}
+      context += `${i + 1}. ${ml.company_name} | ID: ${ml.id} | Email: ${ml.email || 'N/A'} | Tel: ${ml.phone || 'N/A'} | Score: ${ml.score || 0}/100
 `;
     });
     context += '\n';
   }
 
-  context += `═══════════════════════════════════════════
-⚡ ACTIONS DISPONIBLES (EXÉCUTION IMMÉDIATE)
-═══════════════════════════════════════════
+  // ========== STATS (condensées) ==========
+  context += `📊 STATS: ${stats?.leads_total || 0} leads | ${stats?.hot_leads || 0} chauds | ${stats?.tasks_pending || 0} tâches en attente
+`;
 
-📧 ENVOYER UN EMAIL PAR NOM D'ENTREPRISE:
-[ACTION:send_email_by_name]{"companyName":"Nom Entreprise","subject":"Objet","body":"Contenu de l'email..."}[/ACTION]
+  // ========== TÂCHES (max 5) ==========
+  if (tasks && tasks.length > 0) {
+    context += `📋 TÂCHES (${Math.min(tasks.length, 5)} sur ${tasks.length}):
+`;
+    tasks.slice(0, 5).forEach((task, i) => {
+      const dueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Sans date';
+      context += `${i + 1}. [${task.id}] ${task.title || 'Sans titre'} - ${task.lead_name || 'Pas de lead'} - ${dueDate}
+`;
+    });
+    context += '\n';
+  }
 
-📝 AJOUTER UNE NOTE PAR NOM:
-[ACTION:add_note_by_name]{"companyName":"Nom Entreprise","content":"Contenu de la note"}[/ACTION]
+  // ========== HOT LEADS (max 3) ==========
+  if (hotLeads && hotLeads.length > 0) {
+    context += `🔥 TOP 3 LEADS CHAUDS:
+`;
+    hotLeads.slice(0, 3).forEach((l, i) => {
+      context += `${i + 1}. ${l.company_name} (${l.score}/100) - ${l.email || 'N/A'}
+`;
+    });
+    context += '\n';
+  }
 
-✅ CRÉER UNE TÂCHE PAR NOM:
-[ACTION:create_task_by_name]{"companyName":"Nom Entreprise","title":"Titre tâche","dueDate":"2024-01-20"}[/ACTION]
+  // ========== LEAD CONSULTÉ (si sur une page lead) ==========
+  if (lead) {
+    context += `📍 LEAD ACTUELLEMENT CONSULTÉ:
+${lead.company_name} | ${lead.email || 'N/A'} | ${lead.phone || 'N/A'} | Score: ${lead.score}/100 | ${lead.status}
+`;
+  }
 
-🔄 CHANGER LE STATUT PAR NOM:
-[ACTION:update_status_by_name]{"companyName":"Nom Entreprise","status":"qualifie"}[/ACTION]
+  // ========== ACTIONS DISPONIBLES ==========
+  context += `
+⚡ ACTIONS (utilise le lead en contexte si disponible):
+- [ACTION:create_task_by_name]{"companyName":"NOM","title":"TITRE","dueDate":"2025-01-20T09:00:00"}[/ACTION]
+- [ACTION:send_email_by_name]{"companyName":"NOM","subject":"OBJET","body":"CONTENU"}[/ACTION]
+- [ACTION:add_note_by_name]{"companyName":"NOM","content":"NOTE"}[/ACTION]
+- [ACTION:update_status_by_name]{"companyName":"NOM","status":"qualifie"}[/ACTION]
+- [ACTION:navigate_to_lead]{"companyName":"NOM"}[/ACTION]
+- [ACTION:complete_task]{"taskId":"UUID"}[/ACTION]
 
-🔗 NAVIGUER VERS UN LEAD:
-[ACTION:navigate_to_lead]{"companyName":"Nom Entreprise"}[/ACTION]
-
-✔️ TERMINER UNE TÂCHE:
-[ACTION:complete_task]{"taskId":"uuid-de-la-tache"}[/ACTION]
-
-═══════════════════════════════════════════
-📝 RÈGLES D'AGENT AUTONOME - TRÈS IMPORTANT !
-═══════════════════════════════════════════
-
-⚠️ RÈGLE CRITIQUE - AFFICHAGE DES DONNÉES:
-Quand tu trouves un lead, AFFICHE IMMÉDIATEMENT TOUTES SES DONNÉES RÉELLES.
-JAMAIS de placeholder comme "[En cours de récupération]" ou "[Recherche en cours...]"
-Tu as DÉJÀ toutes les données dans "LEADS TROUVÉS" ci-dessus - UTILISE-LES !
-
-Exemple de réponse CORRECTE quand on te demande de trouver "Company XYZ":
-"📋 **Lead trouvé : Company XYZ**
-- 🆔 ID: abc-123-xyz
-- 📧 Email: contact@company.xyz
-- 📱 Téléphone: 01 23 45 67 89
-- 🏢 Secteur: Technologie
-- 📍 Ville: Paris
-- 🌡️ Statut: qualifié
-- 📊 Score: 75/100"
-
-⚠️ RÈGLE CONTEXTE DE CONVERSATION - TRÈS IMPORTANT:
-Si un lead apparaît dans "LEADS TROUVÉS" ou "LEAD EN CONTEXTE DE CONVERSATION",
-UTILISE-LE AUTOMATIQUEMENT pour toute action demandée (créer tâche, envoyer email, etc.)
-NE DEMANDE JAMAIS "pour quel lead ?" si un lead est déjà en contexte !
-
-Exemple:
-- Utilisateur trouve "Company ABC"
-- Puis dit "créer une tâche rappel demain"
-→ Tu crées la tâche pour Company ABC SANS demander quel lead !
-
-1. ✅ EXÉCUTE les actions IMMÉDIATEMENT quand demandé
-2. ✅ Utilise les actions "by_name" pour agir sur un lead par son nom
-3. ✅ AFFICHE les données RÉELLES des leads - JAMAIS de placeholders
-4. ✅ SOUVIENS-TOI du lead en contexte dans la conversation
-5. ✅ Si l'utilisateur dit "ce lead", "lui", "ouvre le", utilise le lead en contexte
-6. ✅ Réponds en français, sois concis et professionnel
-7. ✅ Utilise des emojis pour la clarté
-
-⚠️ NE DIS JAMAIS: "je ne peux pas" ou "je n'ai pas accès" - TU PEUX TOUT FAIRE!
-⚠️ NE DIS JAMAIS: "[En cours de récupération]" ou "[Recherche en cours...]"
+📅 DATE ACTUELLE: ${new Date().toISOString().split('T')[0]}
 `;
 
   return context;
@@ -1215,11 +1136,11 @@ router.post('/chat', authMiddleware, async (req, res) => {
     let messages = [...conversationMessages];
     messages.push({ role: 'user', content: message });
 
-    // Appeler Claude
+    // Appeler Claude avec temperature basse pour plus de consistance
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      temperature: 0.7,
+      max_tokens: 1500,
+      temperature: 0.3,  // Basse température = plus rigoureux, suit mieux les règles
       system: systemPrompt,
       messages: messages
     });
