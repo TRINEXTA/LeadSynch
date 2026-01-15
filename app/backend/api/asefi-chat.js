@@ -46,20 +46,20 @@ async function getUserTasks(userId, tenantId, filter = 'all') {
     const params = [tenantId];
     let paramIndex = 2;
 
-    // Filtrer par assignation ou création
-    whereClause += ` AND (f.assigned_to = $${paramIndex} OR f.created_by = $${paramIndex})`;
+    // Filtrer par utilisateur assigné
+    whereClause += ` AND f.user_id = $${paramIndex}`;
     params.push(userId);
     paramIndex++;
 
-    // Filtres additionnels
+    // Filtres additionnels (utilise completed BOOLEAN au lieu de status)
     if (filter === 'pending' || filter === 'all') {
-      whereClause += ` AND f.status IN ('pending', 'in_progress')`;
+      whereClause += ` AND f.completed = FALSE`;
     } else if (filter === 'today') {
-      whereClause += ` AND f.due_date::date = CURRENT_DATE AND f.status != 'completed'`;
+      whereClause += ` AND f.scheduled_date::date = CURRENT_DATE AND f.completed = FALSE`;
     } else if (filter === 'overdue') {
-      whereClause += ` AND f.due_date < NOW() AND f.status != 'completed'`;
+      whereClause += ` AND f.scheduled_date < NOW() AND f.completed = FALSE`;
     } else if (filter === 'completed') {
-      whereClause += ` AND f.status = 'completed'`;
+      whereClause += ` AND f.completed = TRUE`;
     }
 
     const { rows } = await query(
@@ -70,11 +70,11 @@ async function getUserTasks(userId, tenantId, filter = 'all') {
         u.first_name || ' ' || u.last_name as assigned_to_name
        FROM follow_ups f
        LEFT JOIN leads l ON f.lead_id = l.id
-       LEFT JOIN users u ON f.assigned_to = u.id
+       LEFT JOIN users u ON f.user_id = u.id
        ${whereClause}
        ORDER BY
-         CASE WHEN f.due_date < NOW() THEN 0 ELSE 1 END,
-         f.due_date ASC NULLS LAST,
+         CASE WHEN f.scheduled_date < NOW() THEN 0 ELSE 1 END,
+         f.scheduled_date ASC NULLS LAST,
          f.priority DESC NULLS LAST
        LIMIT 50`,
       params
@@ -122,8 +122,8 @@ async function getUserDailyStats(userId, tenantId) {
     // Tâches en attente
     const tasksPending = await queryOne(
       `SELECT COUNT(*) as count FROM follow_ups
-       WHERE tenant_id = $1 AND status IN ('pending', 'in_progress')
-       AND (assigned_to = $2 OR created_by = $2)`,
+       WHERE tenant_id = $1 AND completed = FALSE
+       AND user_id = $2`,
       [tenantId, userId]
     );
     stats.tasks_pending = parseInt(tasksPending?.count) || 0;
@@ -131,8 +131,8 @@ async function getUserDailyStats(userId, tenantId) {
     // Tâches en retard
     const tasksOverdue = await queryOne(
       `SELECT COUNT(*) as count FROM follow_ups
-       WHERE tenant_id = $1 AND status != 'completed' AND due_date < NOW()
-       AND (assigned_to = $2 OR created_by = $2)`,
+       WHERE tenant_id = $1 AND completed = FALSE AND scheduled_date < NOW()
+       AND user_id = $2`,
       [tenantId, userId]
     );
     stats.tasks_overdue = parseInt(tasksOverdue?.count) || 0;
@@ -140,8 +140,8 @@ async function getUserDailyStats(userId, tenantId) {
     // Tâches complétées aujourd'hui
     const tasksCompleted = await queryOne(
       `SELECT COUNT(*) as count FROM follow_ups
-       WHERE tenant_id = $1 AND status = 'completed' AND completed_at::date = CURRENT_DATE
-       AND (assigned_to = $2 OR created_by = $2)`,
+       WHERE tenant_id = $1 AND completed = TRUE AND completed_at::date = CURRENT_DATE
+       AND user_id = $2`,
       [tenantId, userId]
     );
     stats.tasks_completed_today = parseInt(tasksCompleted?.count) || 0;
@@ -590,9 +590,9 @@ async function executeAction(action, params, userId, tenantId) {
     case AVAILABLE_ACTIONS.CREATE_TASK: {
       const { leadId, title, description, dueDate } = params;
       await execute(
-        `INSERT INTO follow_ups (tenant_id, lead_id, title, description, due_date, status, created_by, created_at)
-         VALUES ($1, $2, $3, $4, $5, 'pending', $6, NOW())`,
-        [tenantId, leadId, title, description || '', dueDate || new Date(Date.now() + 24*60*60*1000), userId]
+        `INSERT INTO follow_ups (tenant_id, lead_id, user_id, title, notes, scheduled_date, completed, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW())`,
+        [tenantId, leadId, userId, title, description || '', dueDate || new Date(Date.now() + 24*60*60*1000)]
       );
       return { success: true, message: `Tâche créée: ${title}` };
     }
@@ -765,9 +765,9 @@ async function executeAction(action, params, userId, tenantId) {
       }
 
       await execute(
-        `INSERT INTO follow_ups (tenant_id, lead_id, title, description, due_date, status, assigned_to, created_by, created_at)
-         VALUES ($1, $2, $3, $4, $5, 'pending', $6, $6, NOW())`,
-        [tenantId, lead.id, title, description || '', parsedDate, userId]
+        `INSERT INTO follow_ups (tenant_id, lead_id, user_id, title, notes, scheduled_date, completed, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW())`,
+        [tenantId, lead.id, userId, title, description || '', parsedDate]
       );
 
       const dateStr = parsedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
@@ -868,7 +868,7 @@ async function executeAction(action, params, userId, tenantId) {
         }
 
         if (!isNaN(targetDate.getTime())) {
-          dateFilter = ` AND due_date::date = $3`;
+          dateFilter = ` AND f.scheduled_date::date = $3`;
           queryParams.push(targetDate.toISOString().split('T')[0]);
         }
       }
@@ -879,10 +879,10 @@ async function executeAction(action, params, userId, tenantId) {
            FROM follow_ups f
            LEFT JOIN leads l ON f.lead_id = l.id
            WHERE f.tenant_id = $1
-             AND (f.assigned_to = $2 OR f.created_by = $2)
-             AND f.status != 'completed'
+             AND f.user_id = $2
+             AND f.completed = FALSE
              ${dateFilter}
-           ORDER BY f.due_date ASC
+           ORDER BY f.scheduled_date ASC
            LIMIT 10`,
           queryParams
         );
@@ -899,8 +899,8 @@ async function executeAction(action, params, userId, tenantId) {
           id: t.id,
           title: t.title,
           lead: t.lead_name,
-          due_date: t.due_date,
-          status: t.status
+          scheduled_date: t.scheduled_date,
+          completed: t.completed
         }));
 
         return {
