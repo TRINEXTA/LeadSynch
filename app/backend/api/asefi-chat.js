@@ -211,6 +211,77 @@ async function searchLeads(tenantId, searchTerm, limit = 20) {
 }
 
 /**
+ * Trouve UN lead par son nom (fuzzy search) - retourne le meilleur match
+ */
+async function findLeadByName(tenantId, companyName) {
+  try {
+    // Recherche exacte d'abord
+    let lead = await queryOne(
+      `SELECT * FROM leads WHERE tenant_id = $1 AND LOWER(company_name) = LOWER($2)`,
+      [tenantId, companyName]
+    );
+
+    if (lead) return lead;
+
+    // Sinon recherche fuzzy
+    const { rows } = await query(
+      `SELECT *,
+        SIMILARITY(LOWER(company_name), LOWER($2)) as sim_score
+       FROM leads
+       WHERE tenant_id = $1
+         AND (company_name ILIKE $2 OR company_name ILIKE $3)
+       ORDER BY sim_score DESC, score DESC
+       LIMIT 1`,
+      [tenantId, `%${companyName}%`, `${companyName}%`]
+    );
+
+    return rows && rows.length > 0 ? rows[0] : null;
+  } catch (e) {
+    // Si SIMILARITY n'existe pas, fallback
+    try {
+      const { rows } = await query(
+        `SELECT * FROM leads
+         WHERE tenant_id = $1
+           AND (company_name ILIKE $2 OR company_name ILIKE $3)
+         ORDER BY score DESC
+         LIMIT 1`,
+        [tenantId, `%${companyName}%`, `${companyName}%`]
+      );
+      return rows && rows.length > 0 ? rows[0] : null;
+    } catch (e2) {
+      log('⚠️ Erreur recherche lead par nom:', e2.message);
+      return null;
+    }
+  }
+}
+
+/**
+ * Détecte les noms d'entreprises mentionnés dans un message
+ */
+function extractCompanyNames(message) {
+  // Patterns communs pour les noms d'entreprises
+  const patterns = [
+    /(?:lead|entreprise|société|client|prospect|contact)\s+(?:de\s+)?["']?([^"'\n,]+?)["']?(?:\s|$|,)/gi,
+    /(?:à|pour|sur|chez)\s+["']?([A-Z][A-Za-z\s&'-]+(?:SARL|SAS|SA|EURL|Group|Corp|Inc|Ltd)?)/g,
+    /["']([^"']{3,50})["']/g, // Noms entre guillemets
+    /(?:mail|email|appel|rdv|rendez-vous)\s+(?:à|pour|avec)?\s*["']?([A-Z][A-Za-z\s&'-]{2,40})/gi
+  ];
+
+  const names = new Set();
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(message)) !== null) {
+      const name = match[1].trim();
+      if (name.length > 2 && name.length < 60 && !/^(le|la|les|un|une|des|ce|cette|mon|ma|mes)$/i.test(name)) {
+        names.add(name);
+      }
+    }
+  }
+
+  return Array.from(names);
+}
+
+/**
  * Récupère les informations détaillées d'un lead
  * @param {string} leadId - ID du lead
  * @param {string} tenantId - ID du tenant
@@ -465,6 +536,156 @@ async function executeAction(action, params, userId, tenantId) {
       return { success: true, message: 'Tâche marquée comme terminée ✅' };
     }
 
+    // ========== ACTIONS PAR NOM D'ENTREPRISE ==========
+
+    case 'send_email_by_name': {
+      const { companyName, subject, body } = params;
+      if (!companyName) {
+        return { success: false, message: 'Nom d\'entreprise requis' };
+      }
+
+      // Chercher le lead par nom
+      const lead = await findLeadByName(tenantId, companyName);
+      if (!lead) {
+        return { success: false, message: `Lead "${companyName}" non trouvé` };
+      }
+
+      // Vérifier qu'on a l'email
+      if (!lead.email) {
+        return { success: false, message: `Le lead "${lead.company_name}" n'a pas d'email` };
+      }
+
+      // Ajouter à la queue d'envoi
+      await execute(
+        `INSERT INTO email_queue (tenant_id, lead_id, subject, body, status, created_at)
+         VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+        [tenantId, lead.id, subject, body]
+      );
+
+      return {
+        success: true,
+        message: `📧 Email envoyé à ${lead.company_name} (${lead.email})`,
+        leadId: lead.id,
+        leadName: lead.company_name
+      };
+    }
+
+    case 'add_note_by_name': {
+      const { companyName, content } = params;
+      if (!companyName || !content) {
+        return { success: false, message: 'Nom d\'entreprise et contenu requis' };
+      }
+
+      const lead = await findLeadByName(tenantId, companyName);
+      if (!lead) {
+        return { success: false, message: `Lead "${companyName}" non trouvé` };
+      }
+
+      await execute(
+        `INSERT INTO lead_notes (lead_id, content, created_by, created_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [lead.id, content, userId]
+      );
+
+      return {
+        success: true,
+        message: `📝 Note ajoutée à ${lead.company_name}`,
+        leadId: lead.id,
+        leadName: lead.company_name
+      };
+    }
+
+    case 'create_task_by_name': {
+      const { companyName, title, description, dueDate } = params;
+      if (!companyName || !title) {
+        return { success: false, message: 'Nom d\'entreprise et titre requis' };
+      }
+
+      const lead = await findLeadByName(tenantId, companyName);
+      if (!lead) {
+        return { success: false, message: `Lead "${companyName}" non trouvé` };
+      }
+
+      await execute(
+        `INSERT INTO follow_ups (tenant_id, lead_id, title, description, due_date, status, created_by, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'pending', $6, NOW())`,
+        [tenantId, lead.id, title, description || '', dueDate || new Date(Date.now() + 24*60*60*1000), userId]
+      );
+
+      return {
+        success: true,
+        message: `✅ Tâche "${title}" créée pour ${lead.company_name}`,
+        leadId: lead.id,
+        leadName: lead.company_name
+      };
+    }
+
+    case 'update_status_by_name': {
+      const { companyName, status } = params;
+      if (!companyName || !status) {
+        return { success: false, message: 'Nom d\'entreprise et statut requis' };
+      }
+
+      const lead = await findLeadByName(tenantId, companyName);
+      if (!lead) {
+        return { success: false, message: `Lead "${companyName}" non trouvé` };
+      }
+
+      await execute(
+        `UPDATE leads SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+        [status, lead.id, tenantId]
+      );
+
+      return {
+        success: true,
+        message: `🔄 Statut de ${lead.company_name} changé en "${status}"`,
+        leadId: lead.id,
+        leadName: lead.company_name
+      };
+    }
+
+    case 'navigate_to_lead': {
+      const { companyName, leadId: directLeadId } = params;
+
+      let lead;
+      if (directLeadId) {
+        lead = await queryOne(`SELECT id, company_name FROM leads WHERE id = $1 AND tenant_id = $2`, [directLeadId, tenantId]);
+      } else if (companyName) {
+        lead = await findLeadByName(tenantId, companyName);
+      }
+
+      if (!lead) {
+        return { success: false, message: `Lead non trouvé` };
+      }
+
+      return {
+        success: true,
+        message: `🔗 Ouvrir ${lead.company_name}`,
+        action_type: 'navigate',
+        navigate_to: `/leads/${lead.id}`,
+        leadId: lead.id,
+        leadName: lead.company_name
+      };
+    }
+
+    case 'search_lead': {
+      const { searchTerm } = params;
+      if (!searchTerm) {
+        return { success: false, message: 'Terme de recherche requis' };
+      }
+
+      const results = await searchLeads(tenantId, searchTerm, 5);
+      if (results.length === 0) {
+        return { success: false, message: `Aucun lead trouvé pour "${searchTerm}"` };
+      }
+
+      return {
+        success: true,
+        message: `🔍 ${results.length} lead(s) trouvé(s)`,
+        leads: results
+      };
+    }
+
     default:
       return { success: false, message: `Action inconnue: ${action}` };
   }
@@ -474,16 +695,20 @@ async function executeAction(action, params, userId, tenantId) {
  * Construit le prompt système avec le contexte du lead
  */
 function buildSystemPrompt(user, fullContext) {
-  const { lead, history, tasks, stats, hotLeads } = fullContext;
+  const { lead, history, tasks, stats, hotLeads, mentionedLeads } = fullContext;
 
-  let context = `Tu es ASEFI, l'assistant IA ULTRA-INTELLIGENT de LeadSynch. Tu as un accès COMPLET à toutes les données du CRM.
+  let context = `Tu es ASEFI, un AGENT IA AUTONOME et INTELLIGENT de LeadSynch.
+Tu as un accès TOTAL à la base de données CRM et tu peux EXÉCUTER des actions IMMÉDIATEMENT.
 
-🧠 TU ES CAPABLE DE:
-1. Voir et analyser TOUTES les tâches de l'utilisateur
-2. Voir et analyser TOUS les leads et leur statut
-3. Voir les statistiques en temps réel
-4. EXÉCUTER des actions concrètes (créer tâches, envoyer emails, compléter tâches, etc.)
-5. Générer du contenu personnalisé (emails, messages WhatsApp)
+🤖 TU ES UN VRAI AGENT AUTONOME:
+1. Tu CHERCHES automatiquement les leads mentionnés dans les messages
+2. Tu EXÉCUTES les actions demandées SANS confirmation (l'utilisateur te fait confiance)
+3. Tu as accès à TOUTES les données: tâches, leads, stats, historique
+4. Tu GÉNÈRES des emails/messages personnalisés et tu les ENVOIES
+5. Tu NAVIGUES l'utilisateur vers les bonnes pages
+
+⚠️ RÈGLE CRITIQUE: Quand l'utilisateur te demande quelque chose, TU LE FAIS directement.
+Ne dis JAMAIS "je ne peux pas accéder" ou "je n'ai pas les informations" - TU AS TOUT !
 
 ═══════════════════════════════════════════
 👤 UTILISATEUR CONNECTÉ
@@ -592,38 +817,63 @@ HISTORIQUE RÉCENT (${history.length} événements):
     context += '\n';
   }
 
+  // ========== LEADS MENTIONNÉS DANS LE MESSAGE ==========
+  if (mentionedLeads && mentionedLeads.length > 0) {
+    context += `═══════════════════════════════════════════
+🔍 LEADS TROUVÉS DANS TA DEMANDE
+═══════════════════════════════════════════
+J'ai trouvé ces leads correspondant à ta demande:
+`;
+    mentionedLeads.forEach((ml, i) => {
+      context += `
+${i + 1}. ${ml.company_name}
+   - ID: ${ml.id}
+   - Contact: ${ml.contact_name || 'N/A'}
+   - Email: ${ml.email || 'N/A'}
+   - Téléphone: ${ml.phone || 'N/A'}
+   - Secteur: ${ml.sector || 'N/A'}
+   - Ville: ${ml.city || 'N/A'}
+   - Score: ${ml.score || 0}/100
+   - Statut: ${ml.status || 'nouveau'}
+`;
+    });
+    context += '\n';
+  }
+
   context += `═══════════════════════════════════════════
-⚡ ACTIONS QUE TU PEUX EXÉCUTER
+⚡ ACTIONS DISPONIBLES (EXÉCUTION IMMÉDIATE)
 ═══════════════════════════════════════════
-Tu peux DIRECTEMENT exécuter ces actions quand l'utilisateur te le demande:
 
-1. complete_task - Marquer une tâche comme terminée
-   Exemple: [ACTION:complete_task]{"taskId":"uuid-de-la-tache"}[/ACTION]
+📧 ENVOYER UN EMAIL PAR NOM D'ENTREPRISE:
+[ACTION:send_email_by_name]{"companyName":"Nom Entreprise","subject":"Objet","body":"Contenu de l'email..."}[/ACTION]
 
-2. create_task - Créer une nouvelle tâche
-   Exemple: [ACTION:create_task]{"leadId":"uuid","title":"Rappeler client","dueDate":"2024-01-20"}[/ACTION]
+📝 AJOUTER UNE NOTE PAR NOM:
+[ACTION:add_note_by_name]{"companyName":"Nom Entreprise","content":"Contenu de la note"}[/ACTION]
 
-3. update_status - Changer le statut d'un lead
-   Exemple: [ACTION:update_status]{"leadId":"uuid","status":"qualifie"}[/ACTION]
+✅ CRÉER UNE TÂCHE PAR NOM:
+[ACTION:create_task_by_name]{"companyName":"Nom Entreprise","title":"Titre tâche","dueDate":"2024-01-20"}[/ACTION]
 
-4. add_note - Ajouter une note à un lead
-   Exemple: [ACTION:add_note]{"leadId":"uuid","content":"Client intéressé par..."}[/ACTION]
+🔄 CHANGER LE STATUT PAR NOM:
+[ACTION:update_status_by_name]{"companyName":"Nom Entreprise","status":"qualifie"}[/ACTION]
 
-5. send_email - Mettre un email en queue d'envoi
-   Exemple: [ACTION:send_email]{"leadId":"uuid","subject":"Objet","body":"Contenu"}[/ACTION]
+🔗 NAVIGUER VERS UN LEAD:
+[ACTION:navigate_to_lead]{"companyName":"Nom Entreprise"}[/ACTION]
+
+✔️ TERMINER UNE TÂCHE:
+[ACTION:complete_task]{"taskId":"uuid-de-la-tache"}[/ACTION]
 
 ═══════════════════════════════════════════
-📝 RÈGLES D'INTERACTION
+📝 RÈGLES D'AGENT AUTONOME
 ═══════════════════════════════════════════
-1. UTILISE LES VRAIES DONNÉES ci-dessus - ne jamais inventer
-2. Quand on te demande "mes tâches", LISTE-LES directement depuis les données
-3. Quand on te demande d'exécuter une action, FAIS-LE avec le format [ACTION:xxx]{...}[/ACTION]
-4. Sois PROACTIF: suggère des actions pertinentes
-5. Pour les emails/messages, GÉNÈRE un contenu personnalisé basé sur les infos du lead
-6. Réponds en français, de manière concise et professionnelle
-7. N'hésite pas à utiliser des emojis pour la clarté
+1. ✅ EXÉCUTE les actions IMMÉDIATEMENT quand demandé
+2. ✅ Utilise les actions "by_name" pour agir sur un lead par son nom
+3. ✅ Tu as TOUTES les informations - n'invente rien mais utilise ce que tu as
+4. ✅ Génère des emails/messages PERSONNALISÉS basés sur les infos du lead
+5. ✅ Si l'utilisateur mentionne un lead, utilise les infos de "LEADS TROUVÉS"
+6. ✅ Réponds en français, sois concis et professionnel
+7. ✅ Utilise des emojis pour la clarté
 
-IMPORTANT: Tu as VRAIMENT accès aux données. Utilise-les !
+⚠️ NE DIS JAMAIS: "je ne peux pas" ou "je n'ai pas accès" - TU PEUX TOUT FAIRE!
 `;
 
   return context;
@@ -709,13 +959,41 @@ router.post('/chat', authMiddleware, async (req, res) => {
     const hotLeads = await getHotLeads(tenantId, 10);
     log(`🔥 ${hotLeads.length} leads chauds chargés`);
 
+    // ========== RECHERCHE INTELLIGENTE DE LEADS MENTIONNÉS ==========
+    // Détecter si l'utilisateur mentionne un lead spécifique et le chercher
+    let mentionedLeads = [];
+    const companyNamesInMessage = extractCompanyNames(message);
+
+    if (companyNamesInMessage.length > 0) {
+      log(`🔍 Noms d'entreprises détectés dans le message: ${companyNamesInMessage.join(', ')}`);
+
+      for (const name of companyNamesInMessage) {
+        const foundLead = await findLeadByName(tenantId, name);
+        if (foundLead) {
+          mentionedLeads.push(foundLead);
+          log(`✅ Lead trouvé: ${foundLead.company_name} (ID: ${foundLead.id})`);
+        }
+      }
+    }
+
+    // Si aucun lead spécifique mais mots-clés de recherche, faire une recherche générique
+    if (mentionedLeads.length === 0) {
+      const searchKeywords = message.match(/(?:cherche|trouve|montre|ouvre|affiche)\s+(?:le\s+lead\s+)?["']?([^"'\n]{3,40})["']?/i);
+      if (searchKeywords) {
+        const searchResults = await searchLeads(tenantId, searchKeywords[1], 5);
+        mentionedLeads = searchResults;
+        log(`🔍 Recherche générique pour "${searchKeywords[1]}": ${searchResults.length} résultats`);
+      }
+    }
+
     // Construire le contexte complet
     const fullContext = {
       lead,
       history,
       tasks,
       stats,
-      hotLeads
+      hotLeads,
+      mentionedLeads // Leads trouvés dans le message
     };
 
     // Construire le prompt système avec TOUTES les données
