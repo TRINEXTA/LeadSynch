@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     // Important : les options doivent correspondre pour que le navigateur supprime le cookie
     res.clearCookie('token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: true, // Doit correspondre au login
+      sameSite: 'none', // Doit correspondre au login (cross-domain)
       path: '/'
     });
 

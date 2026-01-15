@@ -21,9 +21,18 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, rememberMe = false) => {
     try {
-      // ✅ Plus besoin de gérer le stockage du token manuellement
-      // Le backend (login.js) définit maintenant un cookie HttpOnly
-      await api.post('/auth/login', { email, password, rememberMe });
+      // Le backend définit un cookie HttpOnly + renvoie le token pour fallback
+      const loginResponse = await api.post('/auth/login', { email, password, rememberMe });
+
+      // ✅ FALLBACK : Stocker le token en localStorage pour les cas où le cookie cross-domain échoue
+      // (frontend Vercel ≠ backend Render = domaines différents)
+      if (loginResponse.data.token) {
+        if (rememberMe) {
+          localStorage.setItem('token', loginResponse.data.token);
+        } else {
+          sessionStorage.setItem('token', loginResponse.data.token);
+        }
+      }
 
       // On récupère immédiatement les infos utilisateur pour mettre à jour le contexte
       const me = await api.get('/auth/me');
