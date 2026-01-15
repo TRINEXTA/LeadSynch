@@ -312,10 +312,29 @@ async function findLeadByName(tenantId, companyName) {
  */
 function extractCompanyNames(message) {
   const names = new Set();
+  let match;
+
+  // Pattern 0: Format réponse IA "Lead trouvé : [NOM]" ou "Lead : [NOM]"
+  const aiResponsePattern = /(?:lead\s*(?:trouvé|found)?)\s*[:\-]\s*["']?([A-Za-z][A-Za-z0-9\s&''\-\.\&]+?)["']?\s*(?:$|\n|[!?])/gi;
+  while ((match = aiResponsePattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    if (name.length > 2 && name.length < 80) {
+      names.add(name);
+    }
+  }
+
+  // Pattern 0b: Noms en gras **Nom Entreprise** (format markdown des réponses IA)
+  const boldPattern = /\*\*([A-Za-z][A-Za-z0-9\s&''\-\.\&]{2,60})\*\*/g;
+  while ((match = boldPattern.exec(message)) !== null) {
+    const name = match[1].trim();
+    // Filtrer les mots communs en gras
+    if (name.length > 2 && !/^(action|email|note|tâche|statut|lead|contact|score|secteur|ville)/i.test(name)) {
+      names.add(name);
+    }
+  }
 
   // Pattern 1: "trouve/cherche/ouvre le lead [NOM]" - capture jusqu'à la fin ou ponctuation
-  const directLeadPattern = /(?:trouve|cherche|ouvre|affiche|montre)\s+(?:le\s+)?(?:lead\s+)?["']?([A-Za-z][A-Za-z0-9\s&''\-\.]+?)["']?\s*(?:$|[?!,;:])/gi;
-  let match;
+  const directLeadPattern = /(?:trouve|cherche|ouvre|affiche|montre)\s+(?:le\s+)?(?:lead\s+)?[:\s]*["']?([A-Za-z][A-Za-z0-9\s&''\-\.\&]+?)["']?\s*(?:$|[?!,;:\n])/gi;
   while ((match = directLeadPattern.exec(message)) !== null) {
     const name = match[1].trim();
     if (name.length > 2 && name.length < 80) {
@@ -323,11 +342,11 @@ function extractCompanyNames(message) {
     }
   }
 
-  // Pattern 2: "lead [NOM COMPLET]" - capture tout après "lead" jusqu'à la fin
-  const leadPattern = /\blead\s+["']?([A-Za-z][A-Za-z0-9\s&''\-\.]+?)["']?\s*(?:$|[?!,;:])/gi;
+  // Pattern 2: "lead [NOM COMPLET]" ou "lead: [NOM]" - capture tout après "lead" jusqu'à la fin
+  const leadPattern = /\blead\s*[:\s]+["']?([A-Za-z][A-Za-z0-9\s&''\-\.\&]+?)["']?\s*(?:$|[?!,;:\n])/gi;
   while ((match = leadPattern.exec(message)) !== null) {
     const name = match[1].trim();
-    if (name.length > 2 && name.length < 80) {
+    if (name.length > 2 && name.length < 80 && !/^(trouvé|found|non trouvé|not found)/i.test(name)) {
       names.add(name);
     }
   }
@@ -342,7 +361,7 @@ function extractCompanyNames(message) {
   }
 
   // Pattern 4: "email/note/tâche pour/à [NOM]"
-  const actionPattern = /(?:mail|email|appel|note|tâche|rdv)\s+(?:à|pour|sur|avec|chez)?\s*["']?([A-Z][A-Za-z0-9\s&''\-\.]{2,50})/gi;
+  const actionPattern = /(?:mail|email|appel|note|tâche|rdv)\s+(?:à|pour|sur|avec|chez)?\s*["']?([A-Z][A-Za-z0-9\s&''\-\.\&]{2,50})/gi;
   while ((match = actionPattern.exec(message)) !== null) {
     const name = match[1].trim();
     if (name.length > 2 && !/^(le|la|les|un|une|des|ce|cette|mon|ma|mes)$/i.test(name)) {
@@ -350,19 +369,22 @@ function extractCompanyNames(message) {
     }
   }
 
-  // Pattern 5: Noms propres avec majuscule (fallback)
-  const properNamePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+(?:\s+(?:Group|SARL|SAS|SA|Corp|Inc|Ltd))?)\b/g;
-  while ((match = properNamePattern.exec(message)) !== null) {
+  // Pattern 5: Nom après ID/Email/Contact dans format structuré
+  const structuredPattern = /(?:🆔|ID|Entreprise|Company)[:\s]+["']?([A-Za-z][A-Za-z0-9\s&''\-\.\&]{2,60})["']?/gi;
+  while ((match = structuredPattern.exec(message)) !== null) {
     const name = match[1].trim();
-    if (name.length > 4 && name.length < 60) {
+    if (name.length > 2 && !/^[a-f0-9\-]{36}$/i.test(name)) { // Exclure les UUIDs
       names.add(name);
     }
   }
 
-  // Filtrer les mots communs
+  // Filtrer les mots communs et nettoyer
   const filtered = Array.from(names).filter(name => {
     const lower = name.toLowerCase();
-    return !['le lead', 'ce lead', 'un lead', 'mon lead', 'la fiche', 'cette fiche'].includes(lower);
+    return ![
+      'le lead', 'ce lead', 'un lead', 'mon lead', 'la fiche', 'cette fiche',
+      'action détectée', 'lead trouvé', 'lead non trouvé', 'n/a', 'non renseigné'
+    ].includes(lower) && name.length > 2;
   });
 
   return filtered;
