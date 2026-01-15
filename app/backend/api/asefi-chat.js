@@ -590,38 +590,29 @@ async function executeAction(action, params, userId, tenantId) {
     case AVAILABLE_ACTIONS.CREATE_TASK: {
       const { leadId, title, description, dueDate } = params;
 
-      // Fonction pour créer une date en heure de Paris
-      const createParisDateForTask = (year, month, day, hours = 9, minutes = 0) => {
-        const date = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
-        // Paris: UTC+1 (hiver) ou UTC+2 (été) - en janvier c'est UTC+1
-        const month0Based = date.getUTCMonth();
-        const isDST = month0Based >= 3 && month0Based <= 9; // Approximation: avril-octobre
+      // Convertir heure Paris en UTC
+      // Paris = UTC+1 hiver (nov-mars), UTC+2 été (avril-oct)
+      const parisToUTC = (year, month, day, hours, minutes) => {
+        const isDST = month >= 3 && month <= 9;
         const parisOffset = isDST ? 2 : 1;
-        date.setUTCHours(hours - parisOffset, minutes, 0, 0);
-        return date;
+        return new Date(Date.UTC(year, month, day, hours - parisOffset, minutes, 0, 0));
       };
 
       let scheduledDate;
       if (dueDate) {
-        // Si c'est une date ISO, la parser et ajuster pour Paris
         const parsed = new Date(dueDate);
         if (!isNaN(parsed.getTime())) {
-          // Extraire heure demandée et recréer en heure Paris
-          const hours = parsed.getHours() || parsed.getUTCHours() || 9;
-          const minutes = parsed.getMinutes() || parsed.getUTCMinutes() || 0;
-          scheduledDate = createParisDateForTask(
-            parsed.getFullYear(), parsed.getMonth(), parsed.getDate(),
-            hours, minutes
-          );
+          // Traiter la date comme heure de Paris et convertir en UTC
+          const hours = parsed.getHours() || 9;
+          const minutes = parsed.getMinutes() || 0;
+          scheduledDate = parisToUTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), hours, minutes);
         } else {
-          // Fallback: demain 9h Paris
           const now = new Date();
-          scheduledDate = createParisDateForTask(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+          scheduledDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
         }
       } else {
-        // Par défaut: demain 9h Paris
         const now = new Date();
-        scheduledDate = createParisDateForTask(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+        scheduledDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
       }
 
       await execute(
@@ -759,29 +750,25 @@ async function executeAction(action, params, userId, tenantId) {
         return { success: false, message: `Lead "${companyName}" non trouvé` };
       }
 
-      // Fonction pour créer une date en heure de Paris
-      const createParisDate = (year, month, day, hours = 9, minutes = 0) => {
-        // Créer la date en UTC puis ajuster pour Paris (UTC+1 hiver, UTC+2 été)
-        const date = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
-        // Paris est UTC+1 en hiver (janvier), donc soustraire 1h pour obtenir l'heure locale correcte
-        // Vérifier si on est en heure d'été (dernier dimanche de mars au dernier dimanche d'octobre)
-        const janFirst = new Date(year, 0, 1);
-        const julFirst = new Date(year, 6, 1);
-        const stdTimezoneOffset = Math.max(janFirst.getTimezoneOffset(), julFirst.getTimezoneOffset());
-        const isDST = date.getTimezoneOffset() < stdTimezoneOffset;
-        // Paris: UTC+1 (hiver) ou UTC+2 (été)
+      // Fonction pour convertir une heure Paris en UTC
+      // Paris = UTC+1 en hiver (nov-mars), UTC+2 en été (avril-oct)
+      const parisToUTC = (year, month, day, hours, minutes) => {
+        // Mois 0-based: 0=Jan, 3=Avr, 9=Oct
+        // Approximation: avril (3) à octobre (9) = été = UTC+2
+        const isDST = month >= 3 && month <= 9;
         const parisOffset = isDST ? 2 : 1;
-        date.setUTCHours(hours - parisOffset, minutes, 0, 0);
-        return date;
+        // Pour avoir 9h Paris, on stocke (9 - offset) UTC
+        // Ex: 9h Paris hiver = 8h UTC, 9h Paris été = 7h UTC
+        return new Date(Date.UTC(year, month, day, hours - parisOffset, minutes, 0, 0));
       };
 
-      // Parser la date (supporte ISO, "demain", "dans X jours", etc.)
+      // Parser la date
       let parsedDate = null;
       let requestedHours = 9;
       let requestedMinutes = 0;
 
       if (dueDate) {
-        // Extraire l'heure si présente AVANT de parser la date
+        // Extraire l'heure si présente
         const timeMatch = dueDate.match(/(\d{1,2})[h:](\d{2})?/i);
         if (timeMatch) {
           requestedHours = parseInt(timeMatch[1]);
@@ -791,31 +778,37 @@ async function executeAction(action, params, userId, tenantId) {
         // Essayer de parser comme date ISO
         const isoDate = new Date(dueDate);
         if (!isNaN(isoDate.getTime()) && dueDate.includes('-')) {
-          // C'est une date ISO, l'utiliser directement
-          parsedDate = isoDate;
+          // C'est une date ISO - TRAITER COMME HEURE DE PARIS et convertir en UTC
+          const year = isoDate.getFullYear();
+          const month = isoDate.getMonth();
+          const day = isoDate.getDate();
+          // Utiliser l'heure de la date ISO ou l'heure extraite du texte
+          const hours = isoDate.getHours() || requestedHours;
+          const minutes = isoDate.getMinutes() || requestedMinutes;
+          parsedDate = parisToUTC(year, month, day, hours, minutes);
         } else {
           // Parser les expressions françaises
           const now = new Date();
           const lowerDate = dueDate.toLowerCase();
 
           if (lowerDate.includes('demain')) {
-            parsedDate = createParisDate(now.getFullYear(), now.getMonth(), now.getDate() + 1, requestedHours, requestedMinutes);
+            parsedDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + 1, requestedHours, requestedMinutes);
           } else if (lowerDate.includes('après-demain') || lowerDate.includes('apres-demain')) {
-            parsedDate = createParisDate(now.getFullYear(), now.getMonth(), now.getDate() + 2, requestedHours, requestedMinutes);
+            parsedDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + 2, requestedHours, requestedMinutes);
           } else if (lowerDate.includes('dans')) {
             const match = lowerDate.match(/dans\s+(\d+)\s*(jour|semaine|heure)/i);
             if (match) {
               const num = parseInt(match[1]);
               if (match[2].includes('jour')) {
-                parsedDate = createParisDate(now.getFullYear(), now.getMonth(), now.getDate() + num, requestedHours, requestedMinutes);
+                parsedDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + num, requestedHours, requestedMinutes);
               } else if (match[2].includes('semaine')) {
-                parsedDate = createParisDate(now.getFullYear(), now.getMonth(), now.getDate() + (num * 7), requestedHours, requestedMinutes);
+                parsedDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + (num * 7), requestedHours, requestedMinutes);
               } else if (match[2].includes('heure')) {
                 parsedDate = new Date(now.getTime() + num * 60 * 60 * 1000);
               }
             }
           } else if (lowerDate.includes('aujourd')) {
-            parsedDate = createParisDate(now.getFullYear(), now.getMonth(), now.getDate(), requestedHours, requestedMinutes);
+            parsedDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate(), requestedHours, requestedMinutes);
           }
         }
       }
@@ -823,7 +816,7 @@ async function executeAction(action, params, userId, tenantId) {
       // Par défaut: demain 9h (heure de Paris)
       if (!parsedDate) {
         const now = new Date();
-        parsedDate = createParisDate(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+        parsedDate = parisToUTC(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
       }
 
       await execute(
