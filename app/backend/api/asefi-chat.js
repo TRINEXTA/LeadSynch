@@ -695,7 +695,7 @@ async function executeAction(action, params, userId, tenantId) {
  * Construit le prompt système avec le contexte du lead
  */
 function buildSystemPrompt(user, fullContext) {
-  const { lead, history, tasks, stats, hotLeads, mentionedLeads } = fullContext;
+  const { lead, history, tasks, stats, hotLeads, mentionedLeads, conversationContextLead } = fullContext;
 
   let context = `Tu es ASEFI, un AGENT IA AUTONOME et INTELLIGENT de LeadSynch.
 Tu as un accès TOTAL à la base de données CRM et tu peux EXÉCUTER des actions IMMÉDIATEMENT.
@@ -817,6 +817,28 @@ HISTORIQUE RÉCENT (${history.length} événements):
     context += '\n';
   }
 
+  // ========== LEAD EN CONTEXTE DE CONVERSATION ==========
+  // C'est le dernier lead dont on a parlé dans cette conversation
+  if (conversationContextLead) {
+    context += `═══════════════════════════════════════════
+📌 LEAD EN CONTEXTE DE CONVERSATION (dernier lead discuté)
+═══════════════════════════════════════════
+C'est le lead dont on parlait dans cette conversation. Si l'utilisateur dit
+"ce lead", "ouvre le", "lui", "cette entreprise", c'est CE lead qu'il veut:
+
+🎯 ${conversationContextLead.company_name}
+   - ID: ${conversationContextLead.id}
+   - Contact: ${conversationContextLead.contact_name || 'N/A'}
+   - Email: ${conversationContextLead.email || 'N/A'}
+   - Téléphone: ${conversationContextLead.phone || 'N/A'}
+   - Secteur: ${conversationContextLead.sector || 'N/A'}
+   - Ville: ${conversationContextLead.city || 'N/A'}
+   - Score: ${conversationContextLead.score || 0}/100
+   - Statut: ${conversationContextLead.status || 'nouveau'}
+
+`;
+  }
+
   // ========== LEADS MENTIONNÉS DANS LE MESSAGE ==========
   if (mentionedLeads && mentionedLeads.length > 0) {
     context += `═══════════════════════════════════════════
@@ -863,17 +885,39 @@ ${i + 1}. ${ml.company_name}
 [ACTION:complete_task]{"taskId":"uuid-de-la-tache"}[/ACTION]
 
 ═══════════════════════════════════════════
-📝 RÈGLES D'AGENT AUTONOME
+📝 RÈGLES D'AGENT AUTONOME - TRÈS IMPORTANT !
 ═══════════════════════════════════════════
+
+⚠️ RÈGLE CRITIQUE - AFFICHAGE DES DONNÉES:
+Quand tu trouves un lead, AFFICHE IMMÉDIATEMENT TOUTES SES DONNÉES RÉELLES.
+JAMAIS de placeholder comme "[En cours de récupération]" ou "[Recherche en cours...]"
+Tu as DÉJÀ toutes les données dans "LEADS TROUVÉS" ci-dessus - UTILISE-LES !
+
+Exemple de réponse CORRECTE quand on te demande de trouver "Company XYZ":
+"📋 **Lead trouvé : Company XYZ**
+- 🆔 ID: abc-123-xyz
+- 📧 Email: contact@company.xyz
+- 📱 Téléphone: 01 23 45 67 89
+- 🏢 Secteur: Technologie
+- 📍 Ville: Paris
+- 🌡️ Statut: qualifié
+- 📊 Score: 75/100"
+
+⚠️ RÈGLE CONTEXTE DE CONVERSATION:
+Quand l'utilisateur dit "ouvre le lead" ou "ce lead" ou "lui", regarde la section
+"LEAD EN CONTEXTE DE CONVERSATION" ci-dessous - c'est le dernier lead dont on parlait.
+NE DEMANDE PAS quel lead si un lead est déjà en contexte !
+
 1. ✅ EXÉCUTE les actions IMMÉDIATEMENT quand demandé
 2. ✅ Utilise les actions "by_name" pour agir sur un lead par son nom
-3. ✅ Tu as TOUTES les informations - n'invente rien mais utilise ce que tu as
-4. ✅ Génère des emails/messages PERSONNALISÉS basés sur les infos du lead
-5. ✅ Si l'utilisateur mentionne un lead, utilise les infos de "LEADS TROUVÉS"
+3. ✅ AFFICHE les données RÉELLES des leads - JAMAIS de placeholders
+4. ✅ SOUVIENS-TOI du lead en contexte dans la conversation
+5. ✅ Si l'utilisateur dit "ce lead", "lui", "ouvre le", utilise le lead en contexte
 6. ✅ Réponds en français, sois concis et professionnel
 7. ✅ Utilise des emojis pour la clarté
 
 ⚠️ NE DIS JAMAIS: "je ne peux pas" ou "je n'ai pas accès" - TU PEUX TOUT FAIRE!
+⚠️ NE DIS JAMAIS: "[En cours de récupération]" ou "[Recherche en cours...]"
 `;
 
   return context;
@@ -959,6 +1003,41 @@ router.post('/chat', authMiddleware, async (req, res) => {
     const hotLeads = await getHotLeads(tenantId, 10);
     log(`🔥 ${hotLeads.length} leads chauds chargés`);
 
+    // ========== RÉCUPÉRER L'HISTORIQUE DE CONVERSATION D'ABORD ==========
+    // (pour maintenir le contexte des leads mentionnés précédemment)
+    let conversationMessages = [];
+    let conversationContextLead = null; // Le lead mentionné dans la conversation précédente
+
+    if (conversationId) {
+      try {
+        const { rows } = await query(
+          `SELECT role, content FROM asefi_messages
+           WHERE conversation_id = $1
+           ORDER BY created_at ASC
+           LIMIT 20`,
+          [conversationId]
+        );
+        conversationMessages = rows.map(m => ({ role: m.role, content: m.content }));
+
+        // Extraire les noms d'entreprises des messages précédents pour maintenir le contexte
+        // On parcourt du plus ancien au plus récent, le dernier trouvé sera le contexte actuel
+        for (const msg of rows) {
+          const namesInMessage = extractCompanyNames(msg.content);
+          for (const name of namesInMessage) {
+            const foundLead = await findLeadByName(tenantId, name);
+            if (foundLead) {
+              conversationContextLead = foundLead;
+            }
+          }
+        }
+        if (conversationContextLead) {
+          log(`📍 Lead en contexte de conversation: ${conversationContextLead.company_name}`);
+        }
+      } catch (historyErr) {
+        log('⚠️ Erreur récupération historique (continue sans):', historyErr.message);
+      }
+    }
+
     // ========== RECHERCHE INTELLIGENTE DE LEADS MENTIONNÉS ==========
     // Détecter si l'utilisateur mentionne un lead spécifique et le chercher
     let mentionedLeads = [];
@@ -986,37 +1065,31 @@ router.post('/chat', authMiddleware, async (req, res) => {
       }
     }
 
-    // Construire le contexte complet
+    // ========== GESTION DU CONTEXTE DE CONVERSATION ==========
+    // Si l'utilisateur utilise des références contextuelles ("ce lead", "ouvre le", "lui")
+    // et qu'on a un lead en contexte de conversation, l'utiliser
+    const contextualReferences = /\b(ce lead|le lead|ouvre[- ]?le|celui[- ]?ci|lui|cette entreprise|ce prospect|ouvrir le lead)\b/i;
+    if (contextualReferences.test(message) && conversationContextLead && mentionedLeads.length === 0) {
+      mentionedLeads.push(conversationContextLead);
+      log(`🔄 Utilisation du lead en contexte de conversation: ${conversationContextLead.company_name}`);
+    }
+
+    // Construire le contexte complet avec TOUT ce qu'on a trouvé
     const fullContext = {
       lead,
       history,
       tasks,
       stats,
       hotLeads,
-      mentionedLeads // Leads trouvés dans le message
+      mentionedLeads, // Leads trouvés dans le message actuel
+      conversationContextLead // Le dernier lead discuté dans la conversation
     };
 
     // Construire le prompt système avec TOUTES les données
     const systemPrompt = buildSystemPrompt(req.user, fullContext);
 
-    // Récupérer l'historique de conversation si existant (optionnel)
-    let messages = [];
-    if (conversationId) {
-      try {
-        const { rows } = await query(
-          `SELECT role, content FROM asefi_messages
-           WHERE conversation_id = $1
-           ORDER BY created_at ASC
-           LIMIT 20`,
-          [conversationId]
-        );
-        messages = rows.map(m => ({ role: m.role, content: m.content }));
-      } catch (historyErr) {
-        log('⚠️ Erreur récupération historique (continue sans):', historyErr.message);
-      }
-    }
-
-    // Ajouter le nouveau message
+    // Préparer les messages pour l'API Claude
+    let messages = [...conversationMessages];
     messages.push({ role: 'user', content: message });
 
     // Appeler Claude
